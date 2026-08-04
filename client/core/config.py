@@ -1,6 +1,6 @@
 import os
 
-DEFAULT_SERVER = os.getenv("ALFONSO_SERVER", "http://localhost:8000")
+DEFAULT_SERVER = os.getenv("ALFONSO_SERVER", "http://127.0.0.1:8000")
 SAMPLE_RATE = 16000
 CHANNELS = 1
 CHUNK_SECONDS = int(os.getenv("CHUNK_SECONDS", "3"))

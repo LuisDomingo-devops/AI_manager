@@ -219,7 +219,8 @@ Responde ESTRICTAMENTE en formato JSON con la siguiente estructura (si no hay ci
         # Marcar email como procesado para no volverlo a evaluar
         update_email(email["id"], processed_for_calendar=1)
         
-INVOICE_DESKTOP_PATH = get_client_desktop() + "/facturas pendientes"
+from pathlib import Path
+INVOICE_DESKTOP_PATH = str(Path(__file__).resolve().parents[3] / "data" / "archivo fiscal" / "facturas pendientes")
 INVOICE_BACKUP_PATH = "/mnt/g/RESPALDO_ESCRITORIO/Personal/gastos"
 
 def save_invoice_to_desktop(email: dict):

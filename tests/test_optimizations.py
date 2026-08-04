@@ -73,13 +73,16 @@ async def test_orchestrator_self_correction_loop(session_memory_fixture):
 
     # Attempt 1: LLM returns tool with bad python code
     # Attempt 2: LLM gets the error in memory and returns corrected tool
+    # Attempt 3: Conversational finish
     mock_llm.generate.side_effect = [
         '{"tool": "create_file", "args": {"path": "sandbox_temp.py", "content": "def foo() return 42"}}', # syntax error (missing colon)
-        '{"tool": "create_file", "args": {"path": "sandbox_temp.py", "content": "def foo():\\n    return 42"}}'   # correct syntax
+        '{"tool": "create_file", "args": {"path": "sandbox_temp.py", "content": "def foo():\\n    return 42"}}',  # correct syntax
+        'Archivo creado con éxito.'
     ]
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
+         patch("app.adapters.tool_registry.is_client_tool", return_value=False), \
          patch("app.domain.planner_orchestrator.is_client_tool", return_value=False):
              
         # Mock create_file to behave normally
@@ -101,8 +104,8 @@ async def test_orchestrator_self_correction_loop(session_memory_fixture):
             )
             
             # The second attempt should succeed
-            assert result["type"] == "tool"
-            assert result["tool"] == "create_file"
+            assert result["type"] == "chat"
+            assert result["response"] == "Archivo creado con éxito."
             assert temp_file_path.read_text(encoding="utf-8") == "def foo():\n    return 42"
             
         temp_dir.cleanup()

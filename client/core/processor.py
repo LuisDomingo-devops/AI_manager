@@ -32,8 +32,25 @@ class ResponseProcessor:
             status = tool_result.get("status", "")
             message = tool_result.get("message", "")
 
-            # Aceptar "ok" (de tools de servidor) o "success" (de tools de cliente)
-            if status in ("ok", "success") or tool_name == "switch_project_session":
+            # Mensajes personalizados legibles para transiciones de UI
+            UI_MESSAGES = {
+                "calendar_open_ui": "Abriendo el calendario...",
+                "calendar_close_ui": "Cerrando el calendario...",
+                "mail_open_ui": "Abriendo la bandeja de correo...",
+                "mail_close_ui": "Cerrando la bandeja de correo...",
+                "dev_studio_open_ui": "Abriendo el editor de desarrollo...",
+                "dev_studio_close_ui": "Cerrando el editor de desarrollo..."
+            }
+            if tool_name in UI_MESSAGES:
+                return UI_MESSAGES[tool_name]
+
+            # Aceptar "ok", "success", o resultados vacíos sin error (común en llamadas locales asíncronas)
+            is_success = (
+                status in ("ok", "success") or 
+                tool_name == "switch_project_session" or
+                (not status and not tool_result.get("error") and not tool_result.get("message"))
+            )
+            if is_success:
                 if tool_name == "switch_project_session":
                     # Intentar leer desde result o desde args
                     p_data = result_data.get("args") or result_data.get("result", {})

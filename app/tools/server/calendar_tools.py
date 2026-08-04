@@ -45,6 +45,49 @@ async def calendar_create_event(
         if isinstance(attendees, list):
             attendees = ", ".join([str(a) for a in attendees]) if attendees else None
             
+        # Comprobar conflictos de horario de forma programática
+        from datetime import datetime, timedelta
+        from app.adapters.calendar_db import list_events
+        
+        def parse_dt(dt_str):
+            if not dt_str:
+                return None
+            dt_str = dt_str.replace("T", " ")
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(dt_str, fmt)
+                except ValueError:
+                    continue
+            return None
+
+        new_start = parse_dt(start_time)
+        new_end = parse_dt(end_time) if end_time else None
+        if new_start and not new_end:
+            new_end = new_start + timedelta(hours=1)
+
+        conflicts = []
+        if new_start and new_end:
+            date_str = start_time[:10]
+            existing_events = list_events(start_date=date_str, end_date=date_str)
+            for ev in existing_events:
+                ev_start = parse_dt(ev.get("start_time"))
+                ev_end = parse_dt(ev.get("end_time"))
+                if ev_start and not ev_end:
+                    ev_end = ev_start + timedelta(hours=1)
+                
+                if ev_start and ev_end:
+                    # Hay solapamiento si max(s1, s2) < min(e1, e2)
+                    if max(new_start, ev_start) < min(new_end, ev_end):
+                        conflicts.append(ev)
+
+        if conflicts:
+            tool_logger.warning(f"Conflicto de calendario programático detectado para la fecha {start_time}")
+            return {
+                "status": "conflict",
+                "message": f"Conflicto detectado: ya tienes la cita '{conflicts[0]['title']}' en ese horario ({conflicts[0]['start_time']}).",
+                "conflicts": conflicts
+            }
+
         event_id = create_event(
             title=title,
             start_time=start_time,

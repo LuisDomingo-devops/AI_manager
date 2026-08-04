@@ -393,7 +393,23 @@ class TaxParserService:
                 encryptor.encrypt(file_path)
             ))
             conn.commit()
-            return cursor.lastrowid
+            last_id = cursor.lastrowid
+
+        # Generar asiento contable PGC por partida doble de forma transparente
+        try:
+            from app.domain.services.ledger_service import LedgerService
+            LedgerService.record_invoice_asiento(data)
+        except Exception as cont_err:
+            app_logger.warning("No se pudo generar el asiento contable automáticamente: %s", cont_err)
+
+        # Sincronizar con el Excel local de forma asíncrona/segura
+        try:
+            from app.domain.services.excel_sync import ExcelSyncService
+            ExcelSyncService.sync_invoices_to_excel()
+        except Exception as xls_err:
+            app_logger.warning("No se pudo sincronizar con el archivo Excel local: %s", xls_err)
+
+        return last_id
 
     @classmethod
     def parse_tax_model_text(cls, text: str) -> Dict[str, Any]:
@@ -485,20 +501,26 @@ class TaxParserService:
                 }
             
             cat = r["category"]
-            if cat in ["income", "expense"]:
-                try:
-                    base = float(encryptor.decrypt(r["base_imponible"]) or 0.0)
-                    iva = float(encryptor.decrypt(r["iva_amount"]) or 0.0)
-                    irpf = float(encryptor.decrypt(r["irpf_amount"]) or 0.0)
-                    total = float(encryptor.decrypt(r["total_amount"]) or 0.0)
-                except Exception:
-                    base = iva = irpf = total = 0.0
+            if cat in ["ingreso", "income"]:
+                cat = "income"
+            elif cat in ["gasto", "expense"]:
+                cat = "expense"
+            else:
+                continue
 
-                groups[key][cat]["base"] = round(groups[key][cat]["base"] + base, 2)
-                groups[key][cat]["iva"] = round(groups[key][cat]["iva"] + iva, 2)
-                groups[key][cat]["irpf"] = round(groups[key][cat]["irpf"] + irpf, 2)
-                groups[key][cat]["total"] = round(groups[key][cat]["total"] + total, 2)
-                groups[key][cat]["count"] += 1
+            try:
+                base = float(encryptor.decrypt(r["base_imponible"]) or 0.0)
+                iva = float(encryptor.decrypt(r["iva_amount"]) or 0.0)
+                irpf = float(encryptor.decrypt(r["irpf_amount"]) or 0.0)
+                total = float(encryptor.decrypt(r["total_amount"]) or 0.0)
+            except Exception:
+                base = iva = irpf = total = 0.0
+
+            groups[key][cat]["base"] = round(groups[key][cat]["base"] + base, 2)
+            groups[key][cat]["iva"] = round(groups[key][cat]["iva"] + iva, 2)
+            groups[key][cat]["irpf"] = round(groups[key][cat]["irpf"] + irpf, 2)
+            groups[key][cat]["total"] = round(groups[key][cat]["total"] + total, 2)
+            groups[key][cat]["count"] += 1
                 
         results = []
         # Calcular resultado neto (Ingreso Total - Gasto Total)

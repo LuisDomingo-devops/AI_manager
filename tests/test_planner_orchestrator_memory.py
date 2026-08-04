@@ -26,8 +26,12 @@ async def test_orchestrator_memory_lifecycle():
     # --- FASE 1: Guardar preferencia a través de la simulación del LLM ---
     # El usuario da una orden que no activa el analizador estático pero sí al LLM en modo tool.
     mock_llm = MagicMock()
-    # Forzar una llamada a la tool save_user_preference
-    mock_llm.generate = AsyncMock(return_value='{"tool": "save_user_preference", "args": {"fact": "El perro del usuario se llama Toby."}}')
+    mock_llm.generate = AsyncMock()
+    # Forzar una llamada a la tool save_user_preference, luego terminar con chat
+    mock_llm.generate.side_effect = [
+        '{"tool": "save_user_preference", "args": {"fact": "El perro del usuario se llama Toby."}}',
+        'Preferencia guardada.'
+    ]
 
     # Ejecutar en el orquestador (forzamos que vaya a la tool usando una keyword)
     result = await orchestrator.run(
@@ -60,7 +64,11 @@ async def test_orchestrator_memory_lifecycle():
 
     # --- FASE 3: Borrar el recuerdo a través del LLM ---
     # Petición para olvidar. Usamos una palabra clave explícita para la coincidencia de substring
-    mock_llm.generate = AsyncMock(return_value='{"tool": "forget_user_fact", "args": {"query": "Toby"}}')
+    mock_llm.generate = AsyncMock()
+    mock_llm.generate.side_effect = [
+        '{"tool": "forget_user_fact", "args": {"query": "Toby"}}',
+        'He borrado ese recuerdo.'
+    ]
 
     await orchestrator.run(
         user_message="elimina de mi perfil el nombre de mi perro",

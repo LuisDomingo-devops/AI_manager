@@ -1,5 +1,9 @@
 import sys
 import os
+from pathlib import Path
+# Añadir la carpeta raíz del proyecto (alfonso_autonomo) y la carpeta client al PATH de Python
+sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 import uuid
 import numpy as np
 import asyncio
@@ -39,7 +43,7 @@ class AssistantThread(QThread):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.api = AlfonsoAPI(config['url']) if 'url' in config else AlfonsoAPI("http://localhost:8000")
+        self.api = AlfonsoAPI(config.get('url', 'http://localhost:8000'), config.get('api_key', 'default_key'))
         self.audio = AudioService()
         self.processor = ResponseProcessor()
         self.running = True
@@ -169,11 +173,14 @@ class AssistantThread(QThread):
                         else:
                             if response_text:
                                 self.state_changed.emit("speaking")
-                                audio_path = await self.audio.text_to_speech_human(response_text)
+                                tts_text = response_text
+                                if len(response_text) > 200:
+                                    tts_text = "Te he dejado la información detallada por escrito en el chat para que la revises."
+                                audio_path = await self.audio.text_to_speech_human(tts_text)
                                 if audio_path:
                                     await asyncio.to_thread(self.audio.play_audio_file, audio_path)
                                 else:
-                                    audio_bytes = await asyncio.to_thread(self.audio.text_to_wav_bytes, response_text)
+                                    audio_bytes = await asyncio.to_thread(self.audio.text_to_wav_bytes, tts_text)
                                     if audio_bytes:
                                         await asyncio.to_thread(self.audio.play_audio, audio_bytes, device=output_device)
                         
@@ -259,11 +266,14 @@ class AssistantThread(QThread):
                         else:
                             if response_text:
                                 self.state_changed.emit("speaking")
-                                audio_path = await self.audio.text_to_speech_human(response_text)
+                                tts_text = response_text
+                                if len(response_text) > 200:
+                                    tts_text = "Te he dejado la información detallada por escrito en el chat para que la revises."
+                                audio_path = await self.audio.text_to_speech_human(tts_text)
                                 if audio_path:
                                     await asyncio.to_thread(self.audio.play_audio_file, audio_path)
                                 else:
-                                    audio_bytes = await asyncio.to_thread(self.audio.text_to_wav_bytes, response_text)
+                                    audio_bytes = await asyncio.to_thread(self.audio.text_to_wav_bytes, tts_text)
                                     if audio_bytes:
                                         await asyncio.to_thread(self.audio.play_audio, audio_bytes, device=output_device)
                     else:
@@ -321,29 +331,29 @@ class HUDPanel(QFrame):
         self.setObjectName("HUDPanel")
         self.setStyleSheet("""
             #HUDPanel {
-                background-color: rgba(20, 25, 35, 0.85);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 10px;
+                background-color: rgba(30, 41, 59, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
             }
         """)
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(16, 34, 16, 16)
+        self.main_layout.setContentsMargins(16, 36, 16, 16)
         
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Punto de acento / Badge
-        painter.setBrush(QBrush(QColor(0, 229, 255, 220)))
+        # Punto de acento / Badge - Indigo
+        painter.setBrush(QBrush(QColor(99, 102, 241, 220)))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(16, 17, 6, 6)
+        painter.drawEllipse(16, 18, 6, 6)
         
         # Título del panel
         font = QFont("Segoe UI", 9, QFont.Weight.Bold)
         painter.setFont(font)
-        painter.setPen(QColor(226, 232, 240, 220))
-        painter.drawText(28, 23, self.title.upper())
+        painter.setPen(QColor(241, 245, 249, 220))
+        painter.drawText(28, 24, self.title.upper())
 
 
 class AnimatedWaveWidget(QWidget):
@@ -728,7 +738,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #0B0E14;
+                background-color: #0F172A;
             }
             QLabel {
                 font-family: 'Segoe UI', 'Inter', sans-serif;
@@ -738,33 +748,33 @@ class AlfonsoHUDDashboard(QMainWindow):
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.05);
                 color: #CBD5E1;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 8px;
                 padding: 6px 14px;
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 11px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: rgba(0, 229, 255, 0.15);
+                background-color: rgba(99, 102, 241, 0.15);
                 color: #FFFFFF;
-                border-color: rgba(0, 229, 255, 0.4);
+                border-color: rgba(99, 102, 241, 0.4);
             }
             QPushButton:pressed {
-                background-color: #00E5FF;
-                color: #0B0E14;
+                background-color: #6366F1;
+                color: #FFFFFF;
             }
             QTextEdit, QLineEdit {
-                background-color: rgba(15, 20, 28, 0.9);
+                background-color: rgba(30, 41, 59, 0.9);
                 color: #F8FAFC;
-                border: 1px solid rgba(0, 229, 255, 0.25);
-                border-radius: 6px;
+                border: 1px solid rgba(99, 102, 241, 0.25);
+                border-radius: 8px;
                 padding: 8px 12px;
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 12px;
             }
             QTextEdit:focus, QLineEdit:focus {
-                border-color: #00E5FF;
+                border-color: #6366F1;
             }
         """)
 
@@ -805,13 +815,27 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.ui_timer.timeout.connect(self.update_telemetry)
         self.ui_timer.start(1000)
 
-        self.log_timer = QTimer(self)
-        self.log_timer.timeout.connect(self.read_logs)
-        self.log_timer.start(1000)
+
 
         self.agent_process = None
         self.start_agent()
         self.start_assistant()
+        QTimer.singleShot(2500, self.check_onboarding)
+
+    def check_onboarding(self):
+        try:
+            import requests
+            headers = {"X-API-Key": self.config.get("api_key", "default_key")}
+            server_url = self.config.get("url", "http://127.0.0.1:8000")
+            res = requests.get(f"{server_url}/tax/profile", headers=headers, timeout=3.0)
+            if res.status_code == 200:
+                data = res.json()
+                if not data.get("configured", False):
+                    api_client = AlfonsoAPI(self.config.get('url', 'http://127.0.0.1:8000'), self.config.get('api_key', 'default_key'))
+                    wizard = AlfonsoOnboardingWizard(self, api_client)
+                    wizard.exec()
+        except Exception as e:
+            print(f"Error checking onboarding status: {e}")
 
     def start_agent(self):
         try:
@@ -875,41 +899,28 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.tab_modules.clicked.connect(self.show_calendar)
         self.tab_mail = QPushButton("CORREO")
         self.tab_mail.clicked.connect(self.show_mail)
-        self.tab_editor = QPushButton("DEV STUDIO")
-        self.tab_editor.clicked.connect(self.show_editor)
         self.tab_aeat = QPushButton("AUTOFILL AEAT")
         self.tab_aeat.clicked.connect(self.show_aeat)
-        self.tab_diagnostics = QPushButton("DIAGNOSTICS")
-        self.tab_diagnostics.clicked.connect(self.show_diagnostics)
-        self.tab_logs = QPushButton("LOGS")
         self.tab_config = QPushButton("CONFIG")
         self.tab_config.clicked.connect(self.show_config)
         
         header_layout.addWidget(self.tab_dashboard)
         
-        # Botón Proyectos (POP-UP) con el mismo estilo retro sci-fi
-        self.btn_projects_popup = QPushButton("PROYECTOS")
-        self.btn_projects_popup.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(0, 240, 255, 0.05);
-                color: #00F0FF;
-                border: 1px solid rgba(0, 240, 255, 0.3);
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 240, 255, 0.2);
-                border: 1px solid #00F0FF;
-            }
-        """)
-        self.btn_projects_popup.clicked.connect(self.show_projects_navigator)
-        header_layout.addWidget(self.btn_projects_popup)
+        self.tab_reconcile = QPushButton("CONCILIACIÓN")
+        self.tab_reconcile.clicked.connect(self.show_reconcile)
+        
+        self.tab_ledger = QPushButton("DIARIO CONTABLE")
+        self.tab_ledger.clicked.connect(self.show_ledger)
+        
+        self.tab_archive = QPushButton("ARCHIVO FISCAL")
+        self.tab_archive.clicked.connect(self.show_archive)
 
+        header_layout.addWidget(self.tab_reconcile)
+        header_layout.addWidget(self.tab_ledger)
+        header_layout.addWidget(self.tab_archive)
         header_layout.addWidget(self.tab_modules)
         header_layout.addWidget(self.tab_mail)
-        header_layout.addWidget(self.tab_editor)
         header_layout.addWidget(self.tab_aeat)
-        header_layout.addWidget(self.tab_diagnostics)
-        header_layout.addWidget(self.tab_logs)
         header_layout.addWidget(self.tab_config)
 
 
@@ -931,47 +942,74 @@ class AlfonsoHUDDashboard(QMainWindow):
         left_layout.setSpacing(15)
 
         # 1. Visualización de Rostro/Avatar
-        self.panel_core = HUDPanel("CORE VISUALIZATION")
+        self.panel_core = HUDPanel("TU ASISTENTE ALFONSO")
         self.animated_wave = AnimatedWaveWidget()
         self.panel_core.main_layout.addWidget(self.animated_wave, alignment=Qt.AlignmentFlag.AlignCenter)
         
         self.state_lbl = QLabel("STANDBY")
         self.state_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.state_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #00E5FF; letter-spacing: 2px;")
+        self.state_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #6366F1; letter-spacing: 2px;")
         self.panel_core.main_layout.addWidget(self.state_lbl)
         left_layout.addWidget(self.panel_core, 2)
 
-        # 2. Salida de Logs en tiempo real
-        self.panel_logs = HUDPanel("LOG OUTPUT")
-        log_ctrls = QHBoxLayout()
-        self.btn_log_app = QPushButton("APP")
-        self.btn_log_app.clicked.connect(lambda: self.change_log_file("app.log", self.btn_log_app))
-        self.btn_log_agent = QPushButton("AGENT")
-        self.btn_log_agent.clicked.connect(lambda: self.change_log_file("agent.log", self.btn_log_agent))
-        self.btn_log_errors = QPushButton("ERRORS")
-        self.btn_log_errors.clicked.connect(lambda: self.change_log_file("errors.log", self.btn_log_errors))
-        log_ctrls.addWidget(self.btn_log_app)
-        log_ctrls.addWidget(self.btn_log_agent)
-        log_ctrls.addWidget(self.btn_log_errors)
-        self.panel_logs.main_layout.addLayout(log_ctrls)
-
-        self.log_scroll = QScrollArea()
-        self.log_scroll.setWidgetResizable(True)
-        self.log_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.log_scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 6px;
-                background-color: rgba(15, 20, 28, 0.8);
-            }
-        """)
-        self.log_scroll.viewport().setStyleSheet("background-color: transparent;")
-        self.log_display = CrtTerminalLabel("INITIALIZING LOG SYSTEM...", color_hex="#10B981")
-        self.log_display.setWordWrap(True)
-        self.log_display.setStyleSheet("font-family: 'Consolas', 'Fira Code', monospace; font-size: 11px; color: #10B981; background-color: transparent; padding: 8px;")
-        self.log_scroll.setWidget(self.log_display)
-        self.panel_logs.main_layout.addWidget(self.log_scroll)
-        left_layout.addWidget(self.panel_logs, 4)
+        # 2. Panel de Métricas de Negocio en Tiempo Real
+        self.panel_business = HUDPanel("RESUMEN DEL NEGOCIO")
+        self.panel_business.setMinimumHeight(340)
+        
+        # Layout interno del panel
+        bus_layout = QVBoxLayout()
+        bus_layout.setSpacing(10)
+        bus_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Sección 1: Saldos y Facturación
+        self.lbl_saldo_banco = QLabel("SALDO BANCARIO:  0,00 €")
+        self.lbl_saldo_banco.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #10B981; font-weight: bold;")
+        self.lbl_ingresos_ejercicio = QLabel("INGRESOS 2026:  0,00 €")
+        self.lbl_ingresos_ejercicio.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #E2E8F0;")
+        self.lbl_gastos_ejercicio = QLabel("GASTOS 2026:    0,00 €")
+        self.lbl_gastos_ejercicio.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #E2E8F0;")
+        
+        bus_layout.addWidget(self.lbl_saldo_banco)
+        bus_layout.addWidget(self.lbl_ingresos_ejercicio)
+        bus_layout.addWidget(self.lbl_gastos_ejercicio)
+        
+        # Separador visual
+        sep_bus = QFrame()
+        sep_bus.setFrameShape(QFrame.Shape.HLine)
+        sep_bus.setStyleSheet("border: 1px solid rgba(255, 184, 0, 30); max-height: 1px;")
+        bus_layout.addWidget(sep_bus)
+        
+        # Sección 2: Próximas Obligaciones Fiscales (AEAT)
+        bus_layout.addWidget(QLabel("<b>OBLIGACIONES FISCALES (AEAT):</b>"))
+        
+        self.lbl_vencimiento_iva = QLabel("• Mod. 303 (IVA 3T):   20 Oct 2026")
+        self.lbl_vencimiento_iva.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #00F0FF;")
+        self.lbl_vencimiento_irpf = QLabel("• Mod. 130 (IRPF 3T):  20 Oct 2026")
+        self.lbl_vencimiento_irpf.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #00F0FF;")
+        self.lbl_vencimiento_ret = QLabel("• Mod. 111 (Retenc.):  20 Oct 2026")
+        self.lbl_vencimiento_ret.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #00F0FF;")
+        
+        bus_layout.addWidget(self.lbl_vencimiento_iva)
+        bus_layout.addWidget(self.lbl_vencimiento_irpf)
+        bus_layout.addWidget(self.lbl_vencimiento_ret)
+        
+        # Separador visual 2
+        sep_bus2 = QFrame()
+        sep_bus2.setFrameShape(QFrame.Shape.HLine)
+        sep_bus2.setStyleSheet("border: 1px solid rgba(255, 184, 0, 30); max-height: 1px;")
+        bus_layout.addWidget(sep_bus2)
+        
+        # Sección 3: Seguridad Social
+        bus_layout.addWidget(QLabel("<b>COTIZACIONES Y S. SOCIAL:</b>"))
+        
+        self.lbl_seguros_sociales = QLabel("• Autónomos (Agosto):  31 Ago 2026")
+        self.lbl_seguros_sociales.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #FFB800;")
+        bus_layout.addWidget(self.lbl_seguros_sociales)
+        
+        bus_layout.addStretch()
+        
+        self.panel_business.main_layout.addLayout(bus_layout)
+        left_layout.addWidget(self.panel_business, 4)
 
         body_layout.addLayout(left_layout, 1)
 
@@ -979,18 +1017,18 @@ class AlfonsoHUDDashboard(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.setSpacing(15)
 
-        self.panel_chat = HUDPanel("CONVERSATION CONSOLE")
+        self.panel_chat = HUDPanel("CONVERSACIÓN CON ALFONSO")
         
         # Etiqueta de sesión activa persistente
-        self.lbl_active_session = QLabel("ACTIVO: NINGUNA SESIÓN CARGADA (Por favor abre un proyecto)")
+        self.lbl_active_session = QLabel("ESTADO: SIN CONVERSACIÓN ACTIVA (Por favor abre un proyecto)")
         self.lbl_active_session.setStyleSheet("""
-            font-family: 'Consolas', 'Fira Code', monospace;
+            font-family: 'Segoe UI', sans-serif;
             font-size: 11px;
-            color: #FFB800;
-            background-color: rgba(255, 184, 0, 0.05);
-            border: 1px solid rgba(255, 184, 0, 0.2);
-            border-radius: 4px;
-            padding: 6px;
+            color: #6366F1;
+            background-color: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 8px;
+            padding: 6px 12px;
             margin-bottom: 5px;
         """)
         self.panel_chat.main_layout.addWidget(self.lbl_active_session)
@@ -1141,7 +1179,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
     def start_assistant(self):
         thread_config = self.config.copy()
-        thread_config['bridge_url'] = self.config.get('bridge_url', "ws://localhost:8765")
+        thread_config['bridge_url'] = self.config.get('bridge_url', "ws://127.0.0.1:8765")
         self.thread = AssistantThread(thread_config)
         self.thread.new_message.connect(self.update_chat)
         self.thread.state_changed.connect(self.update_visual_state)
@@ -1152,9 +1190,6 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.thread.open_mail.connect(self.show_mail)
         self.thread.close_mail.connect(self.hide_mail)
         self.thread.sync_mail.connect(self.reload_mail_events)
-        self.thread.open_editor.connect(self.show_editor)
-        self.thread.open_editor.connect(self.show_editor)
-        self.thread.close_editor.connect(self.hide_editor)
         self.thread.switch_session_requested.connect(self.handler_switch_session)
         self.thread.start()
 
@@ -1190,18 +1225,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.calendar_window.activateWindow()
         self.calendar_window.load_events()
 
-    def hide_editor(self):
-        if self.editor_window:
-            self.editor_window.close()
 
-    def show_editor(self):
-        if not self.editor_window:
-            from gui.editor_widget import DevEditorWidget
-            self.editor_window = DevEditorWidget(self.thread.api)
-        self.editor_window.show()
-        self.editor_window.raise_()
-        self.editor_window.activateWindow()
-        self.editor_window.load_file_list()
 
     def hide_config(self):
         if self.config_window:
@@ -1222,14 +1246,25 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.aeat_window.activateWindow()
 
 
-    def show_projects_navigator(self):
-        """Inicializa y abre el Pop-up flotante del listado de proyectos."""
-        self.projects_dialog = ProjectNavigatorDialog(self)
-        self.projects_dialog.show()
-        self.projects_dialog.raise_()
-        self.projects_dialog.activateWindow()
-        # Rellenar datos en la ventana emergente recién creada
-        self.reload_projects_list()
+    def show_reconcile(self):
+        api_client = AlfonsoAPI(self.config.get('url', 'http://127.0.0.1:8000'), self.config.get('api_key', 'default_key'))
+        dialog = AlfonsoBankReconciliationDialog(self, api_client)
+        dialog.exec()
+
+    def show_ledger(self):
+        api_client = AlfonsoAPI(self.config.get('url', 'http://127.0.0.1:8000'), self.config.get('api_key', 'default_key'))
+        dialog = AlfonsoLedgerDialog(self, api_client)
+        dialog.exec()
+
+    def show_archive(self):
+        try:
+            import os
+            # Abrir la carpeta del archivo fiscal en el explorador de Windows
+            archive_dir = os.path.abspath("data/archivo fiscal")
+            os.makedirs(archive_dir, exist_ok=True)
+            os.startfile(archive_dir)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"No se pudo abrir el Archivo Fiscal: {e}")
 
     def handler_switch_session(self, session_id, project_name, title):
         """Manejador ejecutado de forma segura en el hilo principal para aplicar el cambio de proyecto."""
@@ -1264,17 +1299,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         else:
             self.reload_projects_list()
 
-    def hide_diagnostics(self):
-        if self.diagnostics_window:
-            self.diagnostics_window.close()
 
-    def show_diagnostics(self):
-        if not self.diagnostics_window:
-            self.diagnostics_window = DiagnosticsWidget(self)
-        self.diagnostics_window.show()
-        self.diagnostics_window.raise_()
-        self.diagnostics_window.activateWindow()
-        self.diagnostics_window.run_diagnostics()
 
     def hide_alerts(self):
         if self.alerts_window:
@@ -1448,35 +1473,62 @@ class AlfonsoHUDDashboard(QMainWindow):
         }
         self.state_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {state_colors.get(state, '#00F0FF')}; letter-spacing: 2px;")
 
-    def change_log_file(self, filename, active_btn):
-        self.current_log_file = filename
-        self.log_display.setText(f"CARGANDO LOG: {filename.upper()}...")
-        self.read_logs()
 
-    def read_logs(self):
-        logs_base = self.ui_logs_dir if self.current_log_file == "agent.log" else self.logs_dir
-        filepath = os.path.join(logs_base, self.current_log_file)
-        if not os.path.exists(filepath):
-            self.log_display.setText(f"ERROR: ARCHIVO DE LOG NO ENCONTRADO\n{filepath}")
-            return
-        
-        try:
-            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                last_lines = lines[-25:]
-                content = "".join(last_lines)
-                if not content.strip():
-                    content = "ARCHIVO DE LOG VACÍO"
-                self.log_display.setText(content)
-                QTimer.singleShot(20, lambda: self.log_scroll.verticalScrollBar().setValue(self.log_scroll.verticalScrollBar().maximum()))
-        except Exception as e:
-            self.log_display.setText(f"ERROR AL LEER EL ARCHIVO:\n{str(e)}")
 
     def update_telemetry(self):
         now = datetime.datetime.now()
         time_str = now.strftime("%H:%M:%S")
         date_str = now.strftime("%d.%m.%Y")
         self.clock_lbl.setText(f"USER: ADMINISTRATOR   {time_str}\n{date_str}")
+        self.update_business_metrics()
+
+    def update_business_metrics(self):
+        try:
+            from app.adapters.memory.memory import _get_connection
+            from app.utils.encryption import encryptor
+            
+            saldo = 0.0
+            ingresos = 0.0
+            gastos = 0.0
+
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # 1. Calcular Saldo Bancario
+                cursor.execute("SELECT SUM(amount) FROM bank_movements")
+                row_bank = cursor.fetchone()
+                if row_bank and row_bank[0] is not None:
+                    saldo = float(row_bank[0])
+                    
+                # 2. Calcular Ingresos y Gastos
+                cursor.execute("SELECT base_imponible, category FROM invoices WHERE year = 2026")
+                invs = cursor.fetchall()
+                for inv in invs:
+                    try:
+                        base = float(encryptor.decrypt(inv["base_imponible"]))
+                        if inv["category"] in ("ingreso", "income"):
+                            ingresos += base
+                        elif inv["category"] in ("gasto", "expense"):
+                            gastos += base
+                        else:
+                            # Por si acaso
+                            gastos += base
+                    except Exception:
+                        pass
+                        
+            # Actualizar textos de la interfaz
+            self.lbl_saldo_banco.setText(f"SALDO BANCARIO:  {saldo:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+            self.lbl_ingresos_ejercicio.setText(f"INGRESOS 2026:  {ingresos:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+            self.lbl_gastos_ejercicio.setText(f"GASTOS 2026:    {gastos:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+            
+            # Cambiar color de saldo según signo
+            if saldo >= 0:
+                self.lbl_saldo_banco.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #10B981; font-weight: bold;")
+            else:
+                self.lbl_saldo_banco.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; color: #EF4444; font-weight: bold;")
+
+        except Exception as e:
+            print(f"Error updating business telemetry: {e}")
 
     def close_gui(self):
         try:
@@ -1734,7 +1786,7 @@ class CalendarWidget(QWidget):
         res = self.api.get_calendar_events(start_date, end_date)
         if res.get("status") == "ok":
             for ev in res.get("events", []):
-                dt = ev.get("start_time", "").split(" ")[0]
+                dt = ev.get("start_time", "")[:10]  # Extrae siempre YYYY-MM-DD soportando tanto separadores 'T' como espacio
                 if dt not in self.events_cache:
                     self.events_cache[dt] = []
                 self.events_cache[dt].append(ev)
@@ -2640,6 +2692,13 @@ class ConfigWidget(QWidget):
         form_layout.setVerticalSpacing(12)
         form_layout.setHorizontalSpacing(20)
 
+        # Campos de Correo Real (Gmail)
+        self.input_email = QLineEdit()
+        self.input_email.setPlaceholderText("ejemplo@gmail.com")
+        self.input_pass = QLineEdit()
+        self.input_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_pass.setPlaceholderText("Contraseña de Aplicación de 16 caracteres")
+
         self.input_url = QLineEdit()
         self.input_keyword = QLineEdit()
         
@@ -2654,11 +2713,15 @@ class ConfigWidget(QWidget):
         self.spin_threshold.setSingleStep(0.01)
         self.spin_threshold.setValue(0.03)
 
-        form_layout.addRow(QLabel("URL Servidor:"), self.input_url)
-        form_layout.addRow(QLabel("Palabra Clave:"), self.input_keyword)
+        form_layout.addRow(QLabel("Email (Gmail):"), self.input_email)
+        form_layout.addRow(QLabel("Clave de App:"), self.input_pass)
+        form_layout.addRow(QLabel("Palabra Clave (Voz):"), self.input_keyword)
         form_layout.addRow(QLabel("Modelo de Voz:"), self.combo_model)
         form_layout.addRow(QLabel("ID Micrófono:"), self.spin_device)
         form_layout.addRow(QLabel("Umbral Ruido:"), self.spin_threshold)
+        
+        # Campo de URL oculto o al final para evitar confundir al usuario
+        form_layout.addRow(QLabel("URL Servidor:"), self.input_url)
 
         container_layout.addLayout(form_layout)
 
@@ -2695,8 +2758,29 @@ class ConfigWidget(QWidget):
         if idx >= 0:
             self.combo_model.setCurrentIndex(idx)
             
-        self.spin_device.setValue(c.get('device', 8))
+        dev_val = c.get('device')
+        self.spin_device.setValue(dev_val if dev_val is not None else 8)
         self.spin_threshold.setValue(c.get('threshold') if c.get('threshold') is not None else 0.03)
+
+        # Cargar variables de email del archivo .env si existe
+        gmail_email = ""
+        gmail_pass = ""
+        try:
+            gui_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(gui_dir))
+            env_path = os.path.join(project_root, ".env")
+            if os.path.exists(env_path):
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip().startswith("GMAIL_EMAIL="):
+                            gmail_email = line.split("=", 1)[1].strip()
+                        elif line.strip().startswith("GMAIL_APP_PASSWORD="):
+                            gmail_pass = line.split("=", 1)[1].strip()
+        except Exception:
+            pass
+            
+        self.input_email.setText(gmail_email)
+        self.input_pass.setText(gmail_pass)
 
     def save_values(self):
         c = self.dashboard.config
@@ -2705,6 +2789,42 @@ class ConfigWidget(QWidget):
         c['model'] = self.combo_model.currentText()
         c['device'] = self.spin_device.value()
         c['threshold'] = self.spin_threshold.value()
+
+        # Guardar credenciales de correo real en el archivo .env para el servidor
+        try:
+            gui_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(gui_dir))
+            env_path = os.path.join(project_root, ".env")
+            lines = []
+            if os.path.exists(env_path):
+                with open(env_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+            
+            gmail_email = self.input_email.text().strip()
+            gmail_pass = self.input_pass.text().strip()
+            
+            email_found = False
+            pass_found = False
+            for idx, line in enumerate(lines):
+                if line.strip().startswith("GMAIL_EMAIL="):
+                    lines[idx] = f"GMAIL_EMAIL={gmail_email}\n"
+                    email_found = True
+                elif line.strip().startswith("GMAIL_APP_PASSWORD="):
+                    lines[idx] = f"GMAIL_APP_PASSWORD={gmail_pass}\n"
+                    pass_found = True
+                    
+            if not email_found:
+                lines.append(f"GMAIL_EMAIL={gmail_email}\n")
+            if not pass_found:
+                lines.append(f"GMAIL_APP_PASSWORD={gmail_pass}\n")
+                
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+                
+            os.environ["GMAIL_EMAIL"] = gmail_email
+            os.environ["GMAIL_APP_PASSWORD"] = gmail_pass
+        except Exception as e:
+            print(f"Error saving env file: {e}")
 
         # Mostrar aviso de éxito
         QMessageBox.information(
@@ -2716,14 +2836,10 @@ class ConfigWidget(QWidget):
 
 
 class DiagnosticsWidget(QWidget):
-    """Panel de Diagnósticos y Telemetría nativo para Alfonso OS."""
+    """Removed"""
     def __init__(self, parent_dashboard):
         super().__init__()
-        self.dashboard = parent_dashboard
-        self.setWindowTitle("ALFONSO DIAGNOSTICS")
-        self.setMinimumSize(600, 520)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
-        self.drag_position = None
+        return
 
         self.setStyleSheet("""
             QWidget {
@@ -3895,6 +4011,386 @@ class ProjectNavigatorDialog(QDialog):
         
         # Lanzar el envío de mensaje a Alfonso
         self.dashboard.thread.send_text_message(text)
+
+
+from PyQt6.QtWidgets import QComboBox, QFileDialog, QFormLayout
+
+class AlfonsoBaseDialog(QDialog):
+    """
+    Clase base para todos los diálogos/ventanas de Alfonso.
+    Asegura consistencia visual (estilo CRT retro / cyberpunk) y facilita cambios globales de apariencia.
+    """
+    def __init__(self, parent=None, title="SISTEMA ALFONSO"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setup_base_ui(title)
+        self.apply_base_stylesheet()
+
+    def setup_base_ui(self, title):
+        self.base_layout = QVBoxLayout(self)
+        self.base_layout.setContentsMargins(1, 1, 1, 1)
+        self.base_layout.setSpacing(0)
+
+        self.outer_frame = QFrame(self)
+        self.outer_frame.setObjectName("OuterFrame")
+        self.outer_layout = QVBoxLayout(self.outer_frame)
+        self.outer_layout.setContentsMargins(15, 15, 15, 15)
+        self.outer_layout.setSpacing(15)
+
+        self.title_bar = QFrame(self.outer_frame)
+        self.title_bar.setObjectName("TitleBar")
+        self.title_layout = QHBoxLayout(self.title_bar)
+        self.title_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.title_label = QLabel(title, self.title_bar)
+        self.title_label.setObjectName("TitleLabel")
+        self.title_layout.addWidget(self.title_label)
+        self.title_layout.addStretch()
+
+        self.btn_close = QPushButton("X", self.title_bar)
+        self.btn_close.setObjectName("BtnClose")
+        self.btn_close.setFixedSize(20, 20)
+        self.btn_close.clicked.connect(self.close)
+        self.title_layout.addWidget(self.btn_close)
+
+        self.outer_layout.addWidget(self.title_bar)
+
+        self.content_widget = QWidget(self.outer_frame)
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(0, 5, 0, 5)
+        self.content_layout.setSpacing(10)
+        self.outer_layout.addWidget(self.content_widget)
+
+        self.base_layout.addWidget(self.outer_frame)
+
+    def apply_base_stylesheet(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0F172A;
+            }
+            #OuterFrame {
+                background-color: #0F172A;
+                border: 1px solid rgba(99, 102, 241, 0.4);
+                border-radius: 12px;
+            }
+            #TitleBar {
+                background-color: rgba(99, 102, 241, 0.1);
+                border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+            }
+            #TitleLabel {
+                font-family: 'Segoe UI', 'Inter', sans-serif;
+                font-size: 13px;
+                font-weight: bold;
+                color: #6366F1;
+                letter-spacing: 0.5px;
+            }
+            #BtnClose {
+                background-color: transparent;
+                border: none;
+                color: #94A3B8;
+                font-weight: bold;
+                font-family: 'Segoe UI', sans-serif;
+                border-radius: 4px;
+            }
+            #BtnClose:hover {
+                background-color: #EF4444;
+                color: #FFFFFF;
+            }
+            QLabel {
+                color: #CBD5E1;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 12px;
+            }
+            QLineEdit, QComboBox, QTextEdit, QTableWidget {
+                background-color: rgba(30, 41, 59, 0.8);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                border-radius: 8px;
+                color: #F8FAFC;
+                padding: 6px;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
+                border: 1px solid #6366F1;
+            }
+            QPushButton {
+                background-color: rgba(99, 102, 241, 0.15);
+                border: 1px solid #6366F1;
+                color: #6366F1;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QPushButton:hover {
+                background-color: #6366F1;
+                color: #FFFFFF;
+            }
+        """)
+
+
+class AlfonsoOnboardingWizard(AlfonsoBaseDialog):
+    """Asistente de Onboarding para datos fiscales y firma digital FNMT."""
+    def __init__(self, parent=None, api_client=None):
+        self.api = api_client
+        super().__init__(parent, "ASISTENTE DE CONFIGURACIÓN CONTABLE (ONBOARDING)")
+        self.setMinimumSize(500, 450)
+        self.setup_wizard_ui()
+
+    def setup_wizard_ui(self):
+        desc = QLabel("Introduce los datos fiscales obligatorios de tu negocio para configurar la gestoría. Toda la información se almacenará de forma encriptada.")
+        desc.setWordWrap(True)
+        self.content_layout.addWidget(desc)
+
+        form_layout = QFormLayout()
+        
+        self.cmb_type = QComboBox()
+        self.cmb_type.addItems(["autónomo", "pyme"])
+        form_layout.addRow("Tipo de Contribuyente:", self.cmb_type)
+
+        self.txt_razon = QLineEdit()
+        self.txt_razon.setPlaceholderText("Nombre completo o Razón Social S.L.")
+        form_layout.addRow("Razón Social:", self.txt_razon)
+
+        self.txt_nif = QLineEdit()
+        self.txt_nif.setPlaceholderText("NIF / CIF (ej: 12345678Z)")
+        form_layout.addRow("NIF / CIF:", self.txt_nif)
+
+        self.txt_dir = QLineEdit()
+        self.txt_dir.setPlaceholderText("Dirección fiscal")
+        form_layout.addRow("Dirección Fiscal:", self.txt_dir)
+
+        # Certificado
+        self.lbl_cert_status = QLabel("Certificado no cargado (.pfx / .p12)")
+        self.lbl_cert_status.setStyleSheet("color: #EF4444; font-style: italic;")
+        
+        btn_select_cert = QPushButton("Examinar Certificado...")
+        btn_select_cert.clicked.connect(self.select_certificate)
+        form_layout.addRow(self.lbl_cert_status, btn_select_cert)
+
+        self.txt_cert_pass = QLineEdit()
+        self.txt_cert_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self.txt_cert_pass.setPlaceholderText("Contraseña del certificado digital")
+        form_layout.addRow("Contraseña Certificado:", self.txt_cert_pass)
+
+        self.content_layout.addLayout(form_layout)
+        self.selected_cert_path = ""
+
+        # Botón Guardar
+        self.btn_save = QPushButton("GUARDAR Y VALIDAR CONFIGURACIÓN")
+        self.btn_save.clicked.connect(self.save_profile)
+        self.content_layout.addWidget(self.btn_save)
+
+    def select_certificate(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar Certificado Digital", "", "Certificados (*.pfx *.p12)")
+        if file_path:
+            self.selected_cert_path = file_path
+            self.lbl_cert_status.setText(f"Certificado cargado: {os.path.basename(file_path)}")
+            self.lbl_cert_status.setStyleSheet("color: #10B981; font-weight: bold;")
+
+    def save_profile(self):
+        user_type = self.cmb_type.currentText()
+        razon = self.txt_razon.text().strip()
+        nif = self.txt_nif.text().strip()
+        direccion = self.txt_dir.text().strip()
+        cert_pass = self.txt_cert_pass.text().strip()
+
+        if not razon or not nif:
+            QMessageBox.warning(self, "Error de Validación", "La Razón Social y el NIF/CIF son campos obligatorios.")
+            return
+
+        try:
+            import requests
+            url = f"{self.api.base_url}/tax/profile"
+            data = {
+                "user_type": user_type,
+                "nif": nif,
+                "razon_social": razon,
+                "direccion": direccion,
+                "cert_password": cert_pass
+            }
+            files = None
+            if self.selected_cert_path:
+                files = {
+                    "certificate": (os.path.basename(self.selected_cert_path), open(self.selected_cert_path, "rb"), "application/x-pkcs12")
+                }
+            headers = {"X-API-Key": self.api.api_key}
+            res = requests.post(url, data=data, files=files, headers=headers)
+            if res.status_code == 200:
+                QMessageBox.information(self, "Éxito", "Configuración de Onboarding guardada con éxito.")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Error", f"Error en servidor al guardar perfil: {res.text}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error de Conexión", f"No se pudo conectar al servidor: {e}")
+
+class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
+    """Diálogo de Conciliación Bancaria."""
+    def __init__(self, parent=None, api_client=None):
+        self.api = api_client
+        super().__init__(parent, "CONCILIACIÓN BANCARIA AUTOMÁTICA Y MANUAL")
+        self.setMinimumSize(700, 500)
+        self.setup_recon_ui()
+
+    def setup_recon_ui(self):
+        intro = QLabel("Desde este panel puedes importar extractos Norma 43, agregar movimientos manuales y ejecutar el matching con facturas.")
+        intro.setWordWrap(True)
+        self.content_layout.addWidget(intro)
+
+        # Botones
+        btn_layout = QHBoxLayout()
+        btn_import = QPushButton("Importar Norma 43 (.txt)")
+        btn_import.clicked.connect(self.import_norma43)
+        btn_layout.addWidget(btn_import)
+
+        btn_manual = QPushButton("Añadir Movimiento Manual")
+        btn_manual.clicked.connect(self.add_manual_mov)
+        btn_layout.addWidget(btn_manual)
+
+        btn_reconcile = QPushButton("⚡ Ejecutar Matching Automático")
+        btn_reconcile.setStyleSheet("background-color: rgba(0, 229, 255, 0.15); border-color: #00E5FF; color: #00E5FF;")
+        btn_reconcile.clicked.connect(self.run_matching)
+        btn_layout.addWidget(btn_reconcile)
+
+        self.content_layout.addLayout(btn_layout)
+
+        # Tabla de movimientos
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Fecha", "Concepto", "Importe", "Estado"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.content_layout.addWidget(QLabel("<b>Historial de Movimientos Bancarios:</b>"))
+        self.content_layout.addWidget(self.table)
+
+        self.load_bank_movements()
+
+    def load_bank_movements(self):
+        try:
+            from app.adapters.memory.memory import _get_connection
+            from app.utils.encryption import encryptor
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT movement_date, concept, amount, reconciled FROM bank_movements ORDER BY id DESC")
+                rows = cursor.fetchall()
+
+            self.table.setRowCount(len(rows))
+            for row_idx, r in enumerate(rows):
+                fecha = r["movement_date"]
+                concepto = encryptor.decrypt(r["concept"])
+                importe = f"{r['amount']:.2f} €"
+                estado = "🟢 Conciliado" if r["reconciled"] else "🔴 Pendiente"
+
+                self.table.setItem(row_idx, 0, QTableWidgetItem(fecha))
+                self.table.setItem(row_idx, 1, QTableWidgetItem(concepto))
+                self.table.setItem(row_idx, 2, QTableWidgetItem(importe))
+                self.table.setItem(row_idx, 3, QTableWidgetItem(estado))
+        except Exception as e:
+            print(f"Error loading bank movements: {e}")
+
+    def import_norma43(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar Extracto Norma 43", "", "Norma 43 (*.txt *.n43)")
+        if file_path:
+            try:
+                import requests
+                url = f"{self.api.base_url}/tax/bank/import"
+                headers = {"X-API-Key": self.api.api_key}
+                files = {"file": open(file_path, "rb")}
+                res = requests.post(url, files=files, headers=headers)
+                if res.status_code == 200:
+                    info = res.json()
+                    QMessageBox.information(self, "Importación", info.get("message", "Importado correctamente."))
+                    self.load_bank_movements()
+                else:
+                    QMessageBox.warning(self, "Error", f"Error al importar: {res.text}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def add_manual_mov(self):
+        dialog = AlfonsoBaseDialog(self, "AÑADIR MOVIMIENTO MANUAL")
+        dialog.setMinimumSize(350, 250)
+
+        form = QFormLayout()
+        txt_date = QLineEdit(datetime.datetime.now().strftime("%d/%m/%Y"))
+        txt_concept = QLineEdit()
+        txt_amount = QLineEdit()
+
+        form.addRow("Fecha (DD/MM/YYYY):", txt_date)
+        form.addRow("Concepto:", txt_concept)
+        form.addRow("Importe (€):", txt_amount)
+        dialog.content_layout.addLayout(form)
+
+        btn_ok = QPushButton("REGISTRAR")
+        dialog.content_layout.addWidget(btn_ok)
+
+        def save_manual():
+            try:
+                from app.domain.services.bank_service import BankService
+                date_str = txt_date.text().strip()
+                concept = txt_concept.text().strip()
+                amount = float(txt_amount.text().strip().replace(",", "."))
+                
+                BankService.add_manual_movement(date_str, concept, amount, "manual")
+                QMessageBox.information(dialog, "Éxito", "Movimiento registrado con éxito.")
+                dialog.accept()
+                self.load_bank_movements()
+            except Exception as e:
+                QMessageBox.critical(dialog, "Error", f"Verifica los datos: {e}")
+
+        btn_ok.clicked.connect(save_manual)
+        dialog.exec()
+
+    def run_matching(self):
+        try:
+            from app.domain.services.bank_service import BankService
+            pairs = BankService.reconcile_matching_algorithm()
+            QMessageBox.information(self, "Conciliación Finalizada", f"Se han conciliado automáticamente {len(pairs)} movimientos contables.")
+            self.load_bank_movements()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
+class AlfonsoLedgerDialog(AlfonsoBaseDialog):
+    """Diálogo para visualizar el Libro Diario Contable PGC."""
+    def __init__(self, parent=None, api_client=None):
+        super().__init__(parent, "LIBRO DIARIO CONTABLE (PLAN GENERAL CONTABLE)")
+        self.setMinimumSize(800, 500)
+        self.setup_ledger_ui()
+
+    def setup_ledger_ui(self):
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["Fecha", "Asiento", "Cuenta PGC", "Descripción", "Debe", "Haber"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.content_layout.addWidget(self.table)
+
+        self.load_ledger_data()
+
+    def load_ledger_data(self):
+        try:
+            from app.domain.services.ledger_service import LedgerService
+            diario = LedgerService.get_libro_diario(2026)
+            
+            rows_data = []
+            for asiento in diario:
+                fecha = asiento["fecha"]
+                a_id = asiento["asiento_id"]
+                for ap in asiento["apuntes"]:
+                    rows_data.append((
+                        fecha,
+                        f"#{a_id}",
+                        ap["cuenta"],
+                        ap["nombre_cuenta"],
+                        f"{ap['debe']:.2f} €" if ap["debe"] > 0 else "",
+                        f"{ap['haber']:.2f} €" if ap["haber"] > 0 else ""
+                    ))
+
+            self.table.setRowCount(len(rows_data))
+            for row_idx, data in enumerate(rows_data):
+                for col_idx, val in enumerate(data):
+                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
+        except Exception as e:
+            print(f"Error loading ledger: {e}")
 
 
 def launch(config):

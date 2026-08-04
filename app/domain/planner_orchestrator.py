@@ -170,9 +170,6 @@ class ConversationContextService:
     async def build_context(self, user_message: str, session_id: str | None, client_id: str | None) -> tuple[str | None, list[str], list[str]]:
         _check_and_store_fact(user_message, session_id, client_id=client_id, vector_memory_port=self.vector_memory)
 
-        if session_id:
-            self.memory.add_message(session_id, "user", user_message, client_id=client_id)
-
         general_facts = self.vector_memory.query_facts(user_message, limit=3, client_id=client_id)
         
         style_queries = ["estilo de respuesta", "preferencia de formato", "personalidad de Alfonso"]
@@ -213,6 +210,10 @@ class SpecializedAgentRouter:
         self.memory = memory
 
     async def route_if_applicable(self, user_message: str, session_id: str | None, client_id: str | None, logger) -> dict | None:
+        from app.domain.intent_router import IntentRouter
+        if IntentRouter().detect(user_message) == "tool":
+            return None # Si es una acción instrumental, evitamos desvíos a agentes y dejamos correr la tool
+            
         msg_lower = user_message.lower()
         
         is_marcos_query = "marcos" in msg_lower or any(kw in msg_lower for kw in [
@@ -292,6 +293,32 @@ class SpecializedAgentRouter:
             logger.info("Consulta de seguridad. Delegando a CyberSecurityAgent.")
             from app.domain.agents.security.security_agent import security_agent
             response = await security_agent.generate_response(user_message)
+            if session_id:
+                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
+            return {
+                "type": "chat",
+                "response": response,
+            }
+
+        # ── ExcelAgent Routing ──────────────────────────────────────────
+        is_excel_query = "excel" in msg_lower or "hoja de cálculo" in msg_lower or "hoja de calculo" in msg_lower or "libro diario" in msg_lower or "balance de situación" in msg_lower or "balance de situacion" in msg_lower
+        if is_excel_query and ("exporta" in msg_lower or "genera" in msg_lower or "crea" in msg_lower or "excel" in msg_lower):
+            logger.info("Consulta de hoja de cálculo. Delegando a ExcelAgent.")
+            from app.domain.agents.excel.excel_agent import excel_agent
+            response = await excel_agent.generate_response(user_message, client_id=client_id or "default")
+            if session_id:
+                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
+            return {
+                "type": "chat",
+                "response": response,
+            }
+
+        # ── WordAgent Routing ───────────────────────────────────────────
+        is_word_query = "word" in msg_lower or "docx" in msg_lower or "redacta" in msg_lower or "informe financiero" in msg_lower or "documento" in msg_lower
+        if is_word_query and ("genera" in msg_lower or "crea" in msg_lower or "redacta" in msg_lower or "word" in msg_lower):
+            logger.info("Consulta de redacción documental. Delegando a WordAgent.")
+            from app.domain.agents.word.word_agent import word_agent
+            response = await word_agent.generate_response(user_message, client_id=client_id or "default")
             if session_id:
                 self.memory.add_message(session_id, "assistant", response, client_id=client_id)
             return {
@@ -497,6 +524,9 @@ class PlannerOrchestrator:
         logger.info("PlannerOrchestrator.run() — request_id=%s, session_id=%s, client_id=%s", request_id, session_id, client_id)
         user_message = _normalize_message(user_message)
 
+        if session_id:
+            self.memory.add_message(session_id, "user", user_message, client_id=client_id)
+
         # 1. Clasificación y persistencia
         await self.context_service.classify_and_log_corrections(
             user_message, session_id, client_id, request_id, logger, error
@@ -512,41 +542,151 @@ class PlannerOrchestrator:
         if routed:
             return routed
 
-        # 4. Inferencia con LLM
-        raw = await llm.generate(
-            user_message,
-            mode="tool",
-            request_id=request_id,
-            memory=memory_text,
-            client_id=client_id,
-        )
-        logger.info("Raw LLM output: %s", repr(raw))
+        # 3.5. Enrutamiento heurístico rápido de herramientas de utilidad común
+        raw = None
+        try:
+            from app.domain.intent_router import IntentRouter
+            router = IntentRouter()
+            routing_detail = router.detect_with_detail(user_message)
+            if routing_detail["intent"] == "tool":
+                fired_rules = routing_detail["fired_rules"]
+                category = None
+                if fired_rules:
+                    import re
+                    # Extraer categoría de la regla con mayor puntuación, ej: "+2.0 [datetime_tool]"
+                    m_cat = re.search(r"\[(.*?)\]", fired_rules[0])
+                    if m_cat:
+                        category = m_cat.group(1)
 
-        data = extract_json_robust(raw)
-        
-        # Si no se detectó JSON estructurado de tool, devolver como conversación (chat)
-        if not data or "tool" not in data:
-            logger.info("Respuesta clasificada como conversacional.")
-            if session_id:
-                self.memory.add_message(session_id, "assistant", raw, client_id=client_id)
-            return {
-                "type": "chat",
-                "response": raw,
-            }
+                mapped_tool = None
+                mapped_args = {}
 
-        # 5. Ejecución secuencial de herramientas (con reintento de autocorrección)
-        tool_name, args = _extract_tool_and_args(data)
-        max_attempts = 3
-        current_attempt = 1
-        result = None
-        execution = "server"
+                if category == "datetime_tool":
+                    mapped_tool = "get_current_datetime"
+                elif category == "sysinfo":
+                    mapped_tool = "system_info"
+                elif category == "calendar_open":
+                    mapped_tool = "calendar_open_ui"
+                elif category == "calendar_close":
+                    mapped_tool = "calendar_close_ui"
+                elif category == "mail_summary":
+                    mapped_tool = "mail_get_unread_summary"
+                elif category == "mail_classify":
+                    mapped_tool = "mail_classify_emails"
+                elif category == "mail_seed":
+                    mapped_tool = "mail_receive_mock_emails"
+                elif category == "fs_list" or "escritorio" in user_message.lower():
+                    mapped_tool = "list_directory"
+                    import re
+                    m_path = re.search(r"([A-Za-z]:[/\\][^\s]+)", user_message)
+                    if m_path:
+                        mapped_args = {"path": m_path.group(1).replace("\\", "/").rstrip("/\\.,;!?")}
+                    else:
+                        from app.utils.paths import get_client_desktop
+                        mapped_args = {"path": get_client_desktop(client_id)}
+                elif category == "aeat_tool":
+                    import re
+                    year = 2026
+                    quarter = 1
+                    m_year = re.search(r"\b(202\d)\b", user_message)
+                    if m_year:
+                        year = int(m_year.group(1))
+                    m_q = re.search(r"\b([1-4])\s*(?:trimestre|trim|[tTqQ°º])\b", user_message.lower())
+                    if m_q:
+                        quarter = int(m_q.group(1))
 
-        while current_attempt <= max_attempts:
-            logger.info("Ciclo de ejecución de tool: Intento %d de %d", current_attempt, max_attempts)
+                    if "130" in user_message:
+                        mapped_tool = "generate_modelo_130_autofill_script"
+                        mapped_args = {"year": year, "quarter": quarter}
+                    elif "111" in user_message:
+                        mapped_tool = "generate_modelo_111_autofill_script"
+                        mapped_args = {"year": year, "quarter": quarter}
+                    elif "390" in user_message:
+                        mapped_tool = "generate_modelo_390_summary"
+                        mapped_args = {"year": year}
+                    elif "115" in user_message:
+                        mapped_tool = "generate_modelo_115_autofill_script"
+                        mapped_args = {"year": year, "quarter": quarter}
+                    elif "200" in user_message:
+                        mapped_tool = "generate_modelo_200_summary"
+                        mapped_args = {"year": year}
+                    elif "202" in user_message:
+                        # Extraer periodo (1, 2, 3) para el pago fraccionado 202
+                        period = 1
+                        m_p = re.search(r"\b([1-3])\s*(?:p|P)\b", user_message)
+                        if m_p:
+                            period = int(m_p.group(1))
+                        mapped_tool = "generate_modelo_202_autofill_script"
+                        mapped_args = {"year": year, "period": period}
+                    elif "347" in user_message:
+                        mapped_tool = "generate_modelo_347_summary"
+                        mapped_args = {"year": year}
+                    else:
+                        mapped_tool = "generate_modelo_303_autofill_script"
+                        mapped_args = {"year": year, "quarter": quarter}
+                elif category == "bank_balance":
+                    mapped_tool = "get_bank_balance"
+                    mapped_args = {}
+                elif category == "accounting_tool":
+                    import re
+                    year = 2026
+                    m_year = re.search(r"\b(202\d)\b", user_message)
+                    if m_year:
+                        year = int(m_year.group(1))
 
-            if current_attempt > 1:
-                # Re-generar contexto e inferencia
-                memory_text, _, _ = await self.context_service.build_context(user_message, session_id, client_id)
+                    if "balance" in user_message.lower():
+                        mapped_tool = "get_balance_situacion"
+                    else:
+                        mapped_tool = "get_libro_diario"
+                    mapped_args = {"year": year}
+                elif category == "reconciliation_tool":
+                    import re
+                    if any(kw in user_message.lower() for kw in ("importa", "carga", "norma 43", "norma43")):
+                        mapped_tool = "import_bank_statement"
+                        # Extraer posible ruta del archivo o usar default
+                        m_path = re.search(r"\b([\w\-/\\\.]+\.txt|\.n43)\b", user_message)
+                        filepath = m_path.group(1) if m_path else "data/extracto.txt"
+                        mapped_args = {"filepath": filepath}
+                    elif any(kw in user_message.lower() for kw in ("añad", "crea", "registra", "pago manual", "cobro manual")):
+                        mapped_tool = "add_manual_bank_movement"
+                        # Extraer fecha
+                        m_date = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", user_message)
+                        date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
+                        # Extraer importe
+                        m_amount = re.search(r"\b(-?\d+(?:[.,]\d{2})?)\s*€?\b", user_message)
+                        amount = float(m_amount.group(1).replace(",", ".")) if m_amount else 0.0
+                        # Extraer concepto
+                        concept = "Movimiento manual"
+                        m_concept = re.search(r"concepto\s+([a-zA-Z0-9\s\-]+)", user_message.lower())
+                        if m_concept:
+                            concept = m_concept.group(1).strip()
+                        mapped_args = {
+                            "date_str": date_str,
+                            "concept": concept,
+                            "amount": amount,
+                            "reference": "manual"
+                        }
+                    elif any(kw in user_message.lower() for kw in ("reporte", "informe", "pendiente", "no concilia")):
+                        mapped_tool = "get_unreconciled_report_tool"
+                    else:
+                        mapped_tool = "run_bank_reconciliation"
+
+                if mapped_tool:
+                    import json
+                    logger.info("Enrutador heurístico detectó y mapeó herramienta directa: %s", mapped_tool)
+                    raw = json.dumps({"tool": mapped_tool, "args": mapped_args})
+        except Exception as router_err:
+            logger.warning("Error en el enrutamiento heurístico del IntentRouter: %s", router_err)
+
+        # 4. Bucle ReAct multi-turno para ejecución secuencial de herramientas
+        max_turns = 5
+        current_turn = 1
+
+        while current_turn <= max_turns:
+            logger.info("--- TURNO DE ORQUESTACIÓN %d ---", current_turn)
+            memory_text, _, _ = await self.context_service.build_context(user_message, session_id, client_id)
+
+            if current_turn > 1 or not raw:
                 raw = await llm.generate(
                     user_message,
                     mode="tool",
@@ -554,78 +694,123 @@ class PlannerOrchestrator:
                     memory=memory_text,
                     client_id=client_id,
                 )
-                logger.info("Raw LLM output (Intento %d): %s", current_attempt, repr(raw))
-                data = extract_json_robust(raw)
-                if not data or "tool" not in data:
-                    if current_attempt == max_attempts:
-                        return {
-                            "type": "error",
-                            "message": "JSON de herramienta inválido tras reintentos",
-                            "raw": raw,
-                        }
-                    current_attempt += 1
-                    continue
-                tool_name, args = _extract_tool_and_args(data)
+                logger.info("Raw LLM output (Turno %d): %s", current_turn, repr(raw))
+
+            data = extract_json_robust(raw)
+
+            # Si no se detectó JSON estructurado de tool, o es no_op / respuesta conversacional, terminamos y devolvemos como chat
+            if not data or "tool" not in data or data.get("tool") == "no_op":
+                logger.info("Respuesta clasificada como conversacional o fin de ciclo de herramientas.")
+                response_str = raw
+                if data and data.get("tool") == "no_op":
+                    response_str = data.get("message") or data.get("args", {}).get("message") or raw
+
+                # Fallback para evitar respuestas JSON vacías o crudas de error
+                if response_str.strip() in ("{}", "", '"{}"', "None"):
+                    response_str = "Disculpa, he tenido un problema al procesar tu solicitud. ¿Podrías repetirme la consulta o indicarme en qué puedo ayudarte?"
+
+                if session_id:
+                    self.memory.add_message(session_id, "assistant", response_str, client_id=client_id)
+                return {
+                    "type": "chat",
+                    "response": response_str,
+                }
+
+            tool_name, args = _extract_tool_and_args(data)
 
             if not tool_name:
-                if current_attempt == max_attempts:
-                    return {
-                        "type": "error",
-                        "message": "Herramienta no especificada o desconocida",
-                    }
-                if session_id:
-                    self.memory.add_message(session_id, "system", f"Error: No se pudo identificar la herramienta del JSON: {data}.", client_id=client_id)
-                current_attempt += 1
+                logger.warning("No se pudo extraer el nombre de la herramienta del JSON.")
+                raw = None
+                current_turn += 1
                 continue
 
-            # Delegar ejecución al motor
+            # Si es una herramienta de interfaz del cliente (abrir/cerrar ventanas, etc.), la devolvemos inmediatamente para ejecución local de UI
+            from app.adapters.tool_registry import is_client_tool
+            # Herramientas exclusivas de transición de interfaz (se interceptan para que la GUI PyQt actúe directamente)
+            UI_TRANSITION_TOOLS = {
+                "calendar_open_ui", "calendar_close_ui",
+                "mail_open_ui", "mail_close_ui",
+                "dev_studio_open_ui", "dev_studio_close_ui",
+                "switch_project_session"
+            }
+            if tool_name in UI_TRANSITION_TOOLS:
+                logger.info("Detectada tool de interfaz de cliente: %s. Delegando ejecución a UI.", tool_name)
+                if session_id:
+                    import json
+                    self.memory.add_message(session_id, "assistant", json.dumps({"tool": tool_name, "args": args}), client_id=client_id)
+                return {
+                    "type": "tool",
+                    "execution": "client",
+                    "tool": tool_name,
+                    "args": args,
+                    "result": {},
+                }
+
+            # Si es una herramienta directa con confirmación instantánea
+            if tool_name in _DIRECT_CONFIRM:
+                confirm_text = _DIRECT_CONFIRM[tool_name]
+                if session_id:
+                    self.memory.add_message(session_id, "assistant", confirm_text, client_id=client_id)
+                return {
+                    "type": "chat",
+                    "response": confirm_text,
+                }
+
+            # Ejecución de herramienta de servidor
+            logger.info("Ejecutando tool de servidor en el orquestador: %s con args: %s", tool_name, args)
             exec_res = await self.execution_engine.execute_tool(
                 tool_name, args, session_id, client_id, request_id, logger, error
             )
 
-            # Manejar estados de error del motor
             status = exec_res.get("status")
-            if status in ("rbac_error", "missing_error", "validation_error", "execution_error") or status == "error":
-                if current_attempt == max_attempts:
-                    return {
-                        "type": "error",
-                        "execution": exec_res.get("execution", "server"),
-                        "tool": tool_name,
-                        "message": exec_res.get("message", "Fallo al ejecutar herramienta"),
-                        "result": exec_res.get("result"),
-                    }
+            result = exec_res.get("result")
+
+            if status == "rbac_error":
+                error_msg = exec_res.get("message", "Acceso denegado")
+                if session_id:
+                    self.memory.add_message(session_id, "assistant", f"Error: {error_msg}", client_id=client_id)
+                return {
+                    "type": "error",
+                    "message": error_msg,
+                }
+
+            if status in ("validation_error", "missing_error", "error"):
+                error_msg = exec_res.get("message", "Error de ejecución")
                 if session_id:
                     import json
                     self.memory.add_message(session_id, "assistant", json.dumps({"tool": tool_name, "args": args}), client_id=client_id)
-                    self.memory.add_message(session_id, "system", f"Tool output: {json.dumps(exec_res)}. Corrige parámetros y reintenta.", client_id=client_id)
-                current_attempt += 1
+                    self.memory.add_message(session_id, "system", f"Tool output error: {error_msg}. Corrige los parámetros y reintenta.", client_id=client_id)
+                raw = None
+                current_turn += 1
                 continue
 
-            result = exec_res.get("result")
-            execution = exec_res.get("execution")
-            break
-
-        # Registrar éxito en memoria
-        if session_id:
-            import json
-            self.memory.add_message(session_id, "assistant", json.dumps({"tool": tool_name, "args": args}), client_id=client_id)
-            self.memory.add_message(session_id, "system", f"Tool output: {json.dumps(result)}", client_id=client_id)
-
-        # Respuestas con confirmación unificada
-        if tool_name in _DIRECT_CONFIRM:
-            confirm_text = _DIRECT_CONFIRM[tool_name]
+            # Registrar ejecución en memoria
             if session_id:
-                self.memory.add_message(session_id, "assistant", confirm_text, client_id=client_id)
-            return {
-                "type": "chat",
-                "response": confirm_text,
-            }
+                import json
+                self.memory.add_message(session_id, "assistant", json.dumps({"tool": tool_name, "args": args}), client_id=client_id)
+                self.memory.add_message(session_id, "system", f"Tool output: {json.dumps(result)}", client_id=client_id)
 
-        logger.info("Ejecución de tool finalizada: %s (%s)", tool_name, execution)
+            if tool_name == "generate_invoice_pdf":
+                logger.info("Forzando parada del bucle de herramientas tras generar factura PDF para interactividad.")
+                break
+
+            # Limpiamos raw para forzar una nueva generación de inferencia del LLM en el siguiente turno
+            raw = None
+            current_turn += 1
+
+        # Si excedemos los turnos máximos sin respuesta final, hacemos una llamada en modo chat
+        logger.warning("Excedido el número máximo de turnos de herramientas (%d). Generando respuesta final.", max_turns)
+        memory_text, _, _ = await self.context_service.build_context(user_message, session_id, client_id)
+        chat_response = await llm.generate(
+            user_message,
+            mode="chat",
+            request_id=request_id,
+            memory=memory_text,
+            client_id=client_id,
+        )
+        if session_id:
+            self.memory.add_message(session_id, "assistant", chat_response, client_id=client_id)
         return {
-            "type": "tool",
-            "execution": execution,
-            "tool": tool_name,
-            "args": args,
-            "result": result,
+            "type": "chat",
+            "response": chat_response,
         }

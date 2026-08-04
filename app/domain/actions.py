@@ -71,6 +71,7 @@ class Action:
 
     # --- Calendario ------------------------------------------------
     CALENDAR_OPEN = "calendar.open"
+    CALENDAR_CLOSE = "calendar.close"
     CALENDAR_SYNC = "calendar.sync"
 
     # --- Correo ----------------------------------------------------
@@ -136,10 +137,14 @@ CLIENT_ALIASES: dict[str, str] = {
     "replace_file_content": Action.REPLACE_FILE_CONTENT,
     "open_calendar": Action.CALENDAR_OPEN,
     "calendar_open": Action.CALENDAR_OPEN,
+    "calendar_open_ui": Action.CALENDAR_OPEN,
+    "calendar_close_ui": Action.CALENDAR_CLOSE,
     "open_mail": Action.MAIL_OPEN,
     "mail_open": Action.MAIL_OPEN,
+    "mail_open_ui": Action.MAIL_OPEN,
     "close_mail": Action.MAIL_CLOSE,
     "mail_close": Action.MAIL_CLOSE,
+    "mail_close_ui": Action.MAIL_CLOSE,
     "dev_studio_open_ui": Action.DEV_STUDIO_OPEN,
     "dev_studio_open": Action.DEV_STUDIO_OPEN,
     "dev_studio_close_ui": Action.DEV_STUDIO_CLOSE,

@@ -25,6 +25,6 @@ pygetwindow; sys_platform == 'win32'
 chromadb
 pypdf
 pdfplumber
+openpyxl
 
-# Nota: Instalar navegadores de Playwright con: playwright install chromium
 

@@ -117,16 +117,26 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
     
     # Mocking LLM
     mock_llm = AsyncMock()
-    mock_llm.generate.return_value = '{"tool": "read_emails", "args": {}}'
+    mock_llm.generate.side_effect = [
+        '{"tool": "read_emails", "args": {}}',
+        'Mensaje final de chat.'
+    ]
     
     # 1. Ejecución de guest sobre tool de servidor -> Debería ser bloqueada (Acceso denegado)
     res_guest = await orchestrator.run("consulta", llm=mock_llm, client_id="guest_client", session_id="test_sess_guest")
     assert res_guest["type"] == "error"
     assert "Acceso denegado" in res_guest["message"]
     
+    # Restablecer side effect para la ejecución del admin
+    mock_llm.generate.side_effect = [
+        '{"tool": "read_emails", "args": {}}',
+        'Mensaje final de chat.'
+    ]
+    
     # 2. Ejecución de admin sobre tool de servidor -> Debería permitirse
     res_admin = await orchestrator.run("consulta", llm=mock_llm, client_id="admin_client", session_id="test_sess_admin")
-    assert res_admin["type"] == "tool"
+    assert res_admin["type"] == "chat"
+    mock_tool.assert_called_once()
 
 def test_sqlite_memory_isolation(tmp_path, monkeypatch):
     memory_module = sys.modules["app.adapters.memory.memory"]

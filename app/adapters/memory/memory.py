@@ -94,6 +94,107 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_messages_session
         ON messages (session_id, client_id, id)
     """)
+    
+    # --- PLAN GENERAL CONTABLE (PGC) PARA PYMES ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pgc_accounts (
+            code        TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            type        TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_date  TEXT NOT NULL,
+            concept     TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ledger_entries (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            journal_entry_id INTEGER NOT NULL,
+            account_code     TEXT NOT NULL,
+            debe             TEXT NOT NULL,
+            haber            TEXT NOT NULL,
+            FOREIGN KEY(journal_entry_id) REFERENCES journal_entries(id),
+            FOREIGN KEY(account_code) REFERENCES pgc_accounts(code)
+        )
+    """)
+    
+    # Inicializar catálogo contable básico del PGC
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM pgc_accounts")
+    if cursor.fetchone()[0] == 0:
+        default_accounts = [
+            ("10000000", "Capital Social", "patrimonio"),
+            ("21700000", "Equipos para procesos de información", "activo"),
+            ("40000000", "Proveedores (Acreedores comerciales)", "pasivo"),
+            ("43000000", "Clientes", "activo"),
+            ("47200021", "Hacienda Pública, IVA soportado al 21%", "activo"),
+            ("47700021", "Hacienda Pública, IVA repercutido al 21%", "pasivo"),
+            ("57200001", "Banco de la empresa (cuenta corriente)", "activo"),
+            ("60000000", "Compras de mercaderías / suministros", "gasto"),
+            ("62900000", "Otros servicios / Gastos diversos", "gasto"),
+            ("70000000", "Ventas de mercaderías", "ingreso"),
+            ("70500000", "Prestación de servicios de consultoría/desarrollo", "ingreso"),
+        ]
+        cursor.executemany("INSERT INTO pgc_accounts (code, name, type) VALUES (?, ?, ?)", default_accounts)
+        
+    # --- CONCILIACIÓN BANCARIA ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_movements (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            movement_date TEXT NOT NULL,
+            concept       TEXT NOT NULL,
+            amount        REAL NOT NULL,
+            reference     TEXT,
+            invoice_id    TEXT,
+            reconciled    INTEGER DEFAULT 0,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    
+    # --- CONFIGURACIÓN DE PERFIL CONTABLE Y CERTIFICADOS ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_profile (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_type     TEXT NOT NULL,
+            nif           TEXT NOT NULL,
+            razon_social  TEXT NOT NULL,
+            direccion     TEXT,
+            cert_path     TEXT,
+            cert_password TEXT,
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # --- PROYECTOS Y TRABAJOS EN CURSO (WIP) ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            client_name   TEXT NOT NULL,
+            client_nif    TEXT NOT NULL,
+            budget        REAL NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'en_progreso',
+            description   TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # --- BASE DE DATOS DE CLIENTES ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL UNIQUE,
+            nif           TEXT NOT NULL,
+            email         TEXT NOT NULL,
+            address       TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
 
 

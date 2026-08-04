@@ -134,8 +134,28 @@ _TOOL_RULES: list[_Rule] = [
     _r(r"\b(qué tengo hoy|qué citas tengo|lista las citas|muestra la agenda|citas de hoy|qué citas tengo para|mi agenda)\b", 3.0, "calendar_list"),
 
     # ── Proyectos y Conversaciones ──────────────────────────────────
-    _r(r"\b(proyectos\s+tenemos\s+abiertos|lista\s+de\s+proyectos|proyectos\s+activos|proyectos\s+guardados)\b", 3.0, "projects_list"),
+    _r(r"\b(proyectos\s+tenemos\s+abiertos|lista\s+de\s+proyectos|proyectos\s+activos|proyectos\s+guardados|trabajos en curso|wip|proyectos en curso)\b", 3.5, "projects_list"),
     _r(r"\b(abre|abrir|carga|cargar|selecciona|seleccionar|cambia\s+al|cambiar\s+al)\b.*\bproyecto\b", 3.5, "project_open"),
+    _r(r"\b(genera(r)?|crea(r)?|emite|emitir|haz|hacer|factura(r)?)\b.*\bfactura\b", 3.5, "generate_invoice"),
+    _r(r"\b(actualiza|cambia|cambiar|actualizar)\b.*\bestado\b.*\bproyecto\b", 3.0, "update_project"),
+
+    # ── AEAT Impuestos / Modelos ─────────────────────────────────────
+    _r(r"\b(genera(r)?|crea(r)?|rellena(r)?|autocompleta(r)?|haz|hacer|prepara(r)?|script)\b.*\b(modelo 303|modelo 130|modelo 111|modelo 390|modelo 115|modelo 200|modelo 202|modelo 347|303|130|111|390|115|200|202|347)\b", 3.5, "aeat_tool"),
+
+    # ── Contabilidad PGC Partida Doble ───────────────────────────────
+    _r(r"\b(libro diario|libro mayor|balance de situacion|balance de situación|diario contable|asientos contables|cuentas anuales)\b", 3.5, "accounting_tool"),
+
+    # ── Conciliación Bancaria ────────────────────────────────────────
+    _r(r"\b(concilia(r)?|conciliaci[oó]n|empareja(r)?|matching|reconciliaci[oó]n)\b.*\b(banco|bancaria|movimientos|facturas)\b", 3.5, "reconciliation_tool"),
+    _r(r"\b(importa(r)?|carga(r)?)\b.*\b(norma 43|extracto|norma43|fichero bancario)\b", 3.5, "reconciliation_tool"),
+    _r(r"\b(a[ñn]ade|a[ñn]adir|crea(r)?|registra(r)?)\b.*\b(movimiento bancario|movimiento manual|pago manual|cobro manual|movimiento al banco)\b", 3.5, "reconciliation_tool"),
+    _r(r"\b(reporte|informe)\b.*\b(conciliar|conciliaci[oó]n|pendientes de conciliar|no concilia)\b", 3.5, "reconciliation_tool"),
+    _r(r"\b(saldo|mi saldo|cu[aá]nto dinero|estado de la cuenta|dinero en el banco|dinero tengo)\b", 3.5, "bank_balance"),
+
+    # ── Palabras clave de utilidad general (evitan secuestros por agentes) ─
+    _r(r"\b(calendario|agenda|cita|reunión|evento|compromiso)\b", 1.5, "calendar_keyword"),
+    _r(r"\b(correo|mail|email|bandeja de entrada|recibidos)\b", 1.5, "mail_keyword"),
+    _r(r"\b(diario|mayor|contabilidad|factura|facturas|ingresos|gastos|nif|cif|perfil)\b", 1.5, "accounting_keyword"),
 
     # ── Paths y extensiones explícitas ───────────────────────────────
     _r(r"[\w\-]+\.(txt|py|json|csv|md|log|yaml|yml|toml|ini)\b", 1.2, "extension"),
@@ -175,23 +195,27 @@ class IntentRouter:
         normalized = _normalize(message)
 
         score = 0.0
-        fired: list[str] = []
+        matched_rules = []
 
         for rule in _TOOL_RULES:
             if rule.pattern.search(normalized):
                 score += rule.weight
-                fired.append(f"+{rule.weight} [{rule.category}]")
+                matched_rules.append((rule.weight, f"+{rule.weight} [{rule.category}]"))
 
         for rule in _CHAT_RULES:
             if rule.pattern.search(normalized):
                 score += rule.weight
-                fired.append(f"{rule.weight} [{rule.category}]")
+                matched_rules.append((rule.weight, f"{rule.weight} [{rule.category}]"))
 
         # Boost adicional: dominio conocido mencionado explícitamente
         if _KNOWN_DOMAINS_RE.search(normalized):
             if any(k in normalized.lower() for k in ("abre", "ve", "entra", "navega", "busca", "abre")):
                 score += 1.5
-                fired.append("+1.5 [known_domain_boost]")
+                matched_rules.append((1.5, "+1.5 [known_domain_boost]"))
+
+        # Ordenar reglas cruzadas por el peso/relevancia de mayor a menor
+        matched_rules.sort(key=lambda x: x[0], reverse=True)
+        fired = [item[1] for item in matched_rules]
 
         return {
             "intent": "tool" if score >= _THRESHOLD else "chat",

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Alfonso Autónomo - Guardián Fiscal",
+  "version": "1.0",
+  "description": "Copiloto inteligente que te guía y evita errores en los portales de la AEAT y la Seguridad Social.",
+  "permissions": [
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.agenciatributaria.gob.es/*",
+        "*://*.seg-social.es/*",
+        "*://localhost/*",
+        "*://127.0.0.1/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "host_permissions": [
+    "ws://localhost:7860/ws/guardian",
+    "ws://127.0.0.1:7860/ws/guardian"
+  ]
+}

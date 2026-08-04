@@ -1,81 +1,278 @@
-"""
-DEV SEEDER — Inyección inicial de conocimiento técnico.
+import sqlite3
+from datetime import datetime
+from app.adapters.memory.memory import _get_connection, _init_db_schema
+from app.utils.encryption import encryptor
 
-¿QUÉ HACE?
-Lee archivos locales con plantillas y pautas de diseño de software y los indexa en ChromaDB.
-
-¿CUÁNDO LO HACE?
-Se ejecuta de manera manual para sembrar o inicializar el conocimiento disponible para DevAgent.
-
-¿CÓMO LO HACE?
-Analizando archivos y subiéndolos mediante el cliente persistente de ChromaDB.
-
-¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/memory/vector_memory.py (define el cliente y las colecciones donde se guardan los datos)
-"""
-
-from app.adapters.memory import vector_memory
-from app.utils.logger import app_logger
-
-DEV_GUIDELINES = [
-    # Python
-    {
-        "id": "py_best_practices",
-        "text": "Estándar de Python: Seguir PEP 8. Usar type hints siempre en funciones. Manejar excepciones con bloques try/except específicos. Usar docstrings en formato Google. Estructura estándar:\nif __name__ == '__main__':\n    main()"
-    },
-    {
-        "id": "py_file_template",
-        "text": "Plantilla de Python para utilidades/scripts:\nimport os\nimport sys\nfrom typing import List\n\ndef run_task(args: List[str]) -> None:\n    \"\"\"Ejecuta la tarea principal.\"\"\"\n    print(f'Procesando con args: {args}')\n\nif __name__ == '__main__':\n    run_task(sys.argv[1:])"
-    },
-    # C
-    {
-        "id": "c_best_practices",
-        "text": "Estándar de C: Usar C11 o superior. Liberar siempre la memoria reservada con malloc/calloc usando free(). Comprobar punteros NULL. Usar cabeceras estándar <stdio.h>, <stdlib.h>, <string.h>. Evitar desbordamiento de búfer usando funciones seguras (snprintf en vez de sprintf)."
-    },
-    {
-        "id": "c_file_template",
-        "text": "Plantilla básica de C:\n#include <stdio.h>\n#include <stdlib.h>\n\nint main(int argc, char *argv[]) {\n    printf(\"Hello, World from C!\\n\");\n    return EXIT_SUCCESS;\n}"
-    },
-    # C++
-    {
-        "id": "cpp_best_practices",
-        "text": "Estándar de C++: Usar C++17 o superior. Preferir smart pointers (std::unique_ptr, std::shared_ptr) sobre punteros crudos y delete. Usar std::string y std::vector en vez de arrays y strings de estilo C. Usar namespaces correctamente. Utilizar std::cout/std::cerr."
-    },
-    {
-        "id": "cpp_file_template",
-        "text": "Plantilla básica de C++:\n#include <iostream>\n#include <vector>\n#include <string>\n\nint main() {\n    std::vector<std::string> msgs = {\"Hello\", \"C++\", \"World\"};\n    for (const auto& msg : msgs) {\n        std::cout << msg << \" \";\n    }\n    std::cout << std::endl;\n    return 0;\n}"
-    },
-    # C#
-    {
-        "id": "cs_best_practices",
-        "text": "Estándar de C#: Seguir convenciones de C#/.NET. Clases e interfaces bien estructuradas en namespaces. Utilizar properties en vez de fields públicos. Usar LINQ de forma eficiente. Liberar recursos con la declaración 'using'."
-    },
-    {
-        "id": "cs_file_template",
-        "text": "Plantilla básica de C#:\nusing System;\n\nnamespace DevSandbox {\n    class Program {\n        static void Main(string[] args) {\n            Console.WriteLine(\"Hello, World from C#!\");\n        }\n    }\n}"
-    }
-]
-
-def seed_dev_knowledge():
-    print("Iniciando la ingesta de conocimiento técnico para el Agente Dev...")
-    try:
-        vector_memory._refresh_collection()
-        # Verificar si ya tiene datos
-        existing = vector_memory.dev_collection.get()
-        if existing and existing.get("documents") and len(existing["documents"]) > 0:
-            print("La colección dev_knowledge ya contiene datos. Omitiendo semilla.")
-            return
+def seed_database():
+    print("Iniciando la siembra de la base de datos (Seeder) con datos de prueba realistas para 2026...")
+    
+    # Asegurar que el esquema existe
+    with _get_connection() as conn:
+        _init_db_schema(conn)
+        cursor = conn.cursor()
         
-        documents = [item["text"] for item in DEV_GUIDELINES]
-        ids = [item["id"] for item in DEV_GUIDELINES]
+        # Limpiar facturas existentes para evitar duplicados en la demo
+        cursor.execute("DELETE FROM invoices")
+        conn.commit()
+        print("✓ Tabla 'invoices' limpiada.")
         
-        vector_memory.dev_collection.add(
-            documents=documents,
-            ids=ids
-        )
-        print(f"Ingesta completada: {len(documents)} pautas ingresadas en dev_knowledge.")
-    except Exception as e:
-        print(f"Error seeding dev_knowledge: {e}")
+        # Datos de prueba (5 ingresos, 5 gastos del Q1 2026)
+        invoices_data = [
+            # --- INGRESOS (Emitidas por LUIS DOMINGO NIF 12345678Z) ---
+            {
+                "invoice_id": "F-2026-001",
+                "date": "15/01/2026",
+                "issuer_name": "LUIS DOMINGO",
+                "issuer_nif": "12345678Z",
+                "receiver_name": "ACME CORP S.L.",
+                "receiver_nif": "B12345678",
+                "base_imponible": 1500.0,
+                "iva_rate": 21.0,
+                "iva_amount": 315.0,
+                "irpf_rate": 15.0,
+                "irpf_amount": 225.0,
+                "total_amount": 1590.0,
+                "category": "ingreso",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/facturas/F-2026-001.pdf"
+            },
+            {
+                "invoice_id": "F-2026-002",
+                "date": "28/01/2026",
+                "issuer_name": "LUIS DOMINGO",
+                "issuer_nif": "12345678Z",
+                "receiver_name": "GLOBAL TECH SPAIN",
+                "receiver_nif": "B87654321",
+                "base_imponible": 2500.0,
+                "iva_rate": 21.0,
+                "iva_amount": 525.0,
+                "irpf_rate": 15.0,
+                "irpf_amount": 375.0,
+                "total_amount": 2650.0,
+                "category": "ingreso",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/facturas/F-2026-002.pdf"
+            },
+            {
+                "invoice_id": "F-2026-003",
+                "date": "10/02/2026",
+                "issuer_name": "LUIS DOMINGO",
+                "issuer_nif": "12345678Z",
+                "receiver_name": "SERVICIOS LOGISTICOS MADRID",
+                "receiver_nif": "B11223344",
+                "base_imponible": 800.0,
+                "iva_rate": 21.0,
+                "iva_amount": 168.0,
+                "irpf_rate": 15.0,
+                "irpf_amount": 120.0,
+                "total_amount": 848.0,
+                "category": "ingreso",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/facturas/F-2026-003.pdf"
+            },
+            {
+                "invoice_id": "F-2026-004",
+                "date": "20/02/2026",
+                "issuer_name": "LUIS DOMINGO",
+                "issuer_nif": "12345678Z",
+                "receiver_name": "ACME CORP S.L.",
+                "receiver_nif": "B12345678",
+                "base_imponible": 1500.0,
+                "iva_rate": 21.0,
+                "iva_amount": 315.0,
+                "irpf_rate": 15.0,
+                "irpf_amount": 225.0,
+                "total_amount": 1590.0,
+                "category": "ingreso",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/facturas/F-2026-004.pdf"
+            },
+            {
+                "invoice_id": "F-2026-005",
+                "date": "05/03/2026",
+                "issuer_name": "LUIS DOMINGO",
+                "issuer_nif": "12345678Z",
+                "receiver_name": "GLOBAL TECH SPAIN",
+                "receiver_nif": "B87654321",
+                "base_imponible": 1200.0,
+                "iva_rate": 21.0,
+                "iva_amount": 252.0,
+                "irpf_rate": 15.0,
+                "irpf_amount": 180.0,
+                "total_amount": 1272.0,
+                "category": "ingreso",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/facturas/F-2026-005.pdf"
+            },
+            
+            # --- GASTOS (Recibidas por LUIS DOMINGO de varios proveedores) ---
+            {
+                "invoice_id": "G-2026-001",
+                "date": "03/01/2026",
+                "issuer_name": "TELEFONICA DE ESPAÑA S.A.",
+                "issuer_nif": "A88776655",
+                "receiver_name": "LUIS DOMINGO",
+                "receiver_nif": "12345678Z",
+                "base_imponible": 60.0,
+                "iva_rate": 21.0,
+                "iva_amount": 12.6,
+                "irpf_rate": 0.0,
+                "irpf_amount": 0.0,
+                "total_amount": 72.6,
+                "category": "gasto",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/gastos/G-2026-001.pdf"
+            },
+            {
+                "invoice_id": "G-2026-002",
+                "date": "15/01/2026",
+                "issuer_name": "COWORKING MADRID CENTRO",
+                "issuer_nif": "B99887766",
+                "receiver_name": "LUIS DOMINGO",
+                "receiver_nif": "12345678Z",
+                "base_imponible": 250.0,
+                "iva_rate": 21.0,
+                "iva_amount": 52.5,
+                "irpf_rate": 0.0,
+                "irpf_amount": 0.0,
+                "total_amount": 302.5,
+                "category": "gasto",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/gastos/G-2026-002.pdf"
+            },
+            {
+                "invoice_id": "G-2026-003",
+                "date": "02/02/2026",
+                "issuer_name": "AMAZON WEB SERVICES",
+                "issuer_nif": "N0011223F",
+                "receiver_name": "LUIS DOMINGO",
+                "receiver_nif": "12345678Z",
+                "base_imponible": 120.0,
+                "iva_rate": 21.0,
+                "iva_amount": 25.2,
+                "irpf_rate": 0.0,
+                "irpf_amount": 0.0,
+                "total_amount": 145.2,
+                "category": "gasto",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/gastos/G-2026-003.pdf"
+            },
+            {
+                "invoice_id": "G-2026-004",
+                "date": "04/02/2026",
+                "issuer_name": "TELEFONICA DE ESPAÑA S.A.",
+                "issuer_nif": "A88776655",
+                "receiver_name": "LUIS DOMINGO",
+                "receiver_nif": "12345678Z",
+                "base_imponible": 60.0,
+                "iva_rate": 21.0,
+                "iva_amount": 12.6,
+                "irpf_rate": 0.0,
+                "irpf_amount": 0.0,
+                "total_amount": 72.6,
+                "category": "gasto",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/gastos/G-2026-004.pdf"
+            },
+            {
+                "invoice_id": "G-2026-005",
+                "date": "10/03/2026",
+                "issuer_name": "ASESORIA FISCAL RAPIDA S.L.",
+                "issuer_nif": "B55667788",
+                "receiver_name": "LUIS DOMINGO",
+                "receiver_nif": "12345678Z",
+                "base_imponible": 90.0,
+                "iva_rate": 21.0,
+                "iva_amount": 18.9,
+                "irpf_rate": 0.0,
+                "irpf_amount": 0.0,
+                "total_amount": 108.9,
+                "category": "gasto",
+                "quarter": 1,
+                "year": 2026,
+                "file_path": "c:/Users/luisd/Desktop/Alfonso_Autonomo/gastos/G-2026-005.pdf"
+            }
+        ]
+        
+        # Limpiar tablas PGC
+        cursor.execute("DELETE FROM ledger_entries")
+        cursor.execute("DELETE FROM journal_entries")
+        conn.commit()
+        print("✓ Tablas PGC ('journal_entries', 'ledger_entries') limpiadas.")
 
-if __name__ == '__main__':
-    seed_dev_knowledge()
+        # Insertar registros cifrados
+        from app.domain.services.ledger_service import LedgerService
+        
+        for data in invoices_data:
+            cursor.execute("""
+                INSERT INTO invoices (
+                    invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                    base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                    category, quarter, year, file_path
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                encryptor.encrypt(data["invoice_id"]),
+                encryptor.encrypt(data["date"]),
+                encryptor.encrypt(data["issuer_name"]),
+                encryptor.encrypt(data["issuer_nif"]),
+                encryptor.encrypt(data["receiver_name"]),
+                encryptor.encrypt(data["receiver_nif"]),
+                encryptor.encrypt(str(data["base_imponible"])),
+                encryptor.encrypt(str(data["iva_rate"])),
+                encryptor.encrypt(str(data["iva_amount"])),
+                encryptor.encrypt(str(data["irpf_rate"])),
+                encryptor.encrypt(str(data["irpf_amount"])),
+                encryptor.encrypt(str(data["total_amount"])),
+                data["category"],
+                data["quarter"],
+                data["year"],
+                encryptor.encrypt(data["file_path"])
+            ))
+            
+            # Registrar asiento contable PGC por partida doble
+            LedgerService.record_invoice_asiento(data)
+            
+        conn.commit()
+        print(f"✓ {len(invoices_data)} facturas insertadas y contabilizadas bajo partida doble PGC en la base de datos.")
+
+        # --- SEMBRAR PROYECTOS MOCK ---
+        cursor.execute("DELETE FROM projects")
+        projects_data = [
+            ("Desarrollo de App Contable", "ACME CORP S.L.", "B12345678", 5000.0, "en_progreso", "Desarrollo del backend y front-end de la aplicación de contabilidad."),
+            ("Auditoría de Sistemas de Seguridad", "GLOBAL TECH SPAIN", "B87654321", 3000.0, "pendiente_facturar", "Auditoría completa e informes de penetración."),
+            ("Consultoría Estratégica de IA", "BETA PARTNERS S.L.", "B11223344", 1500.0, "facturado", "Asesoramiento en la implantación de modelos LLM locales.")
+        ]
+        for name, client_name, client_nif, budget, status, desc in projects_data:
+            cursor.execute("""
+                INSERT INTO projects (name, client_name, client_nif, budget, status, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (name, client_name, client_nif, budget, status, desc))
+        conn.commit()
+        print("✓ Tabla 'projects' sembrada con 3 proyectos mock.")
+
+        # --- SEMBRAR CLIENTES MOCK ---
+        cursor.execute("DELETE FROM clients")
+        clients_data = [
+            ("ACME CORP S.L.", "B12345678", "finance@acme.com", "Avenida de la Industria 45, Madrid, España"),
+            ("GLOBAL TECH SPAIN", "B87654321", "billing@globaltech.es", "Paseo de la Castellana 100, Madrid, España"),
+            ("BETA PARTNERS S.L.", "B11223344", "admin@betapartners.com", "Calle Gran Vía 12, Madrid, España")
+        ]
+        for name, nif, email, address in clients_data:
+            cursor.execute("""
+                INSERT INTO clients (name, nif, email, address)
+                VALUES (?, ?, ?, ?)
+            """, (name, nif, email, address))
+        conn.commit()
+        print("✓ Tabla 'clients' sembrada con 3 clientes mock.")
+
+if __name__ == "__main__":
+    seed_database()

@@ -13,7 +13,10 @@ async def start_background_mail_monitor(bridge_port=None):
     
     from app.tools.server.mail_tools import sync_emails_to_calendar
     from app.adapters.mail_db import get_connection
-    from app.domain.agents.job.job_agent import job_agent
+    try:
+        from app.domain.agents.job.job_agent import job_agent
+    except ImportError:
+        job_agent = None
     
     if bridge_port is None:
         from app.adapters.alfonso_bridge import bridge as bridge_port
@@ -68,7 +71,7 @@ async def start_background_mail_monitor(bridge_port=None):
                     # Filtrar enlaces que parecen de ofertas reales
                     job_urls = [u for u in urls if any(k in u.lower() for k in ["oferta", "job", "empleo", "apply", "postula", "vacancy", "detail", "view", "linkedin.com/jobs"])]
                     
-                    if job_urls:
+                    if job_urls and job_agent:
                         target_url = job_urls[0]
                         app_logger.info(f"[BackgroundMonitor] Detectada oferta de empleo para procesar: {target_url} en correo ID {email_id}")
                         
@@ -77,6 +80,8 @@ async def start_background_mail_monitor(bridge_port=None):
                             app_logger.info(f"[BackgroundMonitor] Auto-postulación completa para correo {email_id}: {apply_res}")
                         except Exception as e:
                             app_logger.error(f"[BackgroundMonitor] Fallo al auto-postularse en correo {email_id}: {e}")
+                    elif job_urls:
+                        app_logger.info(f"[BackgroundMonitor] Enlace de empleo detectado ({job_urls[0]}), pero job_agent no está disponible.")
                     
                     # Marcar como procesado para no repetir
                     conn.execute("UPDATE emails SET processed_for_job = 1 WHERE id = ?", (email_id,))

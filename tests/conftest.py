@@ -7,6 +7,8 @@ import os
 # Si app.adapters.memory tiene una instancia global 'memory', la parchearemos.
 # Forzamos a que cualquier instancia de SessionMemory use la base de datos de test local
 os.environ["ALFONSO_DB_PATH"] = "data/memory_test.db"
+os.environ["GEMINI_API_KEY"] = ""
+
 
 
 @pytest.fixture

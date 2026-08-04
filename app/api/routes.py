@@ -28,7 +28,7 @@ from typing import Any, List, Optional
 from app.adapters.memory.memory import DB_PATH
 
 import secrets
-from fastapi import APIRouter, HTTPException, Query, Request, Depends, status
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, status, Form, File, UploadFile
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -37,7 +37,6 @@ from app.adapters import mail_db
 from app.adapters.calendar_db import create_event, delete_event, list_events
 from app.adapters.metrics import snapshot
 from app.adapters.tool_registry import get_tool, list_tools
-from app.domain.agents.dev.dev_agent import dev_agent
 from app.utils.logger import app_logger, attach_request_id
 from app.utils.timer import Timer
 from app.config import settings
@@ -55,21 +54,16 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
             )
     return api_key
 
-# Routers
-router = APIRouter()
+# ── Routers ─────────────────────────────────────────────────────────────────
+router = APIRouter(prefix="")
 router_browser = APIRouter(prefix="/browser", tags=["browser"], dependencies=[Depends(verify_api_key)])
 router_computer = APIRouter(prefix="/computer", tags=["computer"], dependencies=[Depends(verify_api_key)])
 router_calendar = APIRouter(prefix="/calendar", tags=["calendar"], dependencies=[Depends(verify_api_key)])
 router_mail = APIRouter(prefix="/mail", tags=["mail"], dependencies=[Depends(verify_api_key)])
-router_dev = APIRouter(prefix="/dev", tags=["developer"], dependencies=[Depends(verify_api_key)])
 router_security = APIRouter(prefix="/security", tags=["security"], dependencies=[Depends(verify_api_key)])
 
 # Inyectado desde lifespan en main.py
 orchestrator: Any = None
-
-# Directorio del sandbox
-SANDBOX_DIR = Path("data/dev_sandbox")
-SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -474,67 +468,8 @@ async def remove_event(event_id: int):
 
 
 # ---------------------------------------------------------------------------
-# Endpoints: Dev Sandbox
+# Endpoints: Browser
 # ---------------------------------------------------------------------------
-
-@router_dev.get("/files")
-def list_files():
-    """Lista todos los archivos presentes en el sandbox de desarrollo."""
-    files = []
-    for entry in os.scandir(SANDBOX_DIR):
-        if entry.is_file():
-            files.append({
-                "name": entry.name,
-                "size": entry.stat().st_size,
-                "mtime": entry.stat().st_mtime
-            })
-    return sorted(files, key=lambda x: x["name"])
-
-
-@router_dev.get("/files/{filename}")
-def get_file_content(filename: str):
-    """Obtiene el contenido de un archivo específico del sandbox."""
-    file_path = SANDBOX_DIR / filename
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    
-    try:
-        content = file_path.read_text(encoding="utf-8")
-        return {"filename": filename, "content": content}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router_dev.post("/files")
-def save_file(payload: FilePayload):
-    """Guarda o actualiza un archivo en el sandbox."""
-    try:
-        dev_agent.write_to_sandbox(payload.filename, payload.content)
-        return {"status": "ok", "message": f"Archivo '{payload.filename}' guardado correctamente"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router_dev.delete("/files/{filename}")
-def delete_file(filename: str):
-    """Elimina un archivo del sandbox."""
-    file_path = SANDBOX_DIR / filename
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    
-    try:
-        file_path.unlink()
-        return {"status": "ok", "message": f"Archivo '{filename}' eliminado"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router_dev.post("/execute")
-def execute_command(payload: CommandPayload):
-    """Ejecuta un comando dentro de la carpeta del sandbox."""
-    app_logger.info("Ejecutando en sandbox: %s", payload.command)
-    res = dev_agent.execute_command_in_sandbox(payload.command)
-    return res
 
 
 # ---------------------------------------------------------------------------
@@ -940,12 +875,152 @@ async def get_tax_aggregates(year: Optional[int] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router_tax.get("/profile")
+async def get_user_profile():
+    try:
+        from app.adapters.memory.memory import _get_connection
+        from app.utils.encryption import encryptor
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_type, nif, razon_social, direccion, cert_path, cert_password FROM user_profile LIMIT 1")
+            row = cursor.fetchone()
+            
+        if not row:
+            return {"status": "ok", "configured": False, "profile": None}
+            
+        return {
+            "status": "ok",
+            "configured": True,
+            "profile": {
+                "user_type": row["user_type"],
+                "nif": encryptor.decrypt(row["nif"]),
+                "razon_social": encryptor.decrypt(row["razon_social"]),
+                "direccion": encryptor.decrypt(row["direccion"]),
+                "cert_path": encryptor.decrypt(row["cert_path"]),
+                "cert_password_masked": "******" if row["cert_password"] else None
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router_tax.post("/profile")
+async def save_user_profile(
+    user_type: str = Form(...),
+    nif: str = Form(...),
+    razon_social: str = Form(...),
+    direccion: str = Form(...),
+    cert_password: Optional[str] = Form(None),
+    certificate: Optional[UploadFile] = File(None)
+):
+    try:
+        from app.adapters.memory.memory import _get_connection
+        from app.utils.encryption import encryptor
+        import shutil
+        from pathlib import Path
+        
+        cert_path_str = ""
+        if certificate:
+            cert_dir = Path("data/certificates")
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            cert_file_path = cert_dir / certificate.filename
+            with open(cert_file_path, "wb") as buffer:
+                shutil.copyfileobj(certificate.file, buffer)
+            cert_path_str = str(cert_file_path.resolve()).replace("\\", "/")
+
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM user_profile")
+            cursor.execute("""
+                INSERT INTO user_profile (user_type, nif, razon_social, direccion, cert_path, cert_password)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                user_type,
+                encryptor.encrypt(nif),
+                encryptor.encrypt(razon_social),
+                encryptor.encrypt(direccion),
+                encryptor.encrypt(cert_path_str) if cert_path_str else None,
+                encryptor.encrypt(cert_password) if cert_password else None
+            ))
+            conn.commit()
+            
+        return {"status": "ok", "message": "Perfil fiscal y certificado guardados correctamente en el servidor."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router_tax.post("/bank/import")
+async def import_bank_statement_file(file: UploadFile = File(...)):
+    try:
+        from app.domain.services.bank_service import BankService
+        import tempfile
+        import shutil
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as temp:
+            shutil.copyfileobj(file.file, temp)
+            temp_path = temp.name
+            
+        try:
+            count = BankService.parse_norma43_file(temp_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            
+        return {
+            "status": "ok",
+            "message": f"Extracto bancario procesado. Se importaron {count} movimientos.",
+            "imported_count": count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router_tax.get("/boe/check")
+async def check_boe_endpoint(date: Optional[str] = Query(None, description="Fecha en formato YYYYMMDD")):
+    try:
+        from datetime import datetime
+        from app.domain.services.boe_reader import BOEReaderService
+        alerts = await BOEReaderService.fetch_and_parse_boe(date_str=date)
+        suggested = await BOEReaderService.analyze_fiscal_alerts(alerts)
+        return {
+            "status": "ok",
+            "date": date or datetime.now().strftime("%Y%m%d"),
+            "alerts_found_count": len(alerts),
+            "alerts": alerts,
+            "suggested_updates": suggested
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Incluimos los sub-routers en el router principal
 router.include_router(router_browser)
 router.include_router(router_computer)
 router.include_router(router_calendar)
 router.include_router(router_mail)
-router.include_router(router_dev)
 router.include_router(router_security)
 router.include_router(router_tax)
+
+
+# ── WebSocket de Alfonso Guardián ───────────────────────────────────────────
+from fastapi import WebSocket, WebSocketDisconnect
+from app.core.websocket_manager import guardian_ws_manager
+
+@router.websocket("/ws/guardian")
+async def websocket_guardian_endpoint(websocket: WebSocket):
+    await guardian_ws_manager.connect(websocket)
+    try:
+        while True:
+            # Escucha mensajes de la extensión (ej. confirmación de firma, logs)
+            data = await websocket.receive_json()
+            app_logger.info(f"Mensaje recibido de la extensión Guardián: {data}")
+            # Eco simple de confirmación
+            await websocket.send_json({"status": "received", "echo": data})
+    except WebSocketDisconnect:
+        guardian_ws_manager.disconnect(websocket)
+    except Exception as e:
+        app_logger.error(f"Error en websocket_guardian_endpoint: {e}")
+        guardian_ws_manager.disconnect(websocket)
+
 

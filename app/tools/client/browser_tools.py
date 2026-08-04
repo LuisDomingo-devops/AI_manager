@@ -255,24 +255,32 @@ async def browser_search(query: str, max_text_chars: int = 3000, client_id: str 
         if not query.strip():
             return _error("invalid_query", "Query vacía")
 
-        url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(query)
+        # Usamos DuckDuckGo HTML para evitar los bloqueos de Google CAPTCHA
+        url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote_plus(query)
 
-        nav = await browser_navigate(url, client_id=client_id)
-        if nav.get("status") != "ok":
-            return nav
+        import httpx
+        import re
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code != 200:
+                return _error("search_failed", f"HTTP status {response.status_code}")
+            
+            html = response.text
+            html = re.sub(r'<head.*?>.*?</head>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<script.*?>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<style.*?>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<.*?>', ' ', html, flags=re.DOTALL)
+            text = " ".join(text.split())
 
-        # fallback robusto (Google cambia DOM)
-        await asyncio.sleep(2)
-
-        text = await browser_get_text("body", client_id=client_id)
-        shot = await browser_screenshot(client_id=client_id)
-
-        return _ok(
-            query=query,
-            url=url,
-            text_preview=text.get("text", "")[:max_text_chars],
-            image_base64=shot.get("image_base64")
-        )
+            return _ok(
+                query=query,
+                url=url,
+                text_preview=text[:max_text_chars],
+                image_base64=None
+            )
 
     except Exception as e:
         return _error("search_failed", str(e), query=query)
