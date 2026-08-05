@@ -6,7 +6,6 @@ Orquesta y ejecuta el ciclo de vida del planificador (fase de intención, planif
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/api/routes.py: Invoca este orquestador a través de /chat.
-- app/domain/agents/dev/dev_agent.py: Delega consultas de desarrollo de software.
 - app/domain/agents/marcos/marcos_agent.py: Delega consultas de legislación española.
 - app/adapters/tool_registry.py: Busca y proporciona las herramientas a ejecutar.
 """
@@ -224,14 +223,6 @@ class SpecializedAgentRouter:
             "hacienda", "aeat", "declaración de la renta", "declaracion de la renta",
             "deducción", "deduccion", "deducciones", "jurisprudencia", "sentencia", "fiscal"
         ])
-
-        is_dev_query = any(kw in msg_lower for kw in [
-            "crea una app", "crea un app", "crear app", "crear aplicación", "crear aplicacion",
-            "crea un programa", "crea programa", "escribe codigo", "escribe código", "escribir codigo", "escribir código",
-            "escribe el código", "escribe el codigo", "escribir el código", "escribir el codigo", "código html", "codigo html",
-            "genera código", "genera codigo", "generar codigo", "generar código", "sandbox", "compila", "compilar", "desarrolla", "desarrollar"
-        ]) or ("marcosdev" in msg_lower or "ingeniero de software" in msg_lower or "devagent" in msg_lower)
-
         is_security_query = any(kw in msg_lower for kw in [
             "ciberseguridad", "cybersecurity", "seguridad", "security", "vulnerabilidad", 
             "vulnerabilities", "auditoría de seguridad", "auditoria de seguridad", "hack",
@@ -242,46 +233,6 @@ class SpecializedAgentRouter:
             logger.info("Consulta de tipo legal. Delegando a MarcosAgent.")
             from app.domain.agents.marcos.marcos_agent import marcos_agent
             response = await marcos_agent.generate_response(user_message)
-            if session_id:
-                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
-            return {
-                "type": "chat",
-                "response": response,
-            }
-
-        if is_dev_query:
-            logger.info("Consulta de desarrollo. Delegando a DevAgent.")
-            from app.domain.agents.dev.dev_agent import dev_agent
-            response = await dev_agent.generate_response(user_message)
-            
-            if "escritorio" in msg_lower or "desktop" in msg_lower:
-                try:
-                    import os
-                    from pathlib import Path
-                    from app.tools.server.filesystem_tools import _resolve_path
-                    from app.utils.paths import get_client_desktop
-                    desktop_dir = get_client_desktop(client_id)
-                    sandbox_path = Path("data/dev_sandbox")
-                    if sandbox_path.exists():
-                        subfolder = None
-                        m_sub = re.search(r"\b(?:carpeta\s+que\s+se\s+llame|carpeta\s+llamada|subcarpeta\s+llamada|directorio\s+llamado|carpeta)\s+([a-zA-Z0-9_\-]+)", msg_lower)
-                        if m_sub:
-                            subfolder = m_sub.group(1).strip()
-                            
-                        for entry in os.scandir(sandbox_path):
-                            if entry.is_file():
-                                file_content = Path(entry.path).read_text(encoding="utf-8")
-                                if subfolder:
-                                    dest_path = f"{desktop_dir}/{subfolder}/{entry.name}"
-                                else:
-                                    dest_path = f"{desktop_dir}/{entry.name}"
-                                resolved_dest = _resolve_path(dest_path)
-                                resolved_dest.parent.mkdir(parents=True, exist_ok=True)
-                                logger.info(f"Copiando archivo del sandbox al escritorio: {entry.name} -> {resolved_dest}")
-                                resolved_dest.write_text(file_content, encoding="utf-8")
-                except Exception as e:
-                    logger.error(f"Error al copiar archivos del sandbox al escritorio: {e}")
-
             if session_id:
                 self.memory.add_message(session_id, "assistant", response, client_id=client_id)
             return {

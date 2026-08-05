@@ -26,5 +26,5 @@ chromadb
 pypdf
 pdfplumber
 openpyxl
-
-
+qrcode
+cryptography

@@ -45,25 +45,26 @@ async def test_orchestrator_client_tool_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector):
-        # El LLM responde con una herramienta cliente: click
-        mock_llm.generate.return_value = '{"tool": "click", "args": {"x": 100, "y": 200}}'
+        # El LLM responde con una herramienta cliente: calendar_open_ui
+        mock_llm.generate.return_value = '{"tool": "calendar_open_ui", "args": {}}'
         
         # Mock de alfonso_bridge
         mock_bridge = AsyncMock()
-        mock_bridge.send_command.return_value = {"status": "success", "result": "click exitoso"}
+        mock_bridge.send_command.return_value = {"status": "success", "result": "operación exitosa"}
         
         with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
             orchestrator = PlannerOrchestrator()
             result = await orchestrator.run(
-                user_message="haz click en la pantalla",
+                user_message="abre el calendario",
                 llm=mock_llm,
                 session_id="test_session"
             )
             
             assert result["type"] == "tool"
             assert result["execution"] == "client"
-            assert result["tool"] == "click"
+            assert result["tool"] == "calendar_open_ui"
             assert result["result"] == {}
+
 
 
 @pytest.mark.asyncio

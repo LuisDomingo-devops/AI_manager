@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import qrcode
 from pathlib import Path
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
@@ -9,7 +10,9 @@ from app.adapters.memory.memory import _get_connection
 from app.utils.encryption import encryptor
 from app.domain.services.ledger_service import LedgerService
 from app.domain.services.excel_sync import ExcelSyncService
+from app.domain.services.verifactu_service import VerifactuService
 from app.utils.logger import tool_logger
+
 
 async def get_projects_wip() -> dict:
     """
@@ -234,12 +237,55 @@ async def generate_invoice_pdf(
         c.drawString(340, y - 5, "Total a Cobrar:")
         c.drawString(450, y - 5, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
         
-        # Notas
+        # 4. Registrar en el encadenamiento Verifactu (AEAT)
+        verifactu_data = {
+            "invoice_number": invoice_id,
+            "date_of_issue": date_str,
+            "issuer_nif": emisor_nif,
+            "receiver_nif": client_nif,
+            "base_imponible": amount,
+            "iva_amount": iva_amount,
+            "total_amount": total_amount
+        }
+        verifactu_res = VerifactuService.register_invoice(verifactu_data)
+        current_hash = verifactu_res["current_hash"]
+        signature_base64 = verifactu_res["signature"]
+
+        # Generar código QR oficial de verificación de la AEAT
+        qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFactura?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
+        qr = qrcode.QRCode(version=1, box_size=3, border=1)
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        qr_temp_path = target_dir / f"qr_{invoice_id}.png"
+        qr_img.save(str(qr_temp_path))
+
+        # Dibujar QR en el Canvas PDF
+        c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
+
+        # Añadir leyenda de VERI*FACTU y metadatos criptográficos
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColorRGB(0.12, 0.23, 0.35)
+        c.drawString(135, 175, "VERI*FACTU - FACTURA VERIFICABLE")
+        
+        c.setFont("Helvetica", 7)
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.drawString(135, 163, "Factura verificable en la sede electrónica de la AEAT")
+        c.drawString(135, 151, f"Hash Encadenamiento: {current_hash[:36]}...")
+        c.drawString(135, 140, f"Firma Criptográfica (RSA): {signature_base64[:40]}...")
+
+        # Notas finales
         c.setFont("Helvetica-Oblique", 8)
-        c.drawString(55, 100, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
-        c.drawString(55, 85, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
+        c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
+        c.drawString(55, 75, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
         
         c.save()
+
+        # Limpiar QR temporal
+        if qr_temp_path.exists():
+            os.remove(qr_temp_path)
+
 
         # 5. Insertar en la Base de Datos SQLite (cifrado)
         invoice_db_data = {

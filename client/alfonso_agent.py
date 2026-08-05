@@ -645,28 +645,12 @@ class AlfonsoAgent:
     # ---------------- GESTURES ----------------
 
     def start_gestures(self, params):
-        logger.info(f"Iniciando control de gestos con params: {params}")
-        try:
-            if not self.gesture_controller:
-                from services.gesture_controller import GestureController
-                camera_index = params.get("camera_index", 0)
-                self.gesture_controller = GestureController(camera_index=camera_index)
-            self.gesture_controller.start()
-            return {"result": "ok", "message": "Control de gestos iniciado correctamente."}
-        except Exception as e:
-            logger.exception("Error al iniciar el control de gestos")
-            return {"error": f"Fallo al iniciar gestos: {e}"}
+        logger.warning("El control de gestos ha sido deprecado y desconectado del código activo.")
+        return {"error": "El control de gestos ha sido deprecado y desactivado."}
 
     def stop_gestures(self, params):
-        logger.info("Deteniendo control de gestos...")
-        try:
-            if self.gesture_controller:
-                self.gesture_controller.stop()
-                return {"result": "ok", "message": "Control de gestos detenido correctamente."}
-            return {"result": "ok", "message": "El control de gestos no estaba activo."}
-        except Exception as e:
-            logger.exception("Error al detener el control de gestos")
-            return {"error": f"Fallo al detener gestos: {e}"}
+        logger.warning("El control de gestos ha sido deprecado y desconectado del código activo.")
+        return {"result": "ok", "message": "Control de gestos desactivado por obsolescencia."}
 
     def switch_project_session(self, params):
         logger.info("switch_project_session recibido en el agente. Notificando cambio exitoso.")

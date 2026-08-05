@@ -191,11 +191,6 @@ from pathlib import Path
 
 app = FastAPI(title="Alfonso Core — Fase 4", lifespan=lifespan)
 
-# Asegurar que el sandbox existe para evitar errores al montar
-sandbox_dir = Path("data/dev_sandbox")
-sandbox_dir.mkdir(parents=True, exist_ok=True)
-
-app.mount("/sandbox-view", StaticFiles(directory="data/dev_sandbox"), name="sandbox_view")
 
 
 @app.middleware("http")
