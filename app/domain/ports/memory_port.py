@@ -29,6 +29,14 @@ class MemoryPort(Protocol):
         """Lists all persistent conversations/projects in the system."""
         ...
 
+    def update_summary(self, session_id: str, summary: str) -> None:
+        """Updates the conversation summary for a session."""
+        ...
+
+    def get_diary_entry(self, session_id: str) -> Dict[str, Any] | None:
+        """Retrieves the diary entry for a session."""
+        ...
+
 
 class VectorMemoryPort(Protocol):
     def add_fact(self, session_id: str, fact: str, client_id: str | None = None) -> None:

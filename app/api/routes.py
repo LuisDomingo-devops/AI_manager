@@ -29,6 +29,7 @@ from app.adapters.memory.memory import DB_PATH
 
 import secrets
 from fastapi import APIRouter, HTTPException, Query, Request, Depends, status, Form, File, UploadFile
+from fastapi.responses import HTMLResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -950,7 +951,7 @@ async def save_user_profile(
 
 
 @router_tax.post("/bank/import")
-async def import_bank_statement_file(file: UploadFile = File(...)):
+async def import_bank_statement_file(file: UploadFile = File(...), connection_id: Optional[int] = Query(None)):
     try:
         from app.domain.services.bank_service import BankService
         import tempfile
@@ -962,7 +963,7 @@ async def import_bank_statement_file(file: UploadFile = File(...)):
             temp_path = temp.name
             
         try:
-            count = BankService.parse_norma43_file(temp_path)
+            count = BankService.parse_norma43_file(temp_path, connection_id)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -974,6 +975,72 @@ async def import_bank_statement_file(file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router_tax.get("/bank/mock-auth", response_class=HTMLResponse)
+async def bank_mock_auth(redirect: str, bank: str = "BBVA"):
+    from fastapi.responses import HTMLResponse
+    html_content = f"""
+    <html>
+        <head>
+            <title>Simulacion de Autorizacion Bancaria</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background-color: #0f172a;
+                    color: #e2e8f0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                }}
+                .card {{
+                    background-color: #1e293b;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    text-align: center;
+                    max-width: 400px;
+                    border: 1px solid #334155;
+                }}
+                h1 {{
+                    color: #38bdf8;
+                    font-size: 24px;
+                    margin-bottom: 20px;
+                }}
+                p {{
+                    color: #94a3b8;
+                    margin-bottom: 30px;
+                    line-height: 1.5;
+                }}
+                .btn {{
+                    background-color: #0284c7;
+                    color: white;
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    transition: background-color 0.2s;
+                }}
+                .btn:hover {{
+                    background-color: #0369a1;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Conectar Alfonso con {bank}</h1>
+                <p>Estás en el portal seguro de autorización de <strong>{bank}</strong>. Al hacer clic en el botón de abajo, permitirás que Alfonso acceda a los movimientos de tu cuenta para la conciliación fiscal.</p>
+                <a href="{redirect}" class="btn">Autorizar Acceso</a>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
 @router_tax.get("/boe/check")

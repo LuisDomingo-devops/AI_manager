@@ -11,7 +11,8 @@ def mem(tmp_path, monkeypatch):
     Crea una instancia de SessionMemory con una base de datos temporal
     para que los tests no interfieran con la base de datos real.
     """
-    import app.adapters.memory.memory as memory_module
+    import sys
+    memory_module = sys.modules["app.adapters.memory.memory"]
     db_path = tmp_path / "test_memory.db"
     monkeypatch.setattr(memory_module, "DB_PATH", db_path)
     # Re-inicializar la base de datos en la ruta temporal
@@ -69,7 +70,8 @@ def test_persistence_across_instances(tmp_path, monkeypatch):
     Verifica que los datos sobreviven al crear una nueva instancia de SessionMemory,
     simulando un reinicio del servidor.
     """
-    import app.adapters.memory.memory as memory_module
+    import sys
+    memory_module = sys.modules["app.adapters.memory.memory"]
     db_path = tmp_path / "persist_test.db"
     monkeypatch.setattr(memory_module, "DB_PATH", db_path)
     memory_module._db_initialized = False
@@ -117,3 +119,42 @@ def test_empty_session_id_ignored(mem):
     """session_id vacío no debe guardar nada."""
     mem.add_message("", "user", "esto no debería guardarse")
     assert mem.get_history("") == []
+
+
+def test_session_diary_archiving_and_summary(mem):
+    # En tests, IS_TESTING es True, por lo que date_str será la misma session_id ("diary-session")
+    session_id = "diary-session"
+    for i in range(10):
+        mem.add_message(session_id, "user", f"mensaje {i}")
+
+    # El historial normal (con max_messages=5) solo tiene los últimos 5
+    history = mem.get_history(session_id)
+    assert len(history) == 5
+
+    # Pero el diario de sesiones conserva TODOS (los 10 mensajes)
+    diary = mem.get_diary_entry(session_id)
+    assert diary is not None
+    assert diary["date"] == session_id
+    
+    import json
+    messages_archived = json.loads(diary["messages"])
+    assert len(messages_archived) == 10
+    assert messages_archived[0]["content"] == "mensaje 0"
+    assert messages_archived[-1]["content"] == "mensaje 9"
+
+    # Actualizar resumen
+    mem.update_summary(session_id, "Resumen de prueba")
+    diary_updated = mem.get_diary_entry(session_id)
+    assert diary_updated["summary"] == "Resumen de prueba"
+
+
+def test_session_id_normalization_non_testing(mem):
+    # Simulamos que no estamos en tests
+    mem.is_testing = False
+
+    from datetime import datetime
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    expected_session_id = f"daily_{today_str}"
+
+    resolved = mem._resolve_session_id("custom-session")
+    assert resolved == expected_session_id

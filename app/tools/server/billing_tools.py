@@ -123,32 +123,122 @@ async def generate_invoice_pdf(
 ) -> dict:
     """
     Genera una factura en PDF con formato profesional de venta en la carpeta Facturas_Pendientes_Cobro del Escritorio,
-    la inserta en la base de datos de facturas y realiza el asiento contable (Diario/Mayor) automáticamente.
+    la inserta en la base de datos de facturas y realiza el asiento contable (Diario/Mayor) automáticamente si no es borrador.
+    Soporta la persistencia de borradores si faltan datos del cliente, NIF, concepto o importe.
     """
     try:
-        # 1. Resolver fechas y números secuenciales
+        # 1. Buscar si existe un registro previo con el invoice_id proporcionado
+        existing_id_db = None
+        existing_file_path = None
+        is_updating = False
+
+        if invoice_id:
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, invoice_id, date, receiver_name, receiver_nif, base_imponible, concept, file_path, status
+                    FROM invoices
+                """)
+                rows = cursor.fetchall()
+                for r in rows:
+                    try:
+                        dec_id = encryptor.decrypt(r["invoice_id"])
+                        if dec_id.upper() == invoice_id.upper():
+                            existing_id_db = r["id"]
+                            existing_file_path = encryptor.decrypt(r["file_path"])
+                            is_updating = True
+                            
+                            # Cargar valores antiguos si los nuevos no son válidos/proporcionados
+                            if not client_name or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                                dec_client_name = encryptor.decrypt(r["receiver_name"])
+                                if dec_client_name and dec_client_name.lower().strip() not in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                                    client_name = dec_client_name
+                            
+                            if not client_nif or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                                dec_client_nif = encryptor.decrypt(r["receiver_nif"])
+                                if dec_client_nif and dec_client_nif.lower().strip() not in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                                    client_nif = dec_client_nif
+                            
+                            if not amount or float(amount) <= 0.0:
+                                dec_amount = float(encryptor.decrypt(r["base_imponible"]))
+                                if dec_amount > 0.0:
+                                    amount = dec_amount
+                                    
+                            if not concept or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                                try:
+                                    dec_concept = encryptor.decrypt(r["concept"])
+                                    if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                                        concept = dec_concept
+                                except Exception:
+                                    pass
+                            break
+                    except Exception:
+                        pass
+            finally:
+                conn.close()
+
+        # 2. Evaluar si es borrador (faltan datos o se solicita explícitamente)
+        is_incomplete_name = not client_name or client_name.strip() == "" or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido", "cliente_desconocido")
+        is_incomplete_nif = not client_nif or client_nif.strip() == "" or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido")
+        is_incomplete_concept = not concept or concept.strip() == "" or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto")
+        is_incomplete_amount = not amount or float(amount) <= 0.0
+
+        is_draft = is_incomplete_name or is_incomplete_nif or is_incomplete_concept or is_incomplete_amount
+
+        # 3. Resolver fechas e identificadores secuenciales
         now = datetime.now()
         if not date:
             date_str = now.strftime("%d/%m/%Y")
         else:
             date_str = date
-            
-        if not invoice_id:
-            # Obtener el último número secuencial para autogenerar
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM invoices")
-                count = cursor.fetchone()[0]
-                invoice_id = f"F-2026-{count + 101:03d}"
-            finally:
-                conn.close()
+
+        # Si ya teníamos un ID asignado y sigue siendo borrador, lo mantenemos.
+        # Si era borrador y ahora se completa, le asignamos un ID secuencial de factura real.
+        if is_draft:
+            if not invoice_id or not invoice_id.startswith("BORRADOR-"):
+                # Generar nuevo ID de borrador secuencial
+                conn = _get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT invoice_id FROM invoices")
+                    rows = cursor.fetchall()
+                    draft_count = 0
+                    for r in rows:
+                        try:
+                            dec_id = encryptor.decrypt(r["invoice_id"])
+                            if dec_id.startswith("BORRADOR-"):
+                                draft_count += 1
+                        except Exception:
+                            pass
+                    invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
+                finally:
+                    conn.close()
+        else:
+            # Es factura completa/firme. Si venía de un borrador o no tiene ID, le generamos un ID de la serie de facturas F-
+            if not invoice_id or invoice_id.startswith("BORRADOR-"):
+                conn = _get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT invoice_id FROM invoices")
+                    rows = cursor.fetchall()
+                    firm_count = 0
+                    for r in rows:
+                        try:
+                            dec_id = encryptor.decrypt(r["invoice_id"])
+                            if dec_id.startswith("F-"):
+                                firm_count += 1
+                        except Exception:
+                            pass
+                    invoice_id = f"F-2026-{firm_count + 101:03d}"
+                finally:
+                    conn.close()
 
         # Datos fiscales del emisor (Luis Domingo)
         emisor_name = "LUIS DOMINGO"
         emisor_nif = "12345678Z"
 
-        # 2. Cálculos económicos
+        # 4. Cálculos económicos
         iva_amount = round(amount * (iva_rate / 100.0), 2)
         irpf_amount = round(amount * (irpf_rate / 100.0), 2)
         total_amount = round(amount + iva_amount - irpf_amount, 2)
@@ -167,7 +257,7 @@ async def generate_invoice_pdf(
         pdf_filename = f"Factura_{invoice_id}.pdf"
         pdf_path = target_dir / pdf_filename
 
-        # 4. Generación del Canvas PDF
+        # 5. Generación del Canvas PDF
         c = canvas.Canvas(str(pdf_path), pagesize=letter)
         
         # Estilo premium básico
@@ -176,7 +266,10 @@ async def generate_invoice_pdf(
         
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(65, 732, "FACTURA DE VENTA / INGRESO")
+        if is_draft:
+            c.drawString(65, 732, "BORRADOR DE FACTURA")
+        else:
+            c.drawString(65, 732, "FACTURA DE VENTA / INGRESO")
         
         c.setFillColorRGB(0.2, 0.2, 0.2)
         c.setFont("Helvetica-Bold", 10)
@@ -199,8 +292,8 @@ async def generate_invoice_pdf(
         c.setFont("Helvetica-Bold", 11)
         c.drawString(320, 675, "DATOS DEL CLIENTE:")
         c.setFont("Helvetica", 10)
-        c.drawString(320, 655, f"Razón Social: {client_name}")
-        c.drawString(320, 640, f"NIF/CIF: {client_nif}")
+        c.drawString(320, 655, f"Razón Social: {client_name if client_name else 'PENDIENTE DE ASIGNAR'}")
+        c.drawString(320, 640, f"NIF/CIF: {client_nif if client_nif else 'PENDIENTE DE ASIGNAR'}")
         
         c.line(50, 605, 560, 605)
         
@@ -213,7 +306,7 @@ async def generate_invoice_pdf(
         c.drawString(450, 576, "Importe Base")
         
         c.setFont("Helvetica", 10)
-        c.drawString(60, 545, concept)
+        c.drawString(60, 545, concept if concept else "Pendiente de definir concepto")
         c.drawString(450, 545, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
         
         c.line(50, 520, 560, 520)
@@ -237,64 +330,89 @@ async def generate_invoice_pdf(
         c.drawString(340, y - 5, "Total a Cobrar:")
         c.drawString(450, y - 5, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
         
-        # 4. Registrar en el encadenamiento Verifactu (AEAT)
-        verifactu_data = {
-            "invoice_number": invoice_id,
-            "date_of_issue": date_str,
-            "issuer_nif": emisor_nif,
-            "receiver_nif": client_nif,
-            "base_imponible": amount,
-            "iva_amount": iva_amount,
-            "total_amount": total_amount
-        }
-        verifactu_res = VerifactuService.register_invoice(verifactu_data)
-        current_hash = verifactu_res["current_hash"]
-        signature_base64 = verifactu_res["signature"]
+        if is_draft:
+            # Indicador visual muy visible de que es un borrador no fiscal
+            c.setFont("Helvetica-Bold", 14)
+            c.setFillColorRGB(0.8, 0.2, 0.2)
+            c.drawString(135, 165, "BORRADOR SIN VALIDEZ FISCAL")
+            c.setFont("Helvetica", 8)
+            c.setFillColorRGB(0.4, 0.4, 0.4)
+            c.drawString(135, 145, "Este documento provisional no se encuentra registrado ante la AEAT.")
+            c.drawString(135, 135, "Se requiere NIF, Razón Social e Importe para poder firmar y registrar.")
+            
+            c.setFont("Helvetica-Oblique", 8)
+            c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
+            c.drawString(55, 75, "Este documento provisional es un borrador y no es válido como factura definitiva.")
+            c.save()
+            
+            current_hash = ""
+            signature_base64 = ""
+        else:
+            # 6. Registrar en el encadenamiento Verifactu (AEAT) si es una factura firme
+            verifactu_data = {
+                "invoice_number": invoice_id,
+                "date_of_issue": date_str,
+                "issuer_nif": emisor_nif,
+                "receiver_nif": client_nif,
+                "base_imponible": amount,
+                "iva_amount": iva_amount,
+                "total_amount": total_amount
+            }
+            verifactu_res = VerifactuService.register_invoice(verifactu_data)
+            current_hash = verifactu_res["current_hash"]
+            signature_base64 = verifactu_res["signature"]
 
-        # Generar código QR oficial de verificación de la AEAT
-        qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFactura?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
-        qr = qrcode.QRCode(version=1, box_size=3, border=1)
-        qr.add_data(qr_url)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white")
-        
-        qr_temp_path = target_dir / f"qr_{invoice_id}.png"
-        qr_img.save(str(qr_temp_path))
+            # Generar código QR oficial de verificación de la AEAT
+            qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFactura?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
+            qr = qrcode.QRCode(version=1, box_size=3, border=1)
+            qr.add_data(qr_url)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="black", back_color="white")
+            
+            qr_temp_path = target_dir / f"qr_{invoice_id}.png"
+            qr_img.save(str(qr_temp_path))
 
-        # Dibujar QR en el Canvas PDF
-        c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
+            # Dibujar QR en el Canvas PDF
+            c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
 
-        # Añadir leyenda de VERI*FACTU y metadatos criptográficos
-        c.setFont("Helvetica-Bold", 9)
-        c.setFillColorRGB(0.12, 0.23, 0.35)
-        c.drawString(135, 175, "VERI*FACTU - FACTURA VERIFICABLE")
-        
-        c.setFont("Helvetica", 7)
-        c.setFillColorRGB(0.3, 0.3, 0.3)
-        c.drawString(135, 163, "Factura verificable en la sede electrónica de la AEAT")
-        c.drawString(135, 151, f"Hash Encadenamiento: {current_hash[:36]}...")
-        c.drawString(135, 140, f"Firma Criptográfica (RSA): {signature_base64[:40]}...")
+            # Añadir leyenda de VERI*FACTU y metadatos criptográficos
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColorRGB(0.12, 0.23, 0.35)
+            c.drawString(135, 175, "VERI*FACTU - FACTURA VERIFICABLE")
+            
+            c.setFont("Helvetica", 7)
+            c.setFillColorRGB(0.3, 0.3, 0.3)
+            c.drawString(135, 163, "Factura verificable en la sede electrónica de la AEAT")
+            c.drawString(135, 151, f"Hash Encadenamiento: {current_hash[:36]}...")
+            c.drawString(135, 140, f"Firma Criptográfica (RSA): {signature_base64[:40]}...")
 
-        # Notas finales
-        c.setFont("Helvetica-Oblique", 8)
-        c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
-        c.drawString(55, 75, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
-        
-        c.save()
+            # Notas finales
+            c.setFont("Helvetica-Oblique", 8)
+            c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
+            c.drawString(55, 75, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
+            
+            c.save()
 
-        # Limpiar QR temporal
-        if qr_temp_path.exists():
-            os.remove(qr_temp_path)
+            # Limpiar QR temporal
+            if qr_temp_path.exists():
+                os.remove(qr_temp_path)
 
+        # Si el archivo PDF viejo existe y el nombre/ruta cambió, lo borramos
+        if existing_file_path and existing_file_path != str(pdf_path):
+            try:
+                if os.path.exists(existing_file_path):
+                    os.remove(existing_file_path)
+            except Exception as e:
+                tool_logger.warning(f"No se pudo borrar el PDF del borrador antiguo: {e}")
 
-        # 5. Insertar en la Base de Datos SQLite (cifrado)
+        # 7. Registrar/Actualizar en la Base de Datos SQLite (cifrado)
         invoice_db_data = {
             "invoice_id": invoice_id,
             "date": date_str,
             "issuer_name": emisor_name,
             "issuer_nif": emisor_nif,
-            "receiver_name": client_name,
-            "receiver_nif": client_nif,
+            "receiver_name": client_name if client_name else "",
+            "receiver_nif": client_nif if client_nif else "",
             "base_imponible": amount,
             "iva_rate": iva_rate,
             "iva_amount": iva_amount,
@@ -304,53 +422,100 @@ async def generate_invoice_pdf(
             "category": "income",
             "quarter": quarter,
             "year": year,
-            "file_path": str(pdf_path)
+            "file_path": str(pdf_path),
+            "status": "borrador" if is_draft else "firmada",
+            "concept": concept if concept else ""
         }
 
-        conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO invoices (
-                    invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
-                    base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                    category, quarter, year, file_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                encryptor.encrypt(invoice_db_data["invoice_id"]),
-                encryptor.encrypt(invoice_db_data["date"]),
-                encryptor.encrypt(invoice_db_data["issuer_name"]),
-                encryptor.encrypt(invoice_db_data["issuer_nif"]),
-                encryptor.encrypt(invoice_db_data["receiver_name"]),
-                encryptor.encrypt(invoice_db_data["receiver_nif"]),
-                encryptor.encrypt(str(invoice_db_data["base_imponible"])),
-                encryptor.encrypt(str(invoice_db_data["iva_rate"])),
-                encryptor.encrypt(str(invoice_db_data["iva_amount"])),
-                encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
-                encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
-                encryptor.encrypt(str(invoice_db_data["total_amount"])),
-                invoice_db_data["category"],
-                invoice_db_data["quarter"],
-                invoice_db_data["year"],
-                encryptor.encrypt(invoice_db_data["file_path"])
-            ))
-            conn.commit()
-        finally:
-            conn.close()
+        if existing_id_db:
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE invoices SET
+                        invoice_id = ?, date = ?, issuer_name = ?, issuer_nif = ?, receiver_name = ?, receiver_nif = ?,
+                        base_imponible = ?, iva_rate = ?, iva_amount = ?, irpf_rate = ?, irpf_amount = ?, total_amount = ?,
+                        category = ?, quarter = ?, year = ?, file_path = ?, status = ?, concept = ?
+                    WHERE id = ?
+                """, (
+                    encryptor.encrypt(invoice_db_data["invoice_id"]),
+                    encryptor.encrypt(invoice_db_data["date"]),
+                    encryptor.encrypt(invoice_db_data["issuer_name"]),
+                    encryptor.encrypt(invoice_db_data["issuer_nif"]),
+                    encryptor.encrypt(invoice_db_data["receiver_name"]),
+                    encryptor.encrypt(invoice_db_data["receiver_nif"]),
+                    encryptor.encrypt(str(invoice_db_data["base_imponible"])),
+                    encryptor.encrypt(str(invoice_db_data["iva_rate"])),
+                    encryptor.encrypt(str(invoice_db_data["iva_amount"])),
+                    encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
+                    encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
+                    encryptor.encrypt(str(invoice_db_data["total_amount"])),
+                    invoice_db_data["category"],
+                    invoice_db_data["quarter"],
+                    invoice_db_data["year"],
+                    encryptor.encrypt(invoice_db_data["file_path"]),
+                    invoice_db_data["status"],
+                    encryptor.encrypt(invoice_db_data["concept"]),
+                    existing_id_db
+                ))
+                conn.commit()
+            finally:
+                conn.close()
+        else:
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO invoices (
+                        invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                        base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                        category, quarter, year, file_path, status, concept
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    encryptor.encrypt(invoice_db_data["invoice_id"]),
+                    encryptor.encrypt(invoice_db_data["date"]),
+                    encryptor.encrypt(invoice_db_data["issuer_name"]),
+                    encryptor.encrypt(invoice_db_data["issuer_nif"]),
+                    encryptor.encrypt(invoice_db_data["receiver_name"]),
+                    encryptor.encrypt(invoice_db_data["receiver_nif"]),
+                    encryptor.encrypt(str(invoice_db_data["base_imponible"])),
+                    encryptor.encrypt(str(invoice_db_data["iva_rate"])),
+                    encryptor.encrypt(str(invoice_db_data["iva_amount"])),
+                    encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
+                    encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
+                    encryptor.encrypt(str(invoice_db_data["total_amount"])),
+                    invoice_db_data["category"],
+                    invoice_db_data["quarter"],
+                    invoice_db_data["year"],
+                    encryptor.encrypt(invoice_db_data["file_path"]),
+                    invoice_db_data["status"],
+                    encryptor.encrypt(invoice_db_data["concept"])
+                ))
+                conn.commit()
+            finally:
+                conn.close()
 
-        # 6. Registrar asiento contable PGC (partida doble)
-        LedgerService.record_invoice_asiento(invoice_db_data)
+        # 8. Registrar asiento contable PGC y sincronizar Excel SOLO si no es borrador
+        if not is_draft:
+            try:
+                LedgerService.record_invoice_asiento(invoice_db_data)
+            except Exception as cont_err:
+                tool_logger.warning("No se pudo generar el asiento contable automáticamente: %s", cont_err)
 
-        # 7. Sincronizar archivo Excel
-        ExcelSyncService.sync_invoices_to_excel()
+            try:
+                ExcelSyncService.sync_invoices_to_excel()
+            except Exception as xls_err:
+                tool_logger.warning("No se pudo sincronizar con el archivo Excel local: %s", xls_err)
 
+        msg_detail = f"Borrador {invoice_id} creado" if is_draft else f"Factura {invoice_id} creada y registrada ante la AEAT (Veri*Factu)"
         return {
             "status": "ok",
             "invoice_id": invoice_id,
+            "is_draft": is_draft,
             "pdf_path": str(pdf_path),
             "total_amount": total_amount,
             "base_imponible": amount,
-            "message": f"Factura {invoice_id} creada y guardada en 'archivo fiscal/facturas pendientes'."
+            "message": f"{msg_detail} y guardada en 'archivo fiscal/facturas pendientes'."
         }
     except Exception as e:
         tool_logger.exception("Error al generar e inyectar la factura")

@@ -64,7 +64,9 @@ class ExcelSyncService:
                 SELECT invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
                        base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
                        category, quarter, year 
-                FROM invoices ORDER BY year DESC, quarter DESC, id DESC
+                FROM invoices 
+                WHERE status = 'firmada' OR status IS NULL
+                ORDER BY year DESC, quarter DESC, id DESC
             """)
             rows = cursor.fetchall()
 

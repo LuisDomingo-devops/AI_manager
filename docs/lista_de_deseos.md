@@ -29,3 +29,13 @@ Este documento recopila las ideas, propuestas y características futuras que apo
     *   Suscripción/ingesta automática del Boletín Oficial del Estado (BOE) cada vez que se publique una nueva edición.
     *   Procesamiento del boletín mediante LLM con RAG especializado en leyes fiscales para identificar cambios que afecten a autónomos (tipos de IVA, deducciones, tramos de IRPF, bases de cotización).
     *   Actualización dinámica de la base de reglas del motor local de Alfonso para aplicar la nueva fiscalidad del usuario sin requerir actualizaciones manuales de software complejas.
+
+---
+
+## 4. Alianza Comercial y Técnica con Wise
+*   **Descripción:** Proponer a Alfonso como una herramienta aliada comercial de Wise, orientada a autónomos y freelancers que operan a nivel internacional.
+*   **Detalles Técnicos y de Negocio:**
+    *   Integración nativa oficial de Wise como socio bancario preferente para cobros internacionales y facturación multidivisa.
+    *   Reconciliación bancaria automatizada directa a través de GoCardless (Open Banking PSD2) para la sincronización fluida de cuentas multidivisa de Wise.
+    *   Ofrecer a los usuarios de Alfonso ventajas exclusivas al abrir cuentas comerciales de Wise, integrando a Alfonso directamente en el directorio de aplicaciones y socios contables autorizados de Wise.
+

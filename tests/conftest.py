@@ -23,12 +23,15 @@ def session_memory_fixture():
     yield mem
 
 @pytest.fixture(autouse=True)
-def mock_memory():
+def mock_memory(request):
     """
     Fixture para parchear la instancia global 'memory' en app.adapters.memory
     y en cualquier módulo que la importe, como planner_orchestrator.
     Esto evita que los tests interactúen con la DB real.
     """
+    if "test_memory" in request.node.nodeid:
+        yield
+        return
     with patch("app.adapters.memory.memory") as mocked:
         # Configuramos comportamientos básicos si es necesario
         mocked.get_summary.return_value = ""

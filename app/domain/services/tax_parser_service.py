@@ -366,6 +366,26 @@ class TaxParserService:
         Persiste los datos de una factura en la base de datos SQLite.
         """
         from app.utils.encryption import encryptor
+        
+        # Control de duplicados: Desencriptar y comparar con facturas existentes
+        target_invoice_id = str(data.get("invoice_id", "")).strip().upper()
+        target_issuer_nif = str(data.get("issuer_nif", "")).strip().upper()
+        if target_invoice_id and target_issuer_nif:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, invoice_id, issuer_nif FROM invoices")
+                rows = cursor.fetchall()
+                for row in rows:
+                    try:
+                        dec_id = str(encryptor.decrypt(row["invoice_id"]) or "").strip().upper()
+                        dec_nif = str(encryptor.decrypt(row["issuer_nif"]) or "").strip().upper()
+                        if dec_id == target_invoice_id and dec_nif == target_issuer_nif:
+                            raise ValueError(f"Factura duplicada detectada: {target_invoice_id} del emisor {target_issuer_nif}")
+                    except ValueError as ve:
+                        raise ve
+                    except Exception:
+                        pass
+
         with _get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""

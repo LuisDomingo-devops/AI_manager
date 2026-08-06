@@ -82,11 +82,21 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             quarter         INTEGER,
             year            INTEGER,
             file_path       TEXT,
+            status          TEXT DEFAULT 'firmada',
+            concept         TEXT,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN client_id TEXT NOT NULL DEFAULT 'default'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'firmada'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE invoices ADD COLUMN concept TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -134,6 +144,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             ("43000000", "Clientes", "activo"),
             ("47200021", "Hacienda Pública, IVA soportado al 21%", "activo"),
             ("47700021", "Hacienda Pública, IVA repercutido al 21%", "pasivo"),
+            ("57000000", "Caja, euros (efectivo)", "activo"),
             ("57200001", "Banco de la empresa (cuenta corriente)", "activo"),
             ("60000000", "Compras de mercaderías / suministros", "gasto"),
             ("62900000", "Otros servicios / Gastos diversos", "gasto"),
@@ -144,6 +155,19 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         
     # --- CONCILIACIÓN BANCARIA ---
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_connections (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            alias          TEXT NOT NULL,
+            provider       TEXT NOT NULL,
+            bank_name      TEXT,
+            iban           TEXT,
+            credentials    TEXT,
+            status         TEXT DEFAULT 'active',
+            last_sync_at   TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS bank_movements (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             movement_date TEXT NOT NULL,
@@ -152,10 +176,46 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             reference     TEXT,
             invoice_id    TEXT,
             reconciled    INTEGER DEFAULT 0,
+            connection_id INTEGER REFERENCES bank_connections(id),
             created_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    try:
+        conn.execute("ALTER TABLE bank_movements ADD COLUMN connection_id INTEGER REFERENCES bank_connections(id)")
+    except sqlite3.OperationalError:
+        pass
+
+    # --- SUSCRIPCIÓN PREMIUM Y TRANSFERENCIAS ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_status (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier                  TEXT NOT NULL DEFAULT 'free',
+            billing_cycle_start   TEXT NOT NULL,
+            extra_transfer_fee    REAL NOT NULL DEFAULT 0.50
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_transfers (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            transfer_date       TEXT NOT NULL,
+            recipient_name      TEXT NOT NULL,
+            recipient_iban      TEXT NOT NULL,
+            amount              REAL NOT NULL,
+            concept             TEXT,
+            status              TEXT DEFAULT 'initiated',
+            extra_charge        REAL DEFAULT 0.00,
+            connection_id       INTEGER REFERENCES bank_connections(id)
+        )
+    """)
     
+    # Insertar suscripción por defecto si no existe
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM subscription_status")
+    if cursor.fetchone()[0] == 0:
+        import datetime
+        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("INSERT INTO subscription_status (tier, billing_cycle_start, extra_transfer_fee) VALUES ('free', ?, 0.50)", (today_str,))
+        
     # --- CONFIGURACIÓN DE PERFIL CONTABLE Y CERTIFICADOS ---
     conn.execute("""
         CREATE TABLE IF NOT EXISTS user_profile (
@@ -195,12 +255,21 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             created_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    # --- DIARIO DE SESIONES ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_diary (
+            date          TEXT PRIMARY KEY,
+            summary       TEXT,
+            messages      TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
 
 
 def _get_connection() -> sqlite3.Connection:
     global _db_initialized
-    
     if str(DB_PATH) != ":memory:":
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
@@ -225,10 +294,20 @@ class SessionMemory(MemoryPort):
     - Aplica un límite max_messages: solo se guardan los N mensajes más recientes.
     """
 
-    def __init__(self, max_messages: int = 20):
+    def __init__(self, max_messages: int = 20, is_testing: bool | None = None):
         self.max_messages = max_messages
         # Caché en RAM: session_id:client_id → deque de dicts {role, content}
         self._cache: Dict[str, Deque[Dict[str, str]]] = {}
+        self.is_testing = is_testing if is_testing is not None else IS_TESTING
+
+    def _resolve_session_id(self, session_id: str) -> str:
+        if not session_id:
+            return session_id
+        if self.is_testing:
+            return session_id
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        return f"daily_{today_str}"
 
     # ------------------------------------------------------------------
     # Caché
@@ -236,6 +315,7 @@ class SessionMemory(MemoryPort):
 
     def _ensure_loaded(self, session_id: str, client_id: str | None = None) -> None:
         """Carga el historial desde SQLite si no está en caché."""
+        session_id = self._resolve_session_id(session_id)
         cid = client_id or "default"
         cache_key = f"{session_id}:{cid}"
         if cache_key in self._cache:
@@ -265,6 +345,7 @@ class SessionMemory(MemoryPort):
         if not session_id:
             return
 
+        session_id = self._resolve_session_id(session_id)
         cid = client_id or "default"
         cache_key = f"{session_id}:{cid}"
         self._ensure_loaded(session_id, client_id)
@@ -292,9 +373,44 @@ class SessionMemory(MemoryPort):
                 """,
                 (session_id, cid, session_id, cid, self.max_messages),
             )
+            
+            # --- ARCHIVADO EN DIARIO DE SESIONES ---
+            from datetime import datetime
+            import json
+            if self.is_testing:
+                date_str = session_id
+            else:
+                date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
+            
+            row = conn.execute("SELECT messages FROM session_diary WHERE date = ?", (date_str,)).fetchone()
+            if row and row["messages"]:
+                try:
+                    archived = json.loads(row["messages"])
+                except Exception:
+                    archived = []
+            else:
+                archived = []
+                
+            archived.append({
+                "role": role,
+                "content": content,
+                "created_at": datetime.now().isoformat()
+            })
+            
+            conn.execute(
+                """
+                INSERT INTO session_diary (date, summary, messages, updated_at)
+                VALUES (?, '', ?, datetime('now'))
+                ON CONFLICT(date) DO UPDATE SET
+                    messages = ?,
+                    updated_at = datetime('now')
+                """,
+                (date_str, json.dumps(archived, ensure_ascii=False), json.dumps(archived, ensure_ascii=False))
+            )
             conn.commit()
 
     def get_history(self, session_id: str, client_id: str | None = None) -> List[Dict[str, str]]:
+        session_id = self._resolve_session_id(session_id)
         cid = client_id or "default"
         cache_key = f"{session_id}:{cid}"
         self._ensure_loaded(session_id, client_id)
@@ -307,12 +423,61 @@ class SessionMemory(MemoryPort):
         return "\n".join(f"{entry['role']}: {entry['content']}" for entry in history)
 
     def clear(self, session_id: str, client_id: str | None = None) -> None:
+        session_id = self._resolve_session_id(session_id)
         cid = client_id or "default"
         cache_key = f"{session_id}:{cid}"
         self._cache.pop(cache_key, None)
         with _get_connection() as conn:
             conn.execute("DELETE FROM messages WHERE session_id = ? AND client_id = ?", (session_id, cid))
+            from datetime import datetime
+            if self.is_testing:
+                date_str = session_id
+            else:
+                date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
+            conn.execute("DELETE FROM session_diary WHERE date = ?", (date_str,))
             conn.commit()
+
+    def update_summary(self, session_id: str, summary: str) -> None:
+        session_id = self._resolve_session_id(session_id)
+        from datetime import datetime
+        if self.is_testing:
+            date_str = session_id
+        else:
+            date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
+        with _get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_diary (date, summary, messages, updated_at)
+                VALUES (?, ?, '[]', datetime('now'))
+                ON CONFLICT(date) DO UPDATE SET
+                    summary = ?,
+                    updated_at = datetime('now')
+                """,
+                (date_str, summary, summary)
+            )
+            conn.commit()
+
+    def get_diary_entry(self, session_id: str) -> dict | None:
+        session_id = self._resolve_session_id(session_id)
+        from datetime import datetime
+        if self.is_testing:
+            date_str = session_id
+        else:
+            date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
+        with _get_connection() as conn:
+            row = conn.execute(
+                "SELECT date, summary, messages, created_at, updated_at FROM session_diary WHERE date = ?",
+                (date_str,)
+            ).fetchone()
+        if row:
+            return {
+                "date": row["date"],
+                "summary": row["summary"],
+                "messages": row["messages"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            }
+        return None
 
     def list_sessions(self, client_id: str | None = None) -> List[str]:
         """Devuelve todos los session_id con historial guardado."""

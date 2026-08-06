@@ -226,6 +226,69 @@ class AlfonsoAgentLogic:
                 if not command:
                     return {"id": command_id, "status": "error", "error": "No se especificó comando o aplicación"}
                 
+                # Chequear si en los argumentos (args) viene la ruta del documento
+                args = params.get("args", [])
+                if isinstance(args, list):
+                    for arg in args:
+                        if isinstance(arg, str):
+                            arg_strip = arg.strip("\"'")
+                            resolved_arg = resolve_file_path_robust(arg_strip)
+                            if resolved_arg:
+                                command = resolved_arg
+                                break
+
+                # Si el comando es "explorer.exe /ruta/archivo", extraer la ruta
+                if "explorer" in command.lower():
+                    parts = command.split()
+                    for part in parts:
+                        part = part.strip("\"'")
+                        resolved_part = resolve_file_path_robust(part)
+                        if resolved_part:
+                            command = resolved_part
+                            break
+
+                import os
+                resolved_file = resolve_file_path_robust(command)
+                if resolved_file:
+                    ext = os.path.splitext(resolved_file)[1].lower()
+                    if ext in (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".txt", ".csv", ".log", ".sql", ".docx", ".doc"):
+                        import socket
+                        import json
+                        try:
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(0.5)
+                            s.connect(("127.0.0.1", 9876))
+                            s.sendall(json.dumps({"action": "open_file", "filepath": resolved_file}).encode("utf-8"))
+                            s.close()
+                            return {"id": command_id, "status": "success", "result": f"Documento '{resolved_file}' enviado al visor nativo de la GUI."}
+                        except Exception as e:
+                            command = resolved_file
+
+                # Si es un directorio o es una llamada a explorer sin archivo resuelto, abrir el archivo fiscal nativo
+                resolved_dir = None
+                if os.path.isdir(command):
+                    resolved_dir = command
+                else:
+                    for arg in args:
+                        if isinstance(arg, str):
+                            arg_strip = arg.strip("\"'")
+                            if os.path.isdir(arg_strip):
+                                resolved_dir = arg_strip
+                                break
+
+                if resolved_dir or (command.lower() in ("explorer.exe", "explorer", "nautilus") and not resolved_file):
+                    import socket
+                    import json
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(0.5)
+                        s.connect(("127.0.0.1", 9876))
+                        s.sendall(json.dumps({"action": "open_viewer", "filepath": resolved_dir}).encode("utf-8"))
+                        s.close()
+                        return {"id": command_id, "status": "success", "result": "Visor de documentos abierto en la GUI nativa."}
+                    except Exception as e:
+                        pass
+
                 resolved_command = self._resolve_app_path(command)
                 if _IS_WINDOWS:
                     use_shell = resolved_command.lower() in ["explorer.exe", "code"] or not resolved_command.endswith(".exe")
@@ -255,6 +318,28 @@ class AlfonsoAgentLogic:
                 url = params.get("url", "").strip()
                 if not url:
                     return {"id": command_id, "status": "error", "error": "URL vacía"}
+                
+                import os
+                local_path = url
+                if url.startswith("file:///"):
+                    local_path = url[8:]
+                local_path = local_path.strip("\"'")
+                
+                if os.path.exists(local_path) and os.path.isfile(local_path):
+                    ext = os.path.splitext(local_path)[1].lower()
+                    if ext in (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".txt", ".csv", ".log", ".sql", ".docx", ".doc"):
+                        import socket
+                        import json
+                        try:
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(0.5)
+                            s.connect(("127.0.0.1", 9876))
+                            s.sendall(json.dumps({"action": "open_file", "filepath": os.path.abspath(local_path)}).encode("utf-8"))
+                            s.close()
+                            return {"id": command_id, "status": "success", "result": f"Documento '{local_path}' enviado al visor nativo de la GUI."}
+                        except Exception as e:
+                            pass
+                
                 asyncio.create_task(asyncio.to_thread(webbrowser.open, url))
                 result = f"URL abierta: {url}"
 
@@ -305,3 +390,40 @@ class AlfonsoAgentLogic:
         except Exception as e:
             logger.error(f"Error ejecutando {action}: {str(e)}")
             return {"id": command_id, "status": "error", "error": str(e)}
+
+
+def resolve_file_path_robust(target_path):
+    if not target_path:
+        return None
+        
+    import os
+    target_path = target_path.strip("\"'")
+    
+    if os.path.exists(target_path) and os.path.isfile(target_path):
+        return os.path.abspath(target_path)
+        
+    filename = os.path.basename(target_path)
+    
+    search_dirs = [
+        "C:/Users/luisd/Desktop/Facturas_Para_Procesar",
+        "C:/Users/luisd/Desktop/Facturas_Pendientes_Cobro",
+        "C:/Users/luisd/Desktop/Facturas_Emitidas",
+        "data",
+        "facturas",
+        "gastos"
+    ]
+    
+    for s_dir in search_dirs:
+        if os.path.exists(s_dir):
+            for root, dirs, files in os.walk(s_dir):
+                if filename in files:
+                    return os.path.abspath(os.path.join(root, filename))
+                for f in files:
+                    if f.lower() == filename.lower():
+                        return os.path.abspath(os.path.join(root, f))
+                base_name, _ = os.path.splitext(filename)
+                for f in files:
+                    f_base, _ = os.path.splitext(f)
+                    if base_name.lower() in f.lower() or f_base.lower() == base_name.lower():
+                        return os.path.abspath(os.path.join(root, f))
+    return None

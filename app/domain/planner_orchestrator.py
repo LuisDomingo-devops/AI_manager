@@ -470,6 +470,34 @@ class PlannerOrchestrator:
     async def run(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
         llm = llm or self.llm
         logger = attach_request_id(orchestrator_logger, request_id)
+        
+        res = await self._run_internal(user_message, llm, request_id, session_id, client_id)
+        
+        if session_id and not getattr(self.memory, "is_testing", False) and res.get("type") == "chat":
+            try:
+                history = self.memory.get_history(session_id, client_id=client_id)
+                if history:
+                    conv_text = "\n".join(f"{m['role']}: {m['content']}" for m in history if m['role'] in ('user', 'assistant'))
+                    summary_prompt = (
+                        "Resume de manera muy breve y concisa los temas principales tratados en la siguiente conversación "
+                        "de hoy (máximo 2-3 frases). Enfócate en las decisiones tomadas o las consultas del usuario:\n\n"
+                        f"{conv_text}"
+                    )
+                    summary = await llm.generate(
+                        summary_prompt,
+                        mode="chat",
+                        request_id=request_id,
+                        client_id=client_id,
+                    )
+                    self.memory.update_summary(session_id, summary.strip())
+            except Exception as e:
+                logger.warning("Error generating daily conversation summary: %s", e)
+                
+        return res
+
+    async def _run_internal(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
+        llm = llm or self.llm
+        logger = attach_request_id(orchestrator_logger, request_id)
         error = attach_request_id(error_logger, request_id)
 
         logger.info("PlannerOrchestrator.run() — request_id=%s, session_id=%s, client_id=%s", request_id, session_id, client_id)

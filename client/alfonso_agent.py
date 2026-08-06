@@ -91,6 +91,43 @@ def _find_in_home(target_name: str) -> str | None:
     return None
 
 
+def resolve_file_path_robust(target_path):
+    if not target_path:
+        return None
+        
+    import os
+    target_path = target_path.strip("\"'")
+    
+    if os.path.exists(target_path) and os.path.isfile(target_path):
+        return os.path.abspath(target_path)
+        
+    filename = os.path.basename(target_path)
+    
+    search_dirs = [
+        "C:/Users/luisd/Desktop/Facturas_Para_Procesar",
+        "C:/Users/luisd/Desktop/Facturas_Pendientes_Cobro",
+        "C:/Users/luisd/Desktop/Facturas_Emitidas",
+        "data",
+        "facturas",
+        "gastos"
+    ]
+    
+    for s_dir in search_dirs:
+        if os.path.exists(s_dir):
+            for root, dirs, files in os.walk(s_dir):
+                if filename in files:
+                    return os.path.abspath(os.path.join(root, filename))
+                for f in files:
+                    if f.lower() == filename.lower():
+                        return os.path.abspath(os.path.join(root, f))
+                base_name, _ = os.path.splitext(filename)
+                for f in files:
+                    f_base, _ = os.path.splitext(f)
+                    if base_name.lower() in f.lower() or f_base.lower() == base_name.lower():
+                        return os.path.abspath(os.path.join(root, f))
+    return None
+
+
 class AlfonsoAgent:
 
     def __init__(self, server_url="ws://localhost:8765"):
@@ -322,6 +359,71 @@ class AlfonsoAgent:
         if not app:
             return {"error": "app vacío"}
 
+        # Chequear si en los argumentos (args) viene la ruta del documento
+        args = params.get("args", [])
+        if isinstance(args, list):
+            for arg in args:
+                if isinstance(arg, str):
+                    arg_strip = arg.strip("\"'")
+                    resolved_arg = resolve_file_path_robust(arg_strip)
+                    if resolved_arg:
+                        app = resolved_arg
+                        break
+
+        # Si el comando es "explorer.exe /ruta/archivo", extraer la ruta
+        if "explorer" in app.lower():
+            parts = app.split()
+            for part in parts:
+                part = part.strip("\"'")
+                resolved_part = resolve_file_path_robust(part)
+                if resolved_part:
+                    app = resolved_part
+                    break
+
+        # Verificar si 'app' es un archivo (o nombre de archivo) y tiene extensión de documento
+        import os
+        resolved_file = resolve_file_path_robust(app)
+        if resolved_file:
+            ext = os.path.splitext(resolved_file)[1].lower()
+            if ext in (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".txt", ".csv", ".log", ".sql", ".docx", ".doc"):
+                import socket
+                import json
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(0.5)
+                    s.connect(("127.0.0.1", 9876))
+                    s.sendall(json.dumps({"action": "open_file", "filepath": resolved_file}).encode("utf-8"))
+                    s.close()
+                    return {"result": f"Documento '{resolved_file}' enviado al visor nativo de la GUI."}
+                except Exception as e:
+                    logger.debug(f"GUI IPC no disponible, abriendo externamente: {e}")
+                    app = resolved_file
+
+        # Si es un directorio o es una llamada a explorer sin archivo resuelto, abrir el visor de archivo fiscal nativo
+        resolved_dir = None
+        if os.path.isdir(app):
+            resolved_dir = app
+        else:
+            for arg in args:
+                if isinstance(arg, str):
+                    arg_strip = arg.strip("\"'")
+                    if os.path.isdir(arg_strip):
+                        resolved_dir = arg_strip
+                        break
+
+        if resolved_dir or (app.lower() in ("explorer.exe", "explorer", "nautilus") and not resolved_file):
+            import socket
+            import json
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect(("127.0.0.1", 9876))
+                s.sendall(json.dumps({"action": "open_viewer", "filepath": resolved_dir}).encode("utf-8"))
+                s.close()
+                return {"result": "Visor de documentos abierto en la GUI nativa."}
+            except Exception as e:
+                logger.debug(f"GUI IPC no disponible para abrir visor de documentos: {e}")
+
         # Mapeo de comandos de Linux a Windows en el CLI
         if IS_WINDOWS:
             if "nautilus" in app.lower():
@@ -370,8 +472,32 @@ class AlfonsoAgent:
         if not url:
             return {"error": "url vacía"}
 
+        import os
+        local_path = url
+        if url.startswith("file:///"):
+            local_path = url[8:]
+            
+        local_path = local_path.strip("\"'")
+        
+        resolved_file = resolve_file_path_robust(local_path)
+        if resolved_file:
+            ext = os.path.splitext(resolved_file)[1].lower()
+            if ext in (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".txt", ".csv", ".log", ".sql", ".docx", ".doc"):
+                import socket
+                import json
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(0.5)
+                    s.connect(("127.0.0.1", 9876))
+                    s.sendall(json.dumps({"action": "open_file", "filepath": resolved_file}).encode("utf-8"))
+                    s.close()
+                    return {"result": f"Documento '{resolved_file}' enviado al visor nativo de la GUI."}
+                except Exception as e:
+                    logger.debug(f"GUI IPC no disponible para URL: {e}")
+                    url = resolved_file
+
         # Asegurar esquema para evitar que Windows explorer.exe abra "Documentos"
-        if not url.startswith(("http://", "https://")):
+        if not url.startswith(("http://", "https://", "file://")):
             url = "https://" + url
 
         try:

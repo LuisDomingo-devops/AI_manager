@@ -202,3 +202,205 @@ class LedgerService:
             "activo": desglose_activo,
             "pasivo_patrimonio": desglose_pasivo
         }
+
+    @classmethod
+    def get_pgc_accounts(cls) -> List[Dict[str, Any]]:
+        """
+        Retorna la lista de todas las cuentas registradas en el PGC.
+        """
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('57000000', 'Caja, euros (efectivo)', 'activo')")
+            conn.commit()
+            cursor.execute("SELECT code, name, type FROM pgc_accounts ORDER BY code ASC")
+            rows = cursor.fetchall()
+            return [{"code": r["code"], "name": r["name"], "type": r["type"]} for r in rows]
+
+    @classmethod
+    def record_manual_entry(cls, date_str: str, concept: str, apuntes: List[Dict[str, Any]]) -> int:
+        """
+        Registra un asiento contable manual con una lista de apuntes (partida doble).
+        Cada apunte contiene:
+        - account_code: código de subcuenta PGC (ej: '57000000')
+        - debe: importe al debe
+        - haber: importe al haber
+        """
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO journal_entries (entry_date, concept) VALUES (?, ?)",
+                (date_str, encryptor.encrypt(concept))
+            )
+            journal_id = cursor.lastrowid
+            
+            db_apuntes = []
+            for ap in apuntes:
+                db_apuntes.append((
+                    journal_id,
+                    ap["account_code"],
+                    encryptor.encrypt(str(float(ap.get("debe", 0.0)))),
+                    encryptor.encrypt(str(float(ap.get("haber", 0.0))))
+                ))
+            cursor.executemany(
+                "INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)",
+                db_apuntes
+            )
+            conn.commit()
+            return journal_id
+
+    @classmethod
+    def get_libro_mayor(cls, account_code: str, year: int) -> List[Dict[str, Any]]:
+        """
+        Retorna la lista de todos los apuntes contables asociados a una subcuenta específica.
+        Incluye el cálculo del saldo acumulado histórico según la naturaleza de la cuenta.
+        """
+        result = []
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT j.id as journal_id, j.entry_date, j.concept, l.debe, l.haber
+                FROM ledger_entries l
+                JOIN journal_entries j ON l.journal_entry_id = j.id
+                WHERE l.account_code = ?
+                ORDER BY j.id ASC
+            """, (account_code,))
+            rows = cursor.fetchall()
+            
+            # Obtener tipo/naturaleza de la cuenta para el cálculo del saldo
+            cursor.execute("SELECT type FROM pgc_accounts WHERE code = ?", (account_code,))
+            ac_type_row = cursor.fetchone()
+            ac_type = ac_type_row["type"] if ac_type_row else "activo"
+            
+            saldo = 0.0
+            for r in rows:
+                entry_date_raw = r["entry_date"]
+                entry_year = None
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+                    try:
+                        dt = datetime.strptime(entry_date_raw, fmt)
+                        entry_year = dt.year
+                        break
+                    except Exception:
+                        pass
+                if entry_year is None:
+                    if str(year) in entry_date_raw:
+                        entry_year = year
+                
+                if entry_year == year:
+                    debe = float(encryptor.decrypt(r["debe"]))
+                    haber = float(encryptor.decrypt(r["haber"]))
+                    concept = encryptor.decrypt(r["concept"])
+                    
+                    if ac_type in ("activo", "gasto"):
+                        saldo += (debe - haber)
+                    else:
+                        saldo += (haber - debe)
+                        
+                    result.append({
+                        "asiento_id": r["journal_id"],
+                        "fecha": r["entry_date"],
+                        "concepto": concept,
+                        "debe": debe,
+                        "haber": haber,
+                        "saldo": saldo
+                    })
+        return result
+
+    @classmethod
+    def get_modelo_130_estimate(cls, year: int, quarter: int) -> Dict[str, Any]:
+        """
+        Calcula el rendimiento neto y el pago fraccionado estimado del IRPF (Modelo 130).
+        """
+        total_ingresos = 0.0
+        total_gastos = 0.0
+        
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT l.account_code, a.type as account_type, l.debe, l.haber, j.entry_date 
+                FROM ledger_entries l
+                JOIN pgc_accounts a ON l.account_code = a.code
+                JOIN journal_entries j ON l.journal_entry_id = j.id
+            """)
+            rows = cursor.fetchall()
+            
+            for r in rows:
+                entry_date_raw = r["entry_date"]
+                entry_year = None
+                entry_month = None
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+                    try:
+                        dt = datetime.strptime(entry_date_raw, fmt)
+                        entry_year = dt.year
+                        entry_month = dt.month
+                        break
+                    except Exception:
+                        pass
+                if entry_year is None:
+                    if str(year) in entry_date_raw:
+                        entry_year = year
+                
+                # Mapear mes a trimestre
+                entry_quarter = None
+                if entry_month:
+                    entry_quarter = (entry_month - 1) // 3 + 1
+                
+                if entry_year == year and (entry_quarter == quarter or entry_quarter is None):
+                    atype = r["account_type"]
+                    debe = float(encryptor.decrypt(r["debe"]))
+                    haber = float(encryptor.decrypt(r["haber"]))
+                    
+                    if atype == "ingreso":
+                        total_ingresos += (haber - debe)
+                    elif atype == "gasto":
+                        total_gastos += (debe - haber)
+                        
+        rendimiento = total_ingresos - total_gastos
+        pago_estimado = rendimiento * 0.20 if rendimiento > 0 else 0.0
+        
+        return {
+            "ingresos": total_ingresos,
+            "gastos": total_gastos,
+            "rendimiento": rendimiento,
+            "pago_estimado": pago_estimado
+        }
+
+    @classmethod
+    def get_iva_register_books(cls, year: int) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Retorna las facturas emitidas (ingresos) y recibidas (gastos) para los libros oficiales.
+        """
+        emitidas = []
+        recibidas = []
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif, 
+                       base_imponible, iva_rate, iva_amount, irpf_amount, total_amount, category, quarter
+                FROM invoices 
+                WHERE year = ?
+                ORDER BY date ASC
+            """, (year,))
+            rows = cursor.fetchall()
+            
+            for r in rows:
+                cat = r["category"].lower()
+                data = {
+                    "num_factura": r["invoice_id"],
+                    "fecha": r["date"],
+                    "proveedor": r["issuer_name"],
+                    "nif_proveedor": r["issuer_nif"],
+                    "cliente": r["receiver_name"],
+                    "nif_cliente": r["receiver_nif"],
+                    "base": r["base_imponible"],
+                    "tipo_iva": r["iva_rate"],
+                    "cuota_iva": r["iva_amount"],
+                    "retencion": r["irpf_amount"],
+                    "total": r["total_amount"],
+                    "trimestre": r["quarter"]
+                }
+                if cat in ("ingreso", "income", "emitida"):
+                    emitidas.append(data)
+                else:
+                    recibidas.append(data)
+        return {"emitidas": emitidas, "recibidas": recibidas}
