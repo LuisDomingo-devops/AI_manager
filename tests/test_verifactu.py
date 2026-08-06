@@ -3,7 +3,11 @@ from app.domain.services.verifactu_service import VerifactuService
 from app.adapters.memory.memory import _get_connection
 
 @pytest.fixture(autouse=True)
-def clean_db():
+def clean_db(tmp_path, monkeypatch):
+    import app.adapters.memory.memory as memory
+    test_db = tmp_path / "memory_test_verifactu.db"
+    monkeypatch.setattr(memory, "DB_PATH", test_db)
+    
     # Limpiar tabla verifactu antes de cada test
     with _get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS verifactu_invoices")

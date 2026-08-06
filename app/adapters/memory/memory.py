@@ -286,8 +286,8 @@ def _get_connection(client_id: str = None) -> sqlite3.Connection:
         
         # Lógica de protección de negocio: Limitar a un único tenant activo
         # Si se intenta cambiar de inquilino sin una licencia premium, la app mantendrá 'default'
-        import os
-        has_premium = os.getenv("ALFONSO_LICENSE_TYPE") == "premium"
+        from app.utils.license_validator import is_premium_license_valid
+        has_premium = is_premium_license_valid()
         
         if not has_premium:
             cid = "default" # Modo un solo autónomo (licencia básica)

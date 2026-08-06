@@ -65,7 +65,7 @@ def test_mail_db_operations():
     # 1. Crear
     email_id = create_email(
         sender="test@sender.com",
-        recipient="luisd@alfonso.dev",
+        recipient="test.user@alfonso.dev",
         subject="Reunión urgente",
         body="Por favor asiste a la reunión de las 12:00",
         received_at="2026-07-04 10:00",

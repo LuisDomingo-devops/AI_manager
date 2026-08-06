@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfonso Autónomo — El Copiloto Fiscal Local-First</title>
+    <meta name="description" content="Alfonso Autónomo automatiza tu facturación e impuestos desde tu propio ordenador. Privacidad radical, pre-trámite y Verifactu.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Glowing Background blobs for modern ambient lighting -->
+    <div class="glow-bg">
+        <div class="blob blob-blue"></div>
+        <div class="blob blob-purple"></div>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <i class="fa-solid fa-robot logo-icon"></i>
+                <span>Alfonso<span class="text-gradient">Autónomo</span></span>
+            </a>
+            <nav class="nav-links">
+                <a href="#que-es">Concepto</a>
+                <a href="#simulador">Demostración</a>
+                <a href="#privacidad">Privacidad</a>
+                <a href="#calculadora">Ahorro</a>
+            </nav>
+            <a href="#waitlist" class="btn btn-secondary">Unirse a Waitlist</a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container grid-hero">
+            <div class="hero-text-content">
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    <span>Local-First & Verifactu Ready</span>
+                </div>
+                <h1 class="hero-title">Tus impuestos y facturas, resueltos con <span class="text-gradient">precisión y privacidad</span></h1>
+                <p class="hero-subtitle">
+                    Alfonso es el asistente virtual autónomo que prepara tus trámites fiscales directamente en tu ordenador. Sin subir tus certificados ni datos a la nube.
+                </p>
+                <div class="hero-actions">
+                    <a href="#waitlist" class="btn btn-primary">Reservar Acceso Anticipado</a>
+                    <a href="#simulador" class="btn btn-tertiary">
+                        <i class="fa-solid fa-play"></i> Ver cómo funciona
+                    </a>
+                </div>
+                <div class="hero-metrics">
+                    <div class="metric-item">
+                        <span class="metric-val">100%</span>
+                        <span class="metric-lbl">Privado (En Local)</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-val">1-Click</span>
+                        <span class="metric-lbl">Aprobación Final</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-val">AEAT 2027</span>
+                        <span class="metric-lbl">Verifactu Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Preview Graphic -->
+            <div class="hero-preview">
+                <div class="glass-card main-preview-card">
+                    <div class="card-header">
+                        <div class="window-dots">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                        </div>
+                        <div class="window-title">Alfonso Core Dashboard</div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 3D Hologram Reactivo de Alfonso -->
+                        <div class="hologram-wrapper">
+                            <canvas id="hologram-canvas" width="240" height="240"></canvas>
+                            <div class="crt-line-scan"></div>
+                        </div>
+                        
+                        <div class="hologram-controls">
+                            <button class="btn-holo-state active" data-state="idle">IDLE</button>
+                            <button class="btn-holo-state" data-state="listening">ESCUCHANDO</button>
+                            <button class="btn-holo-state" data-state="thinking">PENSANDO</button>
+                            <button class="btn-holo-state" data-state="speaking">HABLANDO</button>
+                        </div>
+
+                        <div class="stat-grid mt-4">
+                            <div class="stat-box">
+                                <span class="stat-lbl">Identidad Visual</span>
+                                <span class="stat-val" id="holo-state-lbl">ALFONSO (IDLE)</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-lbl">Frecuencia / Motor</span>
+                                <span class="stat-val text-green"><i class="fa-solid fa-microchip"></i> Local-First</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Concept Section -->
+    <section id="que-es" class="section bg-card-glow">
+        <div class="container text-center max-w-3xl">
+            <h2 class="section-title">El enfoque "Copiloto de Vuelo"</h2>
+            <p class="section-subtitle">
+                Alfonso hace todo el trabajo pesado en segundo plano (leer facturas, rellenar borradores de Hacienda) pero tú mantienes el control. Tú haces el clic de confirmación en tu navegador.
+            </p>
+        </div>
+
+        <div class="container grid-three">
+            <div class="feature-card glass-card">
+                <div class="feature-icon bg-blue-glow">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h3>Privacidad Absoluta</h3>
+                <p>Tus certificados de Hacienda, cuentas bancarias e información fiscal nunca suben a servidores externos. Todo se queda en tu propio PC.</p>
+            </div>
+            <div class="feature-card glass-card">
+                <div class="feature-icon bg-purple-glow">
+                    <i class="fa-solid fa-code-compare"></i>
+                </div>
+                <h3>Preparado para Verifactu</h3>
+                <p>Diseñado para cumplir con la nueva legislación de facturación electrónica inalterable y encadenamiento criptográfico local de 2027.</p>
+            </div>
+            <div class="feature-card glass-card">
+                <div class="feature-icon bg-green-glow">
+                    <i class="fa-solid fa-fingerprint"></i>
+                </div>
+                <h3>Pre-Trámite / One-Click</h3>
+                <p>Alfonso interactúa de forma segura con la sesión abierta de tu navegador para rellenar los datos. Cero configuraciones complejas.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive AI Simulator -->
+    <section id="simulador" class="section">
+        <div class="container grid-two">
+            <div class="sim-text">
+                <div class="badge">Orquestador Interactivo</div>
+                <h2 class="section-title">Mira a Alfonso en acción</h2>
+                <p class="section-description">
+                    Experimenta en tiempo real cómo Alfonso procesa una factura, protege tus datos sensibles mediante **anonimización local** antes de utilizar inteligencia artificial, y prepara el borrador fiscal en local.
+                </p>
+                <div class="sim-steps-guide">
+                    <div class="sim-guide-step active" data-step="1">
+                        <span class="step-num">1</span>
+                        <div>
+                            <h4>Lectura del Documento</h4>
+                            <p>Procesamiento local de PDFs de facturas e ingresos.</p>
+                        </div>
+                    </div>
+                    <div class="sim-guide-step" data-step="2">
+                        <span class="step-num">2</span>
+                        <div>
+                            <h4>Anonimización Local</h4>
+                            <p>Ocultación de NIFs, nombres e importes reales antes de procesar.</p>
+                        </div>
+                    </div>
+                    <div class="sim-guide-step" data-step="3">
+                        <span class="step-num">3</span>
+                        <div>
+                            <h4>Orquestación Inteligente</h4>
+                            <p>Resolución de modelos fiscales (IVA/IRPF) usando IA local.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal Simulator View -->
+            <div class="sim-visual">
+                <div class="terminal-mockup">
+                    <div class="terminal-header">
+                        <span class="term-dot red"></span>
+                        <span class="term-dot yellow"></span>
+                        <span class="term-dot green"></span>
+                        <span class="term-tab">Alfonso Core System</span>
+                    </div>
+                    
+                    <!-- Drag & Drop Upload Zone -->
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-glow-border"></div>
+                        <i class="fa-solid fa-file-invoice upload-icon"></i>
+                        <h4>Procesa tu Factura Real</h4>
+                        <p class="muted">Arrastra tu factura aquí o <span class="text-gradient font-bold upload-link-btn">explora tus archivos</span></p>
+                        <span class="upload-notice">100% Local-First: El archivo se procesa en memoria en tu navegador. Ningún dato viaja a la nube.</span>
+                        <input type="file" id="file-input" style="display: none;" accept=".pdf,.png,.jpg,.jpeg,.txt">
+                    </div>
+
+                    <div class="terminal-body" id="simulator-terminal" style="display: none; height: 230px;">
+                        <div class="line system">> Esperando carga de factura...</div>
+                    </div>
+                    <div class="terminal-actions">
+                        <span class="sim-status-indicator" id="sim-status">Listo para recibir</span>
+                        <button id="btn-reset-sim" class="btn btn-secondary btn-sm" style="display: none;">Subir Otra Factura</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Privacy section (Radical Privacy) -->
+    <section id="privacidad" class="section bg-darker">
+        <div class="container text-center max-w-3xl">
+            <div class="badge badge-purple">Seguridad sin Concesiones</div>
+            <h2 class="section-title">¿Por qué Local-First?</h2>
+            <p class="section-subtitle">
+                Los programas tradicionales en la nube exigen que subas tu certificado digital y tus claves bancarias a sus servidores. Si ellos sufren un ataque, tu negocio queda expuesto.
+            </p>
+        </div>
+
+        <div class="container privacy-comparison">
+            <div class="comp-card cloud-bad">
+                <h4>Otros Softwares (SaaS en Nube)</h4>
+                <div class="comp-badge bad">Inseguro</div>
+                <ul class="comp-list">
+                    <li><i class="fa-solid fa-xmark text-red"></i> Suben tus Certificados a la nube.</li>
+                    <li><i class="fa-solid fa-xmark text-red"></i> Tus datos bancarios residen en servidores de terceros.</li>
+                    <li><i class="fa-solid fa-xmark text-red"></i> Riesgo de brechas de datos masivas.</li>
+                    <li><i class="fa-solid fa-xmark text-red"></i> Dependencia continua de Internet para facturar.</li>
+                </ul>
+            </div>
+
+            <div class="comp-card local-good glowing-border">
+                <h4>Alfonso Autónomo (Local-First)</h4>
+                <div class="comp-badge good">Recomendado</div>
+                <ul class="comp-list">
+                    <li><i class="fa-solid fa-check text-green"></i> Tus certificados nunca salen de tu ordenador.</li>
+                    <li><i class="fa-solid fa-check text-green"></i> Base de datos cifrada SQLite local.</li>
+                    <li><i class="fa-solid fa-check text-green"></i> Inferencia local o anonimizada antes del envío.</li>
+                    <li><i class="fa-solid fa-check text-green"></i> Funciona sin conexión a internet.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Time & Money Saved Calculator -->
+    <section id="calculadora" class="section">
+        <div class="container grid-two">
+            <div class="calc-graphic">
+                <div class="glass-card calc-card">
+                    <div class="calc-header">
+                        <h3>Calculadora de Rendimiento</h3>
+                        <p class="muted">Calcula cuánto tiempo y dinero ahorras con Alfonso al año.</p>
+                    </div>
+                    <div class="calc-slider-group">
+                        <label for="invoice-slider">Número de Facturas / mes: <span id="invoice-count" class="text-gradient font-bold">15</span></label>
+                        <input type="range" id="invoice-slider" min="1" max="100" value="15" class="slider">
+                    </div>
+                    <div class="calc-results">
+                        <div class="result-box">
+                            <span class="result-lbl">Horas Ahorradas / año</span>
+                            <span id="saved-hours" class="result-val text-gradient font-bold">60h</span>
+                        </div>
+                        <div class="result-box">
+                            <span class="result-lbl">Valor Estimado</span>
+                            <span id="saved-money" class="result-val text-green font-bold">1.800€</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="calc-text">
+                <div class="badge">Optimización de Recursos</div>
+                <h2 class="section-title">El tiempo es oro. <br>Deja que Alfonso lo administre.</h2>
+                <p class="section-description">
+                    Automatizar la lectura de facturas, la conciliación y el borrador de los Modelos 303 e 130 te devuelve horas vitales para tu negocio. Además, minimiza errores manuales que resultan en multas de Hacienda.
+                </p>
+                <ul class="benefit-list">
+                    <li><i class="fa-solid fa-circle-check text-blue"></i> Extracción de datos en menos de 5 segundos por factura.</li>
+                    <li><i class="fa-solid fa-circle-check text-blue"></i> Generación automática del borrador trimestral.</li>
+                    <li><i class="fa-solid fa-circle-check text-blue"></i> Recordatorios inteligentes de plazos fiscales.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Waitlist / Call to Action -->
+    <section id="waitlist" class="section bg-card-glow text-center">
+        <div class="container max-w-2xl">
+            <h2 class="section-title">Sé parte del futuro de la facturación</h2>
+            <p class="section-subtitle">
+                Estamos abriendo vacantes limitadas para nuestro grupo de testeo de la Fase 1. Regístrate hoy y recibe acceso priorizado tan pronto como abramos las descargas controladas.
+            </p>
+
+            <form id="waitlist-form" class="waitlist-form glass-card">
+                <div class="form-group">
+                    <input type="email" id="waitlist-email" placeholder="Introduce tu correo electrónico" required class="form-input">
+                    <button type="submit" class="btn btn-primary">Reservar Acceso</button>
+                </div>
+                <p id="form-msg" class="form-message"></p>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container grid-footer">
+            <div class="footer-brand">
+                <a href="#" class="logo">
+                    <i class="fa-solid fa-robot logo-icon"></i>
+                    <span>Alfonso<span class="text-gradient">Autónomo</span></span>
+                </a>
+                <p class="muted">El asistente local-first e inalterable para autónomos en España. Precisión, seriedad y privacidad.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Producto</h4>
+                <a href="#que-es">Cómo funciona</a>
+                <a href="#simulador">Simulación</a>
+                <a href="#privacidad">Seguridad local</a>
+            </div>
+            <div class="footer-links">
+                <h4>Legal</h4>
+                <a href="#">Términos de servicio</a>
+                <a href="#">Política de Privacidad</a>
+                <a href="#">Aviso Legal</a>
+            </div>
+        </div>
+        <div class="footer-bottom text-center">
+            <p class="muted">&copy; 2026 Alfonso Autónomo. Creado con precisión de ingeniería local-first. Verifactu ready.</p>
+        </div>
+    </footer>
+
+    <!-- JS -->
+    <script src="app.js"></script>
+</body>
+</html>

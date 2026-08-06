@@ -203,6 +203,12 @@ def seed_database():
             }
         ]
         
+        from pathlib import Path
+        project_root = str(Path(__file__).resolve().parents[2]).replace("\\", "/")
+        for inv in invoices_data:
+            if inv.get("file_path", "").startswith("c:/Users/luisd/Desktop/Alfonso_Autonomo"):
+                inv["file_path"] = inv["file_path"].replace("c:/Users/luisd/Desktop/Alfonso_Autonomo", project_root)
+
         # Limpiar tablas PGC
         cursor.execute("DELETE FROM ledger_entries")
         cursor.execute("DELETE FROM journal_entries")

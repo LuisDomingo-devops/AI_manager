@@ -103,10 +103,12 @@ def resolve_file_path_robust(target_path):
         
     filename = os.path.basename(target_path)
     
+    from pathlib import Path
+    home = Path.home()
     search_dirs = [
-        "C:/Users/luisd/Desktop/Facturas_Para_Procesar",
-        "C:/Users/luisd/Desktop/Facturas_Pendientes_Cobro",
-        "C:/Users/luisd/Desktop/Facturas_Emitidas",
+        str(home / "Desktop" / "Facturas_Para_Procesar"),
+        str(home / "Desktop" / "Facturas_Pendientes_Cobro"),
+        str(home / "Desktop" / "Facturas_Emitidas"),
         "data",
         "facturas",
         "gastos"

@@ -59,7 +59,7 @@ def setup_test_db(monkeypatch):
     
     mail_db.create_email(
         sender="abogados@madrid.es",
-        recipient="luisd@alfonso.dev",
+        recipient="test.user@alfonso.dev",
         subject="Demanda arrendamiento Calle Mayor",
         body="Adjuntamos borrador de la demanda de desahucio por impago del alquiler.",
         received_at="2026-07-05 10:00",
@@ -178,7 +178,7 @@ def test_save_invoice_to_desktop(tmp_path, monkeypatch):
     email_data = {
         "id": 123,
         "sender": "Iberdrola Clientes <factura-no-reply@iberdrola.es>",
-        "recipient": "luisd@alfonso.dev",
+        "recipient": "test.user@alfonso.dev",
         "subject": "Su factura de luz del periodo Mayo-Junio ya está disponible (68.42 €)",
         "body": "Estimado Luis, le informamos que ya puede descargar su factura de luz.",
         "received_at": "2026-07-12 10:00"
@@ -224,7 +224,7 @@ async def test_mail_set_invoice_folder_and_save(tmp_path, monkeypatch):
     email_data = {
         "id": 456,
         "sender": "Amazon.es <auto-confirm@amazon.es>",
-        "recipient": "luisd@alfonso.dev",
+        "recipient": "test.user@alfonso.dev",
         "subject": "Confirmación de envío",
         "body": "Su pedido de 45.00 EUR ha sido enviado.",
         "received_at": "2026-07-12 11:00"
@@ -262,7 +262,7 @@ def test_check_and_process_payments(tmp_path, monkeypatch):
     payment_email = {
         "id": 124,
         "sender": "Iberdrola Clientes <factura-no-reply@iberdrola.es>",
-        "recipient": "luisd@alfonso.dev",
+        "recipient": "test.user@alfonso.dev",
         "subject": "Confirmación de pago de su factura",
         "body": "Hemos recibido el pago de su factura de luz del periodo Mayo-Junio correctamente. Gracias.",
         "received_at": "2026-07-12 10:15"

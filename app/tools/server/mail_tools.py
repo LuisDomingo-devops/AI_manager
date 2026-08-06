@@ -857,7 +857,7 @@ def send_smtp_email_if_configured(recipient: str, subject: str, body: str) -> st
         except Exception as e:
             print(f"[ERROR] Error al enviar SMTP real: {e}")
             raise e
-    return "luisd@alfonso.dev"
+    return "test.user@alfonso.dev"
 
 
 async def mail_send_email(recipient: str, subject: str, body: str) -> dict:
@@ -878,7 +878,7 @@ async def mail_send_email(recipient: str, subject: str, body: str) -> dict:
         from app.adapters.mail_db import create_email
         from datetime import datetime
         
-        sender_email = "luisd@alfonso.dev"
+        sender_email = "test.user@alfonso.dev"
         try:
             sender_email = send_smtp_email_if_configured(recipient, subject, body)
         except Exception as e:
@@ -967,7 +967,7 @@ async def mail_reply_email(email_id: int, body: str, reply_all: bool = False) ->
         if not subject.startswith("Re:"):
             subject = f"Re: {subject}"
             
-        sender_email = "luisd@alfonso.dev"
+        sender_email = "test.user@alfonso.dev"
         try:
             sender_email = send_smtp_email_if_configured(recipient, subject, body)
         except Exception as e:
@@ -1029,7 +1029,7 @@ async def mail_forward_email(email_id: int, recipient: str, comment: Optional[st
         if comment:
             body = f"{comment}\n\n---------- Mensaje reenviado ----------\nDe: {orig_email['sender']}\nFecha: {orig_email['received_at']}\nAsunto: {orig_email['subject']}\n\n{body}"
             
-        sender_email = "luisd@alfonso.dev"
+        sender_email = "test.user@alfonso.dev"
         try:
             sender_email = send_smtp_email_if_configured(recipient, subject, body)
         except Exception as e:

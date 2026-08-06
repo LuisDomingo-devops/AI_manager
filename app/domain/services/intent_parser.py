@@ -630,8 +630,9 @@ def parse_calendar_create_directly(msg: str, history: list = None) -> dict | Non
 def parse_file_operation_directly(msg: str, client_info: dict | None, history: list) -> dict | None:
     msg_clean = msg.strip()
     
-    home = "C:/Users/luisd"
-    desktop = "C:/Users/luisd/Desktop"
+    from pathlib import Path
+    home = str(Path.home()).replace("\\", "/")
+    desktop = str(Path.home() / "Desktop").replace("\\", "/")
     if isinstance(client_info, dict):
         home = client_info.get("home", home).replace("\\", "/")
         desktop = f"{home}/Desktop"

@@ -122,6 +122,10 @@ def generate_tool_prompt(client_id: str | None = None) -> str:
     """
     context_str = get_client_context_str(client_id)
 
+    from pathlib import Path
+    home_dir = str(Path.home()).replace("\\", "/")
+    desktop_dir = f"{home_dir}/Desktop"
+
     header = (
         "OUTPUT: JSON ONLY. No markdown, no explanations.\n"
         f"{context_str}\n\n"
@@ -132,13 +136,13 @@ def generate_tool_prompt(client_id: str | None = None) -> str:
         '{"tool":"TOOL_NAME","args":{...}}\n\n'
         "EXAMPLES:\n"
         'User: crea carpeta PruebaManual en Escritorio\n'
-        'Output: {"tool":"create_directory","args":{"path":"C:/Users/luisd/Desktop/PruebaManual"}}\n'
+        f'Output: {{"tool":"create_directory","args":{{"path":"{desktop_dir}/PruebaManual"}}}}\n'
         'User: crea archivo notas.txt con texto Hola\n'
-        'Output: {"tool":"create_file","args":{"path":"C:/Users/luisd/Desktop/PruebaManual/notas.txt","content":"Hola"}}\n'
+        f'Output: {{"tool":"create_file","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt","content":"Hola"}}}}\n'
         'User: lee archivo notas.txt\n'
-        'Output: {"tool":"read_file","args":{"path":"C:/Users/luisd/Desktop/PruebaManual/notas.txt"}}\n'
+        f'Output: {{"tool":"read_file","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt"}}}}\n'
         'User: reemplaza Hola por Chao en notas.txt\n'
-        'Output: {"tool":"replace_file_content","args":{"path":"C:/Users/luisd/Desktop/PruebaManual/notas.txt","target":"Hola","replacement":"Chao"}}\n\n'
+        f'Output: {{"tool":"replace_file_content","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt","target":"Hola","replacement":"Chao"}}}}\n\n'
         "AVAILABLE TOOLS:\n"
     )
 

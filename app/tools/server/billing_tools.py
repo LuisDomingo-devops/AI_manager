@@ -363,7 +363,7 @@ async def generate_invoice_pdf(
             signature_base64 = verifactu_res["signature"]
 
             # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU
-            qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFactura?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
+            qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFacturaVerifactu?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
             qr = qrcode.QRCode(version=1, box_size=3, border=1)
             qr.add_data(qr_url)
             qr.make(fit=True)

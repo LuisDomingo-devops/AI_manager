@@ -310,6 +310,8 @@ def seed_mock_emails() -> int:
     inserted = 0
     try:
         for data in mock_data:
+            if data.get("recipient") == "luisd@alfonso.dev":
+                data["recipient"] = "test.user@alfonso.dev"
             exists = conn.execute(
                 "SELECT 1 FROM emails WHERE sender = ? AND subject = ?",
                 (data["sender"], data["subject"])

@@ -3,21 +3,52 @@ import base64
 import hashlib
 from pathlib import Path
 
+import keyring
+
 KEY_PATH = Path(__file__).resolve().parents[2] / "data" / ".key"
 
 def get_or_create_key() -> bytes:
-    KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # 1. Intentar obtener la clave desde el Keyring del sistema
+    try:
+        stored_key_b64 = keyring.get_password("alfonso_autonomo", "db_encryption_key")
+        if stored_key_b64:
+            # Eliminar archivo local sobrante de instalaciones anteriores
+            if KEY_PATH.exists():
+                try:
+                    KEY_PATH.unlink()
+                except Exception:
+                    pass
+            return base64.b64decode(stored_key_b64.encode('utf-8'))
+    except Exception:
+        pass
+
+    # 2. Si no está en el Keyring, comprobar el archivo de clave local como fallback
     if KEY_PATH.exists():
         try:
             return KEY_PATH.read_bytes()
         except Exception:
             pass
-    # Generar nueva clave
+
+    # 3. Generar nueva clave
     new_key = os.urandom(32)
+    
+    # 4. Intentar guardar en el Keyring del sistema
+    saved_in_keyring = False
     try:
-        KEY_PATH.write_bytes(new_key)
+        new_key_b64 = base64.b64encode(new_key).decode('utf-8')
+        keyring.set_password("alfonso_autonomo", "db_encryption_key", new_key_b64)
+        saved_in_keyring = True
     except Exception:
         pass
+        
+    # 5. Si falló el keyring, guardar en archivo local
+    if not saved_in_keyring:
+        KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            KEY_PATH.write_bytes(new_key)
+        except Exception:
+            pass
+            
     return new_key
 
 class DatabaseEncryptor:

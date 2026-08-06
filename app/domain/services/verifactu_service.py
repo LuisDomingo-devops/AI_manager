@@ -2,6 +2,7 @@ import os
 import hashlib
 import json
 import base64
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -12,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
 class VerifactuService:
+    _lock = threading.Lock()
     """
     Servicio de cumplimiento técnico para Verifactu (AEAT 2027).
     Garantiza el encadenamiento criptográfico inalterable de facturas emitidas
@@ -123,87 +125,123 @@ class VerifactuService:
         Registra una factura emitida bajo la regulación Verifactu.
         Calcula el hash de encadenamiento oficial y firma criptográficamente con XMLDSig estructurado.
         """
-        cls.init_verifactu_schema()
-        prev_hash = cls.get_last_invoice_hash()
-        current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
+        with cls._lock:
+            # Normalizar NIF del emisor y receptor
+            invoice_data["issuer_nif"] = str(invoice_data.get("issuer_nif", "")).strip().upper()
+            invoice_data["receiver_nif"] = str(invoice_data.get("receiver_nif", "")).strip().upper()
 
-        # Generar estructura XML oficial simplificada conforme a Verifactu
-        from lxml import etree
-        import signxml
-        from signxml import XMLSigner
+            cls.init_verifactu_schema()
+            prev_hash = cls.get_last_invoice_hash()
+            current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
 
-        # Obtener claves y simular certificado para la firma XMLDSig
-        private_key = cls.get_or_create_private_key()
-        # Exportar clave pública simulando un certificado auto-firmado
-        pem_key_bytes = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        
-        # Estructura del XML del registro de facturación de alta
-        registro_xml = etree.Element("RegistroFacturacionAlta")
-        etree.Subclass = "Verifactu"
-        etree.SubElement(registro_xml, "NIFObligado").text = str(invoice_data.get("issuer_nif", ""))
-        etree.SubElement(registro_xml, "NumFactura").text = str(invoice_data.get("invoice_number", ""))
-        etree.SubElement(registro_xml, "FechaExpedicion").text = str(invoice_data.get("date_of_issue", ""))
-        etree.SubElement(registro_xml, "BaseImponible").text = f"{float(invoice_data.get('base_imponible', 0.0)):.2f}"
-        etree.SubElement(registro_xml, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
-        etree.SubElement(registro_xml, "ImporteTotal").text = f"{float(invoice_data.get('total_amount', 0.0)):.2f}"
-        etree.SubElement(registro_xml, "HuellaRegistroAnterior").text = prev_hash or ""
-        etree.SubElement(registro_xml, "HuellaRegistroActual").text = current_hash
+            from lxml import etree
+            import signxml
+            from signxml import XMLSigner
 
-        # Firmar digitalmente el elemento XMLDSig/XAdES envelopado
-        signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
-        signed_root = signer.sign(registro_xml, key=pem_key_bytes)
-        
-        xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
-        real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
+            # Obtener claves y simular certificado para la firma XMLDSig
+            private_key = cls.get_or_create_private_key()
+            # Exportar clave pública simulando un certificado auto-firmado
+            pem_key_bytes = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
 
-        with _get_connection() as conn:
-            conn.execute("""
-                INSERT INTO verifactu_invoices (
-                    invoice_number, date_of_issue, issuer_nif, receiver_nif,
-                    base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                invoice_data["invoice_number"],
-                invoice_data["date_of_issue"],
-                invoice_data["issuer_nif"],
-                invoice_data["receiver_nif"],
-                invoice_data["base_imponible"],
-                invoice_data["iva_amount"],
-                invoice_data["total_amount"],
-                prev_hash,
-                current_hash,
-                real_sig_base64
-            ))
-            conn.commit()
+            # Estructura del XML del registro de facturación de alta según Verifactu
+            registro_xml = etree.Element("SuministroLRRegistroFacturacionAlta")
+            
+            # Cabecera
+            cabecera = etree.SubElement(registro_xml, "Cabecera")
+            etree.SubElement(cabecera, "ObligadoEmision").text = str(invoice_data.get("issuer_nif", ""))
+            
+            # Bloque de RegistroFacturacionAlta
+            reg_alta = etree.SubElement(registro_xml, "RegistroFacturacionAlta")
+            
+            # IDFactura
+            id_factura = etree.SubElement(reg_alta, "IDFactura")
+            etree.SubElement(id_factura, "NumSerieFacturaEmisor").text = str(invoice_data.get("invoice_number", ""))
+            etree.SubElement(id_factura, "FechaExpedicionFacturaEmisor").text = str(invoice_data.get("date_of_issue", ""))
+            
+            # Datos del emisor
+            emisor = etree.SubElement(reg_alta, "Emisor")
+            etree.SubElement(emisor, "NIF").text = str(invoice_data.get("issuer_nif", ""))
+            
+            # Datos del receptor
+            receptor = etree.SubElement(reg_alta, "Receptor")
+            etree.SubElement(receptor, "NIF").text = str(invoice_data.get("receiver_nif", ""))
+            
+            # DetalleFactura
+            detalle = etree.SubElement(reg_alta, "DetalleFactura")
+            etree.SubElement(detalle, "TipoFactura").text = "F1"  # Factura Ordinaria
+            etree.SubElement(detalle, "ClaveRegimenEspecialOTrascendencia").text = "01"  # Régimen común
+            etree.SubElement(detalle, "BaseImponible").text = f"{float(invoice_data.get('base_imponible', 0.0)):.2f}"
+            etree.SubElement(detalle, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
+            etree.SubElement(detalle, "ImporteTotal").text = f"{float(invoice_data.get('total_amount', 0.0)):.2f}"
+            
+            # Datos de Infraestructura del Software (Requerido por Verifactu)
+            sistema = etree.SubElement(reg_alta, "SistemaInformatico")
+            etree.SubElement(sistema, "Nombre").text = "Alfonso Autónomo SIF"
+            etree.SubElement(sistema, "NIFProductor").text = "B00000000"
+            etree.SubElement(sistema, "NumInstalacion").text = "000001"
+            etree.SubElement(sistema, "Version").text = "2.0.0"
+            
+            # Encadenamiento criptográfico Verifactu oficial
+            encadenamiento = etree.SubElement(reg_alta, "Encadenamiento")
+            if prev_hash:
+                registro_ant = etree.SubElement(encadenamiento, "RegistroAnterior")
+                etree.SubElement(registro_ant, "Huella").text = prev_hash
 
-        # Guardar en local el XML firmado para auditar
-        xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
-        xml_dir.mkdir(parents=True, exist_ok=True)
-        xml_file = xml_dir / f"{invoice_data['invoice_number']}_verifactu.xml"
-        with open(xml_file, "w", encoding="utf-8") as f:
-            f.write(xml_firmado_str)
+            # Firmar digitalmente el elemento XMLDSig/XAdES envelopado
+            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
+            signed_root = signer.sign(registro_xml, key=pem_key_bytes)
+            
+            xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
+            real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
 
-        # Envío inmediato (real/simulado) al Sistema Informático de Facturación (SIF) de la AEAT
-        aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
+            with _get_connection() as conn:
+                conn.execute("""
+                    INSERT INTO verifactu_invoices (
+                        invoice_number, date_of_issue, issuer_nif, receiver_nif,
+                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    invoice_data["invoice_number"],
+                    invoice_data["date_of_issue"],
+                    invoice_data["issuer_nif"],
+                    invoice_data["receiver_nif"],
+                    invoice_data["base_imponible"],
+                    invoice_data["iva_amount"],
+                    invoice_data["total_amount"],
+                    prev_hash,
+                    current_hash,
+                    real_sig_base64
+                ))
+                conn.commit()
 
-        return {
-            "status": "success",
-            "invoice_number": invoice_data["invoice_number"],
-            "prev_hash": prev_hash,
-            "current_hash": current_hash,
-            "signature": real_sig_base64,
-            "aeat_delivery": aeat_response
-        }
+            # Guardar en local el XML firmado para auditar
+            xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
+            xml_dir.mkdir(parents=True, exist_ok=True)
+            xml_file = xml_dir / f"{invoice_data['invoice_number']}_verifactu.xml"
+            with open(xml_file, "w", encoding="utf-8") as f:
+                f.write(xml_firmado_str)
+
+            # Envío inmediato (real/simulado) al Sistema Informático de Facturación (SIF) de la AEAT
+            aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
+
+            return {
+                "status": "success",
+                "invoice_number": invoice_data["invoice_number"],
+                "prev_hash": prev_hash,
+                "current_hash": current_hash,
+                "signature": real_sig_base64,
+                "aeat_delivery": aeat_response
+            }
 
     @classmethod
     def send_to_aeat_sif(cls, xml_content: str) -> Dict[str, Any]:
         """
         Envía el XML firmado del registro al endpoint SOAP oficial de VERIFACTU de la AEAT.
-        Si no hay certificados del sistema instalados, simula el envío al entorno de pruebas.
+        Si no hay certificados del sistema instalados, retorna un estado offline simulado transparente.
         """
         import httpx
         # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas)
@@ -240,11 +278,11 @@ class VerifactuService:
             except Exception as e:
                 return {"status": "incident", "message": f"Incidencia de red o TLS en el envío a la AEAT: {str(e)}"}
         
-        # Simulación del SIF offline/pruebas por defecto para evitar bloqueos
+        # Simulación de pruebas offline para evitar falsas aceptaciones
         return {
-            "status": "simulated_accepted",
+            "status": "offline_simulated",
             "code": 200,
-            "message": "Envío simulado con éxito (entorno de desarrollo local sin certificado de cliente AEAT)."
+            "message": "Registro local guardado y firmado. Envío pendiente de firma por mTLS (Entorno de desarrollo local sin certificado)."
         }
 
     @classmethod
@@ -277,6 +315,7 @@ class VerifactuService:
             if current_prev_hash != expected_prev_hash_upper:
                 return {
                     "status": "corrupted",
+                    "corrupted_invoice_number": row["invoice_number"],
                     "error": f"Cadena rota en factura {row['invoice_number']}. Hash anterior esperado: {expected_prev_hash_upper}, encontrado: {current_prev_hash}"
                 }
             
@@ -284,6 +323,7 @@ class VerifactuService:
             if row["current_hash"].upper() != calculated:
                 return {
                     "status": "tampered",
+                    "corrupted_invoice_number": row["invoice_number"],
                     "error": f"Datos alterados en factura {row['invoice_number']}. Hash calculado: {calculated}, encontrado en BD: {row['current_hash']}"
                 }
             expected_prev_hash = row["current_hash"]
