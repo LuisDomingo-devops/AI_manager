@@ -339,8 +339,19 @@ class TaxParserService:
             iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
             irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
 
+        # Reglas aritméticas de validación deterministas estrictas
+        expected_total = round(base_imponible + iva_amount - irpf_amount, 2)
+        if abs(total_amount - expected_total) > 0.05:
+            # Forzar corrección o levantar aviso de inconsistencia
+            app_logger.warning(f"Incoherencia aritmética en factura detectada. Total leído: {total_amount}, Esperado: {expected_total}. Ajustando valores.")
+            total_amount = expected_total
+
         invoice_id_match = re.search(r'\b(?:factura\s+de\s+)([A-Za-z0-9 ]+)|(?:factura(?:\s+(?:n[uú]mero|nº|num))?|n[uú]mero|nº|num)[\s#:]*([A-Za-z0-9\-]*\d[A-Za-z0-9\-]*)', text_lower)
         invoice_id = (invoice_id_match.group(1) or invoice_id_match.group(2)).upper().strip() if invoice_id_match else f"FAC-{int(datetime.now().timestamp())}"
+
+        # Validaciones de campos obligatorios requeridos por VERIFACTU
+        if not issuer_nif or not receiver_nif:
+            raise ValueError("Los NIFs del emisor y receptor son requeridos para la validez tributaria de la factura.")
 
         return {
             "invoice_id": invoice_id,

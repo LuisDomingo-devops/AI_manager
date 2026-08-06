@@ -8,18 +8,11 @@ from app.domain.services.tax_parser_service import TaxParserService
 from app.adapters.memory.memory import _get_connection
 
 def test_encryption_fallback_explicitly():
-    """Fuerza el fallback de cifrado en Python puro al simular la ausencia de cryptography."""
+    """Verifica que la ausencia de cryptography lanza un ImportError de forma controlada."""
     with patch.dict(sys.modules, {'cryptography': None, 'cryptography.fernet': None}):
-        # Instanciar un nuevo encriptador sin fernet
-        fallback_encryptor = DatabaseEncryptor()
-        assert fallback_encryptor.fernet is None
-        
-        plain = "Texto de prueba confidencial 12345"
-        cipher = fallback_encryptor.encrypt(plain)
-        assert cipher.startswith("fallback_")
-        
-        decrypted = fallback_encryptor.decrypt(cipher)
-        assert decrypted == plain
+        with pytest.raises(ImportError):
+            DatabaseEncryptor()
+
 
 def test_encryption_errors_and_invalid_inputs():
     """Verifica la robustez ante entradas inválidas u orígenes no cifrados en decripción."""

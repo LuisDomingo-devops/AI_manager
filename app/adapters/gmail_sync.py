@@ -35,6 +35,13 @@ def _sync_from_gmail_blocking() -> int:
     load_dotenv()
     gmail_user = os.getenv("GMAIL_EMAIL")
     gmail_pass = os.getenv("GMAIL_APP_PASSWORD")
+    if not gmail_pass:
+        try:
+            import keyring
+            gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD")
+        except Exception:
+            pass
+            
     if not gmail_user or not gmail_pass:
         return 0
         

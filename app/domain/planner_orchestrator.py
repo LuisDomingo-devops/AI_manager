@@ -209,10 +209,6 @@ class SpecializedAgentRouter:
         self.memory = memory
 
     async def route_if_applicable(self, user_message: str, session_id: str | None, client_id: str | None, logger) -> dict | None:
-        from app.domain.intent_router import IntentRouter
-        if IntentRouter().detect(user_message) == "tool":
-            return None # Si es una acción instrumental, evitamos desvíos a agentes y dejamos correr la tool
-            
         msg_lower = user_message.lower()
         
         is_marcos_query = "marcos" in msg_lower or any(kw in msg_lower for kw in [
@@ -521,141 +517,8 @@ class PlannerOrchestrator:
         if routed:
             return routed
 
-        # 3.5. Enrutamiento heurístico rápido de herramientas de utilidad común
+        # 3.5. Enrutamiento unificado nativo mediante el function-calling del LLM (heurístico regex retirado para producción)
         raw = None
-        try:
-            from app.domain.intent_router import IntentRouter
-            router = IntentRouter()
-            routing_detail = router.detect_with_detail(user_message)
-            if routing_detail["intent"] == "tool":
-                fired_rules = routing_detail["fired_rules"]
-                category = None
-                if fired_rules:
-                    import re
-                    # Extraer categoría de la regla con mayor puntuación, ej: "+2.0 [datetime_tool]"
-                    m_cat = re.search(r"\[(.*?)\]", fired_rules[0])
-                    if m_cat:
-                        category = m_cat.group(1)
-
-                mapped_tool = None
-                mapped_args = {}
-
-                if category == "datetime_tool":
-                    mapped_tool = "get_current_datetime"
-                elif category == "sysinfo":
-                    mapped_tool = "system_info"
-                elif category == "calendar_open":
-                    mapped_tool = "calendar_open_ui"
-                elif category == "calendar_close":
-                    mapped_tool = "calendar_close_ui"
-                elif category == "mail_summary":
-                    mapped_tool = "mail_get_unread_summary"
-                elif category == "mail_classify":
-                    mapped_tool = "mail_classify_emails"
-                elif category == "mail_seed":
-                    mapped_tool = "mail_receive_mock_emails"
-                elif category == "fs_list" or "escritorio" in user_message.lower():
-                    mapped_tool = "list_directory"
-                    import re
-                    m_path = re.search(r"([A-Za-z]:[/\\][^\s]+)", user_message)
-                    if m_path:
-                        mapped_args = {"path": m_path.group(1).replace("\\", "/").rstrip("/\\.,;!?")}
-                    else:
-                        from app.utils.paths import get_client_desktop
-                        mapped_args = {"path": get_client_desktop(client_id)}
-                elif category == "aeat_tool":
-                    import re
-                    year = 2026
-                    quarter = 1
-                    m_year = re.search(r"\b(202\d)\b", user_message)
-                    if m_year:
-                        year = int(m_year.group(1))
-                    m_q = re.search(r"\b([1-4])\s*(?:trimestre|trim|[tTqQ°º])\b", user_message.lower())
-                    if m_q:
-                        quarter = int(m_q.group(1))
-
-                    if "130" in user_message:
-                        mapped_tool = "generate_modelo_130_autofill_script"
-                        mapped_args = {"year": year, "quarter": quarter}
-                    elif "111" in user_message:
-                        mapped_tool = "generate_modelo_111_autofill_script"
-                        mapped_args = {"year": year, "quarter": quarter}
-                    elif "390" in user_message:
-                        mapped_tool = "generate_modelo_390_summary"
-                        mapped_args = {"year": year}
-                    elif "115" in user_message:
-                        mapped_tool = "generate_modelo_115_autofill_script"
-                        mapped_args = {"year": year, "quarter": quarter}
-                    elif "200" in user_message:
-                        mapped_tool = "generate_modelo_200_summary"
-                        mapped_args = {"year": year}
-                    elif "202" in user_message:
-                        # Extraer periodo (1, 2, 3) para el pago fraccionado 202
-                        period = 1
-                        m_p = re.search(r"\b([1-3])\s*(?:p|P)\b", user_message)
-                        if m_p:
-                            period = int(m_p.group(1))
-                        mapped_tool = "generate_modelo_202_autofill_script"
-                        mapped_args = {"year": year, "period": period}
-                    elif "347" in user_message:
-                        mapped_tool = "generate_modelo_347_summary"
-                        mapped_args = {"year": year}
-                    else:
-                        mapped_tool = "generate_modelo_303_autofill_script"
-                        mapped_args = {"year": year, "quarter": quarter}
-                elif category == "bank_balance":
-                    mapped_tool = "get_bank_balance"
-                    mapped_args = {}
-                elif category == "accounting_tool":
-                    import re
-                    year = 2026
-                    m_year = re.search(r"\b(202\d)\b", user_message)
-                    if m_year:
-                        year = int(m_year.group(1))
-
-                    if "balance" in user_message.lower():
-                        mapped_tool = "get_balance_situacion"
-                    else:
-                        mapped_tool = "get_libro_diario"
-                    mapped_args = {"year": year}
-                elif category == "reconciliation_tool":
-                    import re
-                    if any(kw in user_message.lower() for kw in ("importa", "carga", "norma 43", "norma43")):
-                        mapped_tool = "import_bank_statement"
-                        # Extraer posible ruta del archivo o usar default
-                        m_path = re.search(r"\b([\w\-/\\\.]+\.txt|\.n43)\b", user_message)
-                        filepath = m_path.group(1) if m_path else "data/extracto.txt"
-                        mapped_args = {"filepath": filepath}
-                    elif any(kw in user_message.lower() for kw in ("añad", "crea", "registra", "pago manual", "cobro manual")):
-                        mapped_tool = "add_manual_bank_movement"
-                        # Extraer fecha
-                        m_date = re.search(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", user_message)
-                        date_str = m_date.group(1) if m_date else datetime.now().strftime("%d/%m/%Y")
-                        # Extraer importe
-                        m_amount = re.search(r"\b(-?\d+(?:[.,]\d{2})?)\s*€?\b", user_message)
-                        amount = float(m_amount.group(1).replace(",", ".")) if m_amount else 0.0
-                        # Extraer concepto
-                        concept = "Movimiento manual"
-                        m_concept = re.search(r"concepto\s+([a-zA-Z0-9\s\-]+)", user_message.lower())
-                        if m_concept:
-                            concept = m_concept.group(1).strip()
-                        mapped_args = {
-                            "date_str": date_str,
-                            "concept": concept,
-                            "amount": amount,
-                            "reference": "manual"
-                        }
-                    elif any(kw in user_message.lower() for kw in ("reporte", "informe", "pendiente", "no concilia")):
-                        mapped_tool = "get_unreconciled_report_tool"
-                    else:
-                        mapped_tool = "run_bank_reconciliation"
-
-                if mapped_tool:
-                    import json
-                    logger.info("Enrutador heurístico detectó y mapeó herramienta directa: %s", mapped_tool)
-                    raw = json.dumps({"tool": mapped_tool, "args": mapped_args})
-        except Exception as router_err:
-            logger.warning("Error en el enrutamiento heurístico del IntentRouter: %s", router_err)
 
         # 4. Bucle ReAct multi-turno para ejecución secuencial de herramientas
         max_turns = 5

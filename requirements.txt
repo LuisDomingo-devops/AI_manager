@@ -28,3 +28,5 @@ pdfplumber
 openpyxl
 qrcode
 cryptography
+keyring
+slowapi

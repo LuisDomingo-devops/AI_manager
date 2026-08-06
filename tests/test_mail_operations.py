@@ -13,6 +13,7 @@ from app.tools.server.mail_tools import (
 )
 
 client = TestClient(app)
+client.headers.update({"X-API-Key": "test_api_key_default"})
 
 class DummyConnection:
     def __init__(self, conn):

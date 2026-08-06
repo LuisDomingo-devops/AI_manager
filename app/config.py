@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = 300
     LLM_IS_REASONING: bool = False
 
-    BRIDGE_HOST: str = "0.0.0.0"
+    BRIDGE_HOST: str = "127.0.0.1"
     BRIDGE_PORT: int = 8765
     BRIDGE_TIMEOUT: int = 30
 

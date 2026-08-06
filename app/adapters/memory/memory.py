@@ -268,19 +268,43 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _get_connection() -> sqlite3.Connection:
-    global _db_initialized
-    if str(DB_PATH) != ":memory:":
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+# Registro global de esquemas inicializados por archivo de base de datos
+_initialized_dbs = set()
+# Inquilino activo (por defecto 'default' en modo de licencia básico para proteger el negocio y ventas)
+_active_tenant = None
+
+def _get_connection(client_id: str = None) -> sqlite3.Connection:
+    global _active_tenant
+    
+    # 1. Determinar el archivo de base de datos del Tenant
+    # Si es testing, seguimos usando el archivo en memoria/temporal común
+    if IS_TESTING:
+        target_path = DB_PATH
+    else:
+        # Resolver client_id: si no se especifica, usamos 'default'
+        cid = (client_id or "default").strip().lower()
+        
+        # Lógica de protección de negocio: Limitar a un único tenant activo
+        # Si se intenta cambiar de inquilino sin una licencia premium, la app mantendrá 'default'
+        import os
+        has_premium = os.getenv("ALFONSO_LICENSE_TYPE") == "premium"
+        
+        if not has_premium:
+            cid = "default" # Modo un solo autónomo (licencia básica)
+            
+        target_path = DB_PATH.parent / f"memory_{cid}.db"
+        
+    if str(target_path) != ":memory:":
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+    conn = sqlite3.connect(str(target_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     
-    # 2. INICIALIZACIÓN PEREZOSA (LAZY INITIALIZATION)
-    # En lugar de ejecutarse al importar el módulo, se ejecuta únicamente
-    # cuando la aplicación (o un test) solicita la primera conexión real.
-    if not _db_initialized or str(DB_PATH) == ":memory:":
+    # 2. Inicializar el esquema si es la primera vez que abrimos este archivo concreto
+    db_key = str(target_path)
+    if db_key not in _initialized_dbs:
         _init_db_schema(conn)
-        _db_initialized = True
+        _initialized_dbs.add(db_key)
         
     return conn
 

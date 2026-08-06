@@ -834,7 +834,13 @@ def send_smtp_email_if_configured(recipient: str, subject: str, body: str) -> st
     
     gmail_user = os.getenv("GMAIL_EMAIL")
     gmail_pass = os.getenv("GMAIL_APP_PASSWORD")
-    
+    if not gmail_pass:
+        try:
+            import keyring
+            gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD")
+        except Exception:
+            pass
+            
     if gmail_user and gmail_pass:
         msg = MIMEText(body)
         msg["Subject"] = subject

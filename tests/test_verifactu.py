@@ -80,3 +80,38 @@ def test_verifactu_chain_corruption():
     # Verificar integridad de la cadena debe reportar alteración
     integrity = VerifactuService.verify_chain_integrity()
     assert integrity["status"] in ("tampered", "corrupted")
+
+def test_sif_event_logging():
+    # Limpiar tabla sif_event_log antes de probar
+    with _get_connection() as conn:
+        conn.execute("DROP TABLE IF EXISTS sif_event_log")
+        conn.commit()
+
+    h1 = VerifactuService.log_sif_event("SYSTEM_START", "El sistema informático de facturación Alfonso ha iniciado.")
+    assert h1 is not None
+    
+    h2 = VerifactuService.log_sif_event("DB_BACKUP", "Copia de seguridad realizada con éxito.")
+    assert h2 is not None
+    
+    # Comprobar que se ha encadenado el hash
+    with _get_connection() as conn:
+        row = conn.execute("SELECT prev_event_hash FROM sif_event_log ORDER BY id DESC LIMIT 1").fetchone()
+        assert row["prev_event_hash"] == h1
+
+def test_facturae_export():
+    invoice = {
+        "invoice_number": "FAC-2026-B2G",
+        "date_of_issue": "2026-08-05",
+        "issuer_nif": "12345678Z",
+        "receiver_nif": "87654321A",
+        "base_imponible": 500.00,
+        "iva_amount": 105.00,
+        "total_amount": 605.00
+    }
+    xml_str = VerifactuService.export_to_facturae_xml(invoice)
+    assert xml_str is not None
+    assert "<Facturae" in xml_str
+    assert "Signature" in xml_str  # Asegurar que incluye la firma XMLDSig con namespace ds:Signature
+
+
+

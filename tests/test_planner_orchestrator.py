@@ -75,8 +75,11 @@ async def test_orchestrator_server_tool_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector):
-        # El LLM responde con la respuesta conversacional en el segundo turno (el primer turno se enruta directo por heurística)
-        mock_llm.generate.return_value = 'La fecha actual es jueves.'
+        # El LLM devuelve el JSON de tool en el primer turno y texto en el segundo
+        mock_llm.generate.side_effect = [
+            '{"tool": "get_current_datetime", "args": {}}',
+            'La fecha actual es jueves.'
+        ]
         
         mock_tool_func = AsyncMock(return_value={"status": "ok", "human": "jueves"})
         
@@ -99,8 +102,11 @@ async def test_orchestrator_mail_bypass_flow(mock_llm, session_memory_fixture):
     mock_vector = MagicMock()
     mock_vector.query_facts.return_value = []
 
-    # Mock del LLM para que devuelva la respuesta final conversacional en el segundo turno (el primer turno se enruta directo)
-    mock_llm.generate.return_value = "Correos de prueba generados correctamente."
+    # El LLM devuelve el JSON de tool en el primer turno y texto en el segundo
+    mock_llm.generate.side_effect = [
+        '{"tool": "mail_receive_mock_emails", "args": {}}',
+        "Correos de prueba generados correctamente."
+    ]
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector):
@@ -118,7 +124,8 @@ async def test_orchestrator_mail_bypass_flow(mock_llm, session_memory_fixture):
             assert result["type"] == "chat"
             assert result["response"] == "Correos de prueba generados correctamente."
             mock_mail_func.assert_called_once()
-            mock_llm.generate.assert_called_once()
+            assert mock_llm.generate.call_count == 2
+
 
 
 @pytest.mark.asyncio
@@ -146,4 +153,5 @@ async def test_orchestrator_composite_bypass_flow(mock_llm, session_memory_fixtu
             assert result["type"] == "tool"
             assert result["tool"] == "calendar_open_ui"
             assert result["result"] == {}
-            mock_llm.generate.assert_not_called()
+            assert mock_llm.generate.call_count == 1
+

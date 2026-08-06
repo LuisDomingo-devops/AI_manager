@@ -189,43 +189,15 @@ async def lifespan(app: FastAPI):
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["100 per minute"])
 app = FastAPI(title="Alfonso Core — Fase 4", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-
-
-@app.middleware("http")
-async def security_waf_middleware(request: Request, call_next):
-    ip = request.client.host if request.client else "127.0.0.1"
-
-    if security_agent.is_blocked(ip):
-        return JSONResponse(
-            status_code=403,
-            content={"status": "error", "detail": "IP address blacklisted due to security violations."}
-        )
-
-    # Leer body de forma segura para escaneo sin interrumpir flujo
-    body_bytes = b""
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) < 65536:
-        try:
-            body_bytes = await request.body()
-            async def receive():
-                return {"type": "http.request", "body": body_bytes, "more_body": False}
-            request._receive = receive
-        except Exception:
-            pass
-
-    body_str = body_bytes.decode("utf-8", errors="ignore")
-    path_and_query = f"{request.url.path}?{request.url.query}" if request.url.query else request.url.path
-    headers_dict = dict(request.headers)
-
-    if security_agent.inspect_request(ip, path_and_query, request.method, headers_dict, body_str):
-        return JSONResponse(
-            status_code=403,
-            content={"status": "error", "detail": "Request rejected due to potential security threat."}
-        )
-
-    return await call_next(request)
 
 
 @app.middleware("http")

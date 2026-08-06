@@ -8,7 +8,9 @@ from app.main import app
 
 @pytest.fixture(scope="module")
 def client():
+    headers = {"X-API-Key": "test_api_key_default"}
     with TestClient(app) as c:
+        c.headers.update(headers)
         yield c
 
 def test_health_endpoint(client):

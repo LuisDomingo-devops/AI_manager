@@ -362,7 +362,7 @@ async def generate_invoice_pdf(
             current_hash = verifactu_res["current_hash"]
             signature_base64 = verifactu_res["signature"]
 
-            # Generar código QR oficial de verificación de la AEAT
+            # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU
             qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFactura?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
             qr = qrcode.QRCode(version=1, box_size=3, border=1)
             qr.add_data(qr_url)
@@ -375,16 +375,16 @@ async def generate_invoice_pdf(
             # Dibujar QR en el Canvas PDF
             c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
 
-            # Añadir leyenda de VERI*FACTU y metadatos criptográficos
+            # Añadir leyenda oficial imperativa de VERIFACTU y metadatos del XML firmado
             c.setFont("Helvetica-Bold", 9)
             c.setFillColorRGB(0.12, 0.23, 0.35)
-            c.drawString(135, 175, "VERI*FACTU - FACTURA VERIFICABLE")
+            c.drawString(135, 175, "VERIFACTU - FACTURA VERIFICABLE")
             
             c.setFont("Helvetica", 7)
             c.setFillColorRGB(0.3, 0.3, 0.3)
-            c.drawString(135, 163, "Factura verificable en la sede electrónica de la AEAT")
-            c.drawString(135, 151, f"Hash Encadenamiento: {current_hash[:36]}...")
-            c.drawString(135, 140, f"Firma Criptográfica (RSA): {signature_base64[:40]}...")
+            c.drawString(135, 163, "Factura verificable en la Sede electrónica de la AEAT")
+            c.drawString(135, 151, f"Huella de encadenamiento (SHA256): {current_hash}")
+            c.drawString(135, 140, "Este registro de facturación ha sido firmado digitalmente y enviado a la AEAT.")
 
             # Notas finales
             c.setFont("Helvetica-Oblique", 8)

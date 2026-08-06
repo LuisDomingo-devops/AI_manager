@@ -10,6 +10,7 @@
     {
       "matches": [
         "*://*.agenciatributaria.gob.es/*",
+        "*://*.aeat.es/*",
         "*://*.seg-social.es/*",
         "*://localhost/*",
         "*://127.0.0.1/*"

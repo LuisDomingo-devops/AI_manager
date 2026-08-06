@@ -8,6 +8,8 @@ import os
 # Forzamos a que cualquier instancia de SessionMemory use la base de datos de test local
 os.environ["ALFONSO_DB_PATH"] = "data/memory_test.db"
 os.environ["GEMINI_API_KEY"] = ""
+os.environ["ALFONSO_API_KEY"] = "test_api_key_default"
+os.environ["ALFONSO_BRIDGE_TOKEN"] = "test_bridge_token_default"
 
 
 

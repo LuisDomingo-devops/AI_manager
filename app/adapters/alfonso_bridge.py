@@ -21,6 +21,7 @@ import websockets
 import uuid
 import logging
 import secrets
+import os
 
 from app.domain.actions import ALLOWED_ACTIONS
 
@@ -31,13 +32,15 @@ logger = logging.getLogger("bridge")
 from app.domain.ports.bridge_port import BridgePort
 
 class AlfonsoBridge(BridgePort):
-    def __init__(self, host="0.0.0.0", port=8765):
-        self.host = host
-        self.port = port
+    def __init__(self, host=None, port=None):
+        from app.config import settings
+        self.host = host or settings.BRIDGE_HOST or "127.0.0.1"
+        self.port = port or settings.BRIDGE_PORT or 8765
         self.clients = {}  # client_id -> WebSocket
         self.pending = {}  # cmd_id -> Future
         self.server = None
         self._client_info_dict = {}  # client_id -> info dict
+
 
     @property
     def client_info(self):
@@ -59,12 +62,28 @@ class AlfonsoBridge(BridgePort):
                     self._client_info_dict[client_id] = val
 
     async def start(self):
+        from app.config import settings
+        if settings.ENV == "production" and not settings.ALFONSO_BRIDGE_TOKEN:
+            logger.error("ERROR DE SEGURIDAD CRÍTICO: ALFONSO_BRIDGE_TOKEN no está configurado. El bridge no iniciará.")
+            raise ValueError("ALFONSO_BRIDGE_TOKEN obligatorio no configurado.")
+            
+        ssl_context = None
+        # Buscar certificados TLS opcionales en las variables del sistema
+        cert_path = os.environ.get("ALFONSO_SSL_CERT")
+        key_path = os.environ.get("ALFONSO_SSL_KEY")
+        if cert_path and key_path:
+            import ssl
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+            logger.info("Cargando TLS/WSS para el bridge de comunicación.")
+
         logger.info(f"Bridge en {self.host}:{self.port}")
         self.server = await websockets.serve(
             self.handler,
             self.host,
             self.port,
             ping_interval=None,
+            ssl=ssl_context
         )
 
     async def stop(self):

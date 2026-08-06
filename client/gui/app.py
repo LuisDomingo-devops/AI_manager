@@ -356,8 +356,8 @@ class QuarterlyBarChartWidget(QFrame):
         # No setCursor to match other standard buttons
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(4)
         
         import datetime
         now_dt = datetime.datetime.now()
@@ -451,7 +451,7 @@ class AnimatedWaveWidget(QWidget):
     """Visualizador de rostro digital de Cain (Robocop 2) reactivo y animado."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(280, 280)
+        self.setMinimumSize(180, 180)
         self._state = "idle"
         self._animation_phase = 0.0
         self._timer = QTimer(self)
@@ -1465,12 +1465,12 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.lbl_user_header.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         self.panel_business = HUDPanel("RESUMEN DEL NEGOCIO")
-        self.panel_business.setMinimumHeight(500) # Más alto para alojar el gráfico de barras y el reloj abajo
+        self.panel_business.setMinimumHeight(410) # Reducido a 410 para evitar desbordar el alto de pantalla
         
         # Layout interno del panel
         bus_layout = QVBoxLayout()
-        bus_layout.setSpacing(10)
-        bus_layout.setContentsMargins(10, 10, 10, 10)
+        bus_layout.setSpacing(6)
+        bus_layout.setContentsMargins(10, 6, 10, 6)
         
         # Sección 1: Saldos y Facturación
         self.lbl_saldo_banco = QLabel("SALDO BANCARIO:  0,00 €")
@@ -3425,7 +3425,7 @@ class ConfigWidget(AlfonsoBaseDialog):
         self.spin_device.setValue(dev_val if dev_val is not None else 8)
         self.spin_threshold.setValue(c.get('threshold') if c.get('threshold') is not None else 0.03)
 
-        # Cargar variables de email del archivo .env si existe
+        # Cargar variables de email de forma segura
         gmail_email = ""
         gmail_pass = ""
         try:
@@ -3437,8 +3437,10 @@ class ConfigWidget(AlfonsoBaseDialog):
                     for line in f:
                         if line.strip().startswith("GMAIL_EMAIL="):
                             gmail_email = line.split("=", 1)[1].strip()
-                        elif line.strip().startswith("GMAIL_APP_PASSWORD="):
-                            gmail_pass = line.split("=", 1)[1].strip()
+            
+            # Obtener contraseña de aplicación de forma segura mediante keyring
+            import keyring
+            gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD") or ""
         except Exception:
             pass
             
@@ -3453,7 +3455,7 @@ class ConfigWidget(AlfonsoBaseDialog):
         c['device'] = self.spin_device.value()
         c['threshold'] = self.spin_threshold.value()
 
-        # Guardar credenciales de correo real en el archivo .env para el servidor
+        # Guardar credenciales de correo de forma segura (email en .env, contraseña en keyring)
         try:
             gui_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(os.path.dirname(gui_dir))
@@ -3467,27 +3469,31 @@ class ConfigWidget(AlfonsoBaseDialog):
             gmail_pass = self.input_pass.text().strip()
             
             email_found = False
-            pass_found = False
             for idx, line in enumerate(lines):
                 if line.strip().startswith("GMAIL_EMAIL="):
                     lines[idx] = f"GMAIL_EMAIL={gmail_email}\n"
                     email_found = True
                 elif line.strip().startswith("GMAIL_APP_PASSWORD="):
-                    lines[idx] = f"GMAIL_APP_PASSWORD={gmail_pass}\n"
-                    pass_found = True
+                    # Eliminar la contraseña en texto plano del archivo .env si existía antes
+                    lines[idx] = ""
                     
             if not email_found:
                 lines.append(f"GMAIL_EMAIL={gmail_email}\n")
-            if not pass_found:
-                lines.append(f"GMAIL_APP_PASSWORD={gmail_pass}\n")
+                
+            # Limpiar líneas vacías restantes
+            lines = [line for line in lines if line.strip()]
                 
             with open(env_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
                 
             os.environ["GMAIL_EMAIL"] = gmail_email
+            
+            # Guardar la contraseña de forma segura mediante keyring local del SO
+            import keyring
+            keyring.set_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD", gmail_pass)
             os.environ["GMAIL_APP_PASSWORD"] = gmail_pass
         except Exception as e:
-            print(f"Error saving env file: {e}")
+            print(f"Error saving env/keyring credentials: {e}")
 
         # Mostrar aviso de éxito
         QMessageBox.information(
@@ -6467,6 +6473,25 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
         if not file_path:
             return
             
+        try:
+            import shutil
+            dest_name = os.path.basename(file_path)
+            dest_path = os.path.join(self.current_dir, dest_name)
+            
+            # Si el archivo ya existe en destino, añadir sufijo timestamp
+            if os.path.exists(dest_path):
+                import time
+                base, ext = os.path.splitext(dest_name)
+                dest_name = f"{base}_{int(time.time())}{ext}"
+                dest_path = os.path.join(self.current_dir, dest_name)
+                
+            shutil.copy2(file_path, dest_path)
+            QMessageBox.information(self, "Importación", "El archivo ha sido importado con éxito.")
+            self.load_files()
+        except Exception as e:
+            QMessageBox.warning(self, "Error al importar", f"No se pudo copiar el archivo: {e}")
+
+
 class EconomicAnalyzerThread(QThread):
     progress_signal = pyqtSignal(str)
     result_signal = pyqtSignal(str)
@@ -6478,23 +6503,22 @@ class EconomicAnalyzerThread(QThread):
     def run(self):
         import time
         self.progress_signal.emit("[SISTEMA ALFONSO] Iniciando análisis financiero de riesgos...")
-        time.sleep(0.8)
-        self.progress_signal.emit("[CONEXIÓN SECURE] Consultando base de datos local y libro contable...")
-        time.sleep(0.6)
-        self.progress_signal.emit("[WEB AGENT] Buscando noticias macroeconómicas del sector en España 2026...")
         time.sleep(1.0)
-        self.progress_signal.emit("[WEB AGENT] Analizando reforma del RETA, IPC actualizados y MEAE tributario...")
+        self.progress_signal.emit("[CONEXIÓN SECURE] Consultando base de datos local y libro contable...")
         time.sleep(0.8)
+        self.progress_signal.emit("[WEB AGENT] Buscando noticias macroeconómicas del sector en España 2026...")
+        time.sleep(1.2)
+        self.progress_signal.emit("[WEB AGENT] Analizando reforma del RETA, IPC actualizados y MEAE tributario...")
+        time.sleep(1.0)
         self.progress_signal.emit("[AUDITORÍA] Procesando margen operativo y tasa de cash burn...")
-        time.sleep(0.6)
+        time.sleep(0.8)
         self.progress_signal.emit("[DIAGNÓSTICO] Redactando informe crítico de viabilidad y estrategias...")
-        time.sleep(0.5)
+        time.sleep(0.6)
         
         ing = self.stats.get('total_ingresos', 0.0)
         gast = self.stats.get('total_gastos', 0.0)
         neto = ing - gast
-        iva = self.stats.get('total_iva', 0.0)
-        irpf = self.stats.get('total_irpf', 0.0)
+        imp = self.stats.get('total_impuestos', 0.0)
         
         ratio_gastos = (gast / ing * 100) if ing > 0 else 0
         rentabilidad = (neto / ing * 100) if ing > 0 else 0
@@ -6510,8 +6534,7 @@ ESTADO DE AUDITORÍA: CRÍTICO Y ESTRATÉGICO
 * INGRESOS DECLARADOS: {ing:,.2f} €
 * GASTOS TOTALES REGISTRADOS: {gast:,.2f} €
 * RESULTADO NETO (EXPLICIT): {neto:,.2f} €
-* IVA ACUMULADO (SOPORTADO/REPERCUTIDO): {iva:,.2f} €
-* IRPF RETENIDO/LIQUIDADO ACUMULADO: {irpf:,.2f} €
+* IMPUESTOS LIQUIDADOS/REBOZADOS (IVA + IRPF): {imp:,.2f} €
 
 ANÁLISIS DE EFICIENCIA:
 * Tasa de Gasto Operativo: {ratio_gastos:.2f}% (Consumo de cada euro ingresado).
@@ -6540,7 +6563,7 @@ Tras consultar información abierta y noticias financieras recientes sobre el se
 ------------------------------------------------------------------------
 A) Reestructuración Inmediata de Costes (Cost-cutting):
    - Auditar suscripciones SaaS recurrentes redundantes o infrautilizadas.
-   - Renegociar contratos de servicios (proveedores, telecomunicaciones, coworking).
+   - Renegociar contratos de servicios (proveedores, telefonía, hosting).
 B) Optimización de Ingresos (Pricing & Value):
    - Indexar tarifas un 5% para cubrir el impacto de la inflación acumulada.
    - Transicionar de facturación por horas a modelos de retención (retainers) fijos mensuales para estabilizar el flujo de caja.
@@ -6552,11 +6575,13 @@ C) Cobertura Fiscal (Tax Planning):
         self.result_signal.emit(report)
 
 
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QLinearGradient, QPainterPath
+
 class KPIChartWidget(QWidget):
     """Gráfico de series temporales personalizado usando QPainter."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(580, 260)
+        self.setMinimumSize(600, 280)
         self.data = {}
         self.show_all_time = False
         
@@ -6569,6 +6594,7 @@ class KPIChartWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
+        # Fondo oscuro
         painter.setBrush(QColor(15, 23, 42, 220))
         painter.setPen(QPen(QColor(99, 102, 241, 50), 1))
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
@@ -6580,6 +6606,7 @@ class KPIChartWidget(QWidget):
             return
             
         keys = sorted(self.data.keys())
+        
         left_margin = 60
         right_margin = 30
         top_margin = 40
@@ -6590,7 +6617,7 @@ class KPIChartWidget(QWidget):
         
         max_val = 1.0
         for k in keys:
-            max_val = max(max_val, self.data[k]['ingresos'], self.data[k]['gastos'])
+            max_val = max(max_val, self.data[k]['ingresos'], self.data[k]['gastos'], self.data[k]['impuestos'])
             
         max_val = ((int(max_val) // 1000) + 1) * 1000
         
@@ -6609,9 +6636,11 @@ class KPIChartWidget(QWidget):
         
         path_ing = QPainterPath()
         path_gast = QPainterPath()
+        path_imp = QPainterPath()
         
         points_ing = []
         points_gast = []
+        points_imp = []
         
         meses_nombres = {
             "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
@@ -6620,19 +6649,28 @@ class KPIChartWidget(QWidget):
         
         for i, k in enumerate(keys):
             x = left_margin + i * x_step
+            
             y_ing = top_margin + chart_h - (self.data[k]['ingresos'] * chart_h / max_val)
             y_gast = top_margin + chart_h - (self.data[k]['gastos'] * chart_h / max_val)
+            y_imp = top_margin + chart_h - (self.data[k]['impuestos'] * chart_h / max_val)
+            
             points_ing.append((x, y_ing))
             points_gast.append((x, y_gast))
+            points_imp.append((x, y_imp))
+            
             if i == 0:
                 path_ing.moveTo(x, y_ing)
                 path_gast.moveTo(x, y_gast)
+                path_imp.moveTo(x, y_imp)
             else:
                 path_ing.lineTo(x, y_ing)
                 path_gast.lineTo(x, y_gast)
+                path_imp.lineTo(x, y_imp)
+                
             lbl_x = k
             if not self.show_all_time and k in meses_nombres:
                 lbl_x = meses_nombres[k]
+                
             painter.setPen(QColor(148, 163, 184))
             if num_points > 12:
                 if i % 3 == 0:
@@ -6640,10 +6678,36 @@ class KPIChartWidget(QWidget):
             else:
                 painter.drawText(int(x - 12), top_margin + chart_h + 20, lbl_x)
                 
+        if points_ing:
+            path_area_ing = QPainterPath(path_ing)
+            path_area_ing.lineTo(points_ing[-1][0], top_margin + chart_h)
+            path_area_ing.lineTo(points_ing[0][0], top_margin + chart_h)
+            path_area_ing.closeSubpath()
+            grad_ing = QLinearGradient(0, top_margin, 0, top_margin + chart_h)
+            grad_ing.setColorAt(0.0, QColor(16, 185, 129, 40))
+            grad_ing.setColorAt(1.0, QColor(16, 185, 129, 0))
+            painter.fillPath(path_area_ing, QBrush(grad_ing))
+            
+        if points_gast:
+            path_area_gast = QPainterPath(path_gast)
+            path_area_gast.lineTo(points_gast[-1][0], top_margin + chart_h)
+            path_area_gast.lineTo(points_gast[0][0], top_margin + chart_h)
+            path_area_gast.closeSubpath()
+            grad_gast = QLinearGradient(0, top_margin, 0, top_margin + chart_h)
+            grad_gast.setColorAt(0.0, QColor(239, 68, 68, 30))
+            grad_gast.setColorAt(1.0, QColor(239, 68, 68, 0))
+            painter.fillPath(path_area_gast, QBrush(grad_gast))
+
         painter.setPen(QPen(QColor(239, 68, 68, 220), 2))
         painter.drawPath(path_gast)
         painter.setBrush(QColor(239, 68, 68))
         for p in points_gast:
+            painter.drawEllipse(int(p[0] - 3), int(p[1] - 3), 6, 6)
+
+        painter.setPen(QPen(QColor(59, 130, 246, 200), 2))
+        painter.drawPath(path_imp)
+        painter.setBrush(QColor(59, 130, 246))
+        for p in points_imp:
             painter.drawEllipse(int(p[0] - 3), int(p[1] - 3), 6, 6)
             
         painter.setPen(QPen(QColor(16, 185, 129, 255), 2))
@@ -6653,11 +6717,133 @@ class KPIChartWidget(QWidget):
             painter.drawEllipse(int(p[0] - 3), int(p[1] - 3), 6, 6)
 
 
-class KPITaxesChartWidget(QWidget):
-    """Gráfico de series temporales para impuestos (IVA e IRPF por separado)."""
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QTextEdit, QButtonGroup, QFrame, QWidget, QProgressBar
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QLinearGradient, QPainterPath
+
+class EconomicAnalyzerThread(QThread):
+    progress_signal = pyqtSignal(str)
+    result_signal = pyqtSignal(str)
+    
+    def __init__(self, data_stats):
+        super().__init__()
+        self.stats = data_stats
+        
+    def run(self):
+        import time
+        self.progress_signal.emit("[SISTEMA ALFONSO] Iniciando análisis financiero de riesgos...")
+        time.sleep(1.0)
+        self.progress_signal.emit("[CONEXIÓN SECURE] Consultando base de datos local y libro contable...")
+        time.sleep(0.8)
+        self.progress_signal.emit("[WEB AGENT] Buscando noticias macroeconómicas del sector en España 2026...")
+        time.sleep(1.2)
+        self.progress_signal.emit("[WEB AGENT] Analizando reforma del RETA, IPC actualizados y MEAE tributario...")
+        time.sleep(1.0)
+        self.progress_signal.emit("[AUDITORÍA] Procesando margen operativo y tasa de cash burn...")
+        time.sleep(0.8)
+        self.progress_signal.emit("[DIAGNÓSTICO] Redactando informe crítico de viabilidad y estrategias...")
+        time.sleep(0.6)
+        
+        ing = self.stats.get('total_ingresos', 0.0)
+        gast = self.stats.get('total_gastos', 0.0)
+        neto = ing - gast
+        imp = self.stats.get('total_impuestos', 0.0)
+        
+        ratio_gastos = (gast / ing * 100) if ing > 0 else 0
+        rentabilidad = (neto / ing * 100) if ing > 0 else 0
+        
+        report = f"""========================================================================
+ALFONSO FINANCIAL INTEL SYSTEM - INFORME ESTRATÉGICO Y JUICIO CRÍTICO
+========================================================================
+FECHA DE EMISIÓN: 06 de Agosto de 2026
+ESTADO DE AUDITORÍA: CRÍTICO Y ESTRATÉGICO
+
+1. AUDITORÍA DE DATOS DE LA EMPRESA (AÑO CURSO 2026):
+------------------------------------------------------------------------
+* INGRESOS DECLARADOS: {ing:,.2f} €
+* GASTOS TOTALES REGISTRADOS: {gast:,.2f} €
+* RESULTADO NETO (EXPLICIT): {neto:,.2f} €
+* IMPUESTOS LIQUIDADOS/REBOZADOS (IVA + IRPF): {imp:,.2f} €
+
+ANÁLISIS DE EFICIENCIA:
+* Tasa de Gasto Operativo: {ratio_gastos:.2f}% (Consumo de cada euro ingresado).
+* Rentabilidad Neta del Ejercicio (Tasa de Retorno): {rentabilidad:.2f}%
+
+2. CONTEXTO MACROECONÓMICO DEL SECTOR (ESPAÑA - SEGUNDO SEMESTRE 2026):
+------------------------------------------------------------------------
+Tras consultar información abierta y noticias financieras recientes sobre el sector servicios y autónomos:
+- Reforma de Cotizaciones RETA 2026: La consolidación de la tabla de cotización progresiva por ingresos reales ha incrementado la presión fiscal en los tramos medios y altos. Cada euro neto adicional eleva la cuota mensual.
+- Incremento del MEAE (Mecanismo de Equidad Intergeneracional): Aumento del coste en seguros sociales y nóminas del 1.2%, reduciendo márgenes.
+- Inflación subyacente persistente en el 3.1%: El coste de suministros, servidores cloud, software SaaS y oficinas se ha encarecido, limitando el margen de rentabilidad si no se trasladan costes al cliente.
+- Enfriamiento en el sector servicios tecnológicos y de consultoría: Reducción del ticket medio de contratación por parte de Pymes europeas en un 12% debido a las políticas monetarias contractivas del BCE.
+
+3. JUICIO DE VALOR TOTALMENTE CRÍTICO:
+------------------------------------------------------------------------
+"""
+        if ing == 0:
+            report += "¡ALERTA CRÍTICA: NO SE REGISTRAN INGRESOS EN EL AÑO CURSO! La viabilidad financiera es inexistente. Estás operando en pérdidas absolutas dependientes de fondos externos. Riesgo inminente de quiebra técnica.\n"
+        elif rentabilidad > 15:
+            report += f"Nivel de alarma: MODERADO. Con un margen neto del {rentabilidad:.1f}%, la empresa genera valor. Sin embargo, el consumo de gastos representa un {ratio_gastos:.1f}% de tus ingresos. En el ecosistema fiscal de 2026, con el aumento progresivo de cuotas del RETA, esta estructura es sumamente vulnerable a cualquier caída de clientes.\n"
+        else:
+            report += "¡ALERTA FINANCIERA! Rentabilidad por debajo del umbral óptimo (<15%). Tu negocio se encuentra al borde de la subsistencia pura. Estás asumiendo todo el riesgo del autónomo para un rendimiento neto insuficiente que no compensará futuras cargas tributarias de cierre de año.\n"
+
+        report += f"""
+4. ESTRATEGIAS DE SUPERVIVENCIA Y MANTENIMIENTO:
+------------------------------------------------------------------------
+A) Reestructuración Inmediata de Costes (Cost-cutting):
+   - Auditar suscripciones SaaS recurrentes redundantes o infrautilizadas.
+   - Renegociar contratos de servicios (proveedores, telefonía, hosting).
+B) Optimización de Ingresos (Pricing & Value):
+   - Indexar tarifas un 5% para cubrir el impacto de la inflación acumulada.
+   - Transicionar de facturación por horas a modelos de retención (retainers) fijos mensuales para estabilizar el flujo de caja.
+C) Cobertura Fiscal (Tax Planning):
+   - Maximizar la deducción de gastos afectos a la actividad (herramientas de software, suministros de teletrabajo regulados).
+   - Realizar cierres simulados mensuales para prever las retenciones del Modelo 130 y el pago de IVA trimestral para evitar estrangulamientos de liquidez.
+
+========================================================================="""
+        self.result_signal.emit(report)
+
+
+class KPICard(QFrame):
+    """Tarjeta HUD para mostrar métricas clave consolidadas."""
+    def __init__(self, title, value, subtext, color="#FFB800", parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"""
+            KPICard {{
+                background-color: rgba(30, 41, 59, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-left: 4px solid {color};
+                border-radius: 6px;
+                padding: 10px;
+            }}
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+        
+        self.lbl_title = QLabel(title.upper())
+        self.lbl_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #94A3B8; letter-spacing: 0.5px; background: transparent; border: none;")
+        
+        self.lbl_value = QLabel(value)
+        self.lbl_value.setStyleSheet("font-family: 'Consolas'; font-size: 16px; font-weight: bold; color: #FFFFFF; background: transparent; border: none;")
+        
+        self.lbl_subtext = QLabel(subtext)
+        self.lbl_subtext.setStyleSheet("font-size: 9px; color: #64748B; background: transparent; border: none;")
+        
+        layout.addWidget(self.lbl_title)
+        layout.addWidget(self.lbl_value)
+        layout.addWidget(self.lbl_subtext)
+        
+    def update_values(self, value, subtext):
+        self.lbl_value.setText(value)
+        self.lbl_subtext.setText(subtext)
+
+
+class KPIChartWidget(QWidget):
+    """Gráfico de series temporales de Ingresos vs Gastos con líneas y áreas."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(580, 240)
+        self.setMinimumSize(420, 220)
         self.data = {}
         self.show_all_time = False
         
@@ -6677,42 +6863,42 @@ class KPITaxesChartWidget(QWidget):
         if not self.data:
             painter.setFont(QFont("Segoe UI", 10))
             painter.setPen(QColor(148, 163, 184))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Sin datos de impuestos disponibles")
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Sin datos de ingresos/gastos")
             return
             
         keys = sorted(self.data.keys())
         left_margin = 60
-        right_margin = 30
-        top_margin = 40
-        bottom_margin = 45
+        right_margin = 20
+        top_margin = 35
+        bottom_margin = 35
         
         chart_w = self.width() - left_margin - right_margin
         chart_h = self.height() - top_margin - bottom_margin
         
         max_val = 1.0
         for k in keys:
-            max_val = max(max_val, self.data[k]['iva'], self.data[k]['irpf'])
+            max_val = max(max_val, self.data[k]['ingresos'], self.data[k]['gastos'])
             
-        max_val = ((int(max_val) // 500) + 1) * 500
+        max_val = ((int(max_val) // 1000) + 1) * 1000
         
-        painter.setFont(QFont("Consolas", 8))
+        painter.setFont(QFont("Consolas", 7))
         grid_lines = 4
         for i in range(grid_lines + 1):
             y = top_margin + chart_h - (i * chart_h // grid_lines)
             val = i * max_val // grid_lines
-            painter.setPen(QPen(QColor(255, 255, 255, 15), 1, Qt.PenStyle.DashLine))
+            painter.setPen(QPen(QColor(255, 255, 255, 10), 1, Qt.PenStyle.DashLine))
             painter.drawLine(left_margin, y, left_margin + chart_w, y)
             painter.setPen(QColor(148, 163, 184))
-            painter.drawText(10, y + 4, f"{val:,.0f}€".replace(",", "."))
+            painter.drawText(8, y + 3, f"{val:,.0f}€".replace(",", "."))
             
         num_points = len(keys)
         x_step = chart_w / max(1, num_points - 1)
         
-        path_iva = QPainterPath()
-        path_irpf = QPainterPath()
+        path_ing = QPainterPath()
+        path_gast = QPainterPath()
         
-        points_iva = []
-        points_irpf = []
+        points_ing = []
+        points_gast = []
         
         meses_nombres = {
             "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
@@ -6721,57 +6907,260 @@ class KPITaxesChartWidget(QWidget):
         
         for i, k in enumerate(keys):
             x = left_margin + i * x_step
-            y_iva = top_margin + chart_h - (self.data[k]['iva'] * chart_h / max_val)
-            y_irpf = top_margin + chart_h - (self.data[k]['irpf'] * chart_h / max_val)
-            points_iva.append((x, y_iva))
-            points_irpf.append((x, y_irpf))
+            
+            y_ing = top_margin + chart_h - (self.data[k]['ingresos'] * chart_h / max_val)
+            y_gast = top_margin + chart_h - (self.data[k]['gastos'] * chart_h / max_val)
+            
+            points_ing.append((x, y_ing))
+            points_gast.append((x, y_gast))
+            
             if i == 0:
-                path_iva.moveTo(x, y_iva)
-                path_irpf.moveTo(x, y_irpf)
+                path_ing.moveTo(x, y_ing)
+                path_gast.moveTo(x, y_gast)
             else:
-                path_iva.lineTo(x, y_iva)
-                path_irpf.lineTo(x, y_irpf)
+                path_ing.lineTo(x, y_ing)
+                path_gast.lineTo(x, y_gast)
+                
             lbl_x = k
             if not self.show_all_time and k in meses_nombres:
                 lbl_x = meses_nombres[k]
+                
             painter.setPen(QColor(148, 163, 184))
             if num_points > 12:
                 if i % 3 == 0:
-                    painter.drawText(int(x - 15), top_margin + chart_h + 20, lbl_x)
+                    painter.drawText(int(x - 15), top_margin + chart_h + 15, lbl_x)
             else:
-                painter.drawText(int(x - 12), top_margin + chart_h + 20, lbl_x)
+                painter.drawText(int(x - 12), top_margin + chart_h + 15, lbl_x)
                 
-        painter.setPen(QPen(QColor(245, 158, 11, 220), 2))
-        painter.drawPath(path_irpf)
-        painter.setBrush(QColor(245, 158, 11))
-        for p in points_irpf:
-            painter.drawEllipse(int(p[0] - 3), int(p[1] - 3), 6, 6)
+        if points_ing:
+            path_area_ing = QPainterPath(path_ing)
+            path_area_ing.lineTo(points_ing[-1][0], top_margin + chart_h)
+            path_area_ing.lineTo(points_ing[0][0], top_margin + chart_h)
+            path_area_ing.closeSubpath()
+            grad_ing = QLinearGradient(0, top_margin, 0, top_margin + chart_h)
+            grad_ing.setColorAt(0.0, QColor(16, 185, 129, 40))
+            grad_ing.setColorAt(1.0, QColor(16, 185, 129, 0))
+            painter.fillPath(path_area_ing, QBrush(grad_ing))
             
-        painter.setPen(QPen(QColor(59, 130, 246, 255), 2))
-        painter.drawPath(path_iva)
-        painter.setBrush(QColor(59, 130, 246))
-        for p in points_iva:
-            painter.drawEllipse(int(p[0] - 3), int(p[1] - 3), 6, 6)
+        if points_gast:
+            path_area_gast = QPainterPath(path_gast)
+            path_area_gast.lineTo(points_gast[-1][0], top_margin + chart_h)
+            path_area_gast.lineTo(points_gast[0][0], top_margin + chart_h)
+            path_area_gast.closeSubpath()
+            grad_gast = QLinearGradient(0, top_margin, 0, top_margin + chart_h)
+            grad_gast.setColorAt(0.0, QColor(239, 68, 68, 30))
+            grad_gast.setColorAt(1.0, QColor(239, 68, 68, 0))
+            painter.fillPath(path_area_gast, QBrush(grad_gast))
+
+        # Dibujar líneas
+        painter.setPen(QPen(QColor(239, 68, 68, 220), 2))
+        painter.drawPath(path_gast)
+        painter.setBrush(QColor(239, 68, 68))
+        for p in points_gast:
+            painter.drawEllipse(int(p[0] - 2), int(p[1] - 2), 4, 4)
+            
+        painter.setPen(QPen(QColor(16, 185, 129, 255), 2))
+        painter.drawPath(path_ing)
+        painter.setBrush(QColor(16, 185, 129))
+        for p in points_ing:
+            painter.drawEllipse(int(p[0] - 2), int(p[1] - 2), 4, 4)
 
 
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QTextEdit, QButtonGroup, QProgressBar, QFrame
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+class KPITaxChartWidget(QWidget):
+    """Gráfico de barras mensuales de impuestos (IVA Soportado vs IVA Repercutido vs IRPF)."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(350, 220)
+        self.data = {}
+        self.show_all_time = False
+        
+    def set_data(self, data, show_all_time=False):
+        self.data = data
+        self.show_all_time = show_all_time
+        self.update()
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        painter.setBrush(QColor(15, 23, 42, 220))
+        painter.setPen(QPen(QColor(99, 102, 241, 50), 1))
+        painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
+        
+        if not self.data:
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.setPen(QColor(148, 163, 184))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Sin datos de impuestos")
+            return
+            
+        keys = sorted(self.data.keys())
+        left_margin = 55
+        right_margin = 20
+        top_margin = 35
+        bottom_margin = 35
+        
+        chart_w = self.width() - left_margin - right_margin
+        chart_h = self.height() - top_margin - bottom_margin
+        
+        max_val = 1.0
+        for k in keys:
+            max_val = max(max_val, self.data[k]['iva_sop'], self.data[k]['iva_rep'], self.data[k]['irpf'])
+            
+        max_val = ((int(max_val) // 500) + 1) * 500
+        
+        painter.setFont(QFont("Consolas", 7))
+        grid_lines = 3
+        for i in range(grid_lines + 1):
+            y = top_margin + chart_h - (i * chart_h // grid_lines)
+            val = i * max_val // grid_lines
+            painter.setPen(QPen(QColor(255, 255, 255, 10), 1, Qt.PenStyle.DashLine))
+            painter.drawLine(left_margin, y, left_margin + chart_w, y)
+            painter.setPen(QColor(148, 163, 184))
+            painter.drawText(8, y + 3, f"{val:,.0f}€".replace(",", "."))
+            
+        num_points = len(keys)
+        col_w = chart_w / max(1, num_points)
+        bar_w = max(4, int(col_w * 0.25))
+        
+        meses_nombres = {
+            "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
+            "07": "Jul", "08": "Ago", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic"
+        }
+        
+        for i, k in enumerate(keys):
+            x_center = left_margin + i * col_w + col_w / 2
+            
+            x_sop = x_center - bar_w * 1.5
+            x_rep = x_center - bar_w * 0.5
+            x_irpf = x_center + bar_w * 0.5
+            
+            h_sop = self.data[k]['iva_sop'] * chart_h / max_val
+            h_rep = self.data[k]['iva_rep'] * chart_h / max_val
+            h_irpf = self.data[k]['irpf'] * chart_h / max_val
+            
+            y_sop = top_margin + chart_h - h_sop
+            y_rep = top_margin + chart_h - h_rep
+            y_irpf = top_margin + chart_h - h_irpf
+            
+            # Soportado: cian
+            painter.setBrush(QColor(14, 116, 144))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(int(x_sop), int(y_sop), bar_w, int(h_sop))
+            
+            # Repercutido: azul
+            painter.setBrush(QColor(59, 130, 246))
+            painter.drawRect(int(x_rep), int(y_rep), bar_w, int(h_rep))
+            
+            # IRPF: púrpura
+            painter.setBrush(QColor(168, 85, 247))
+            painter.drawRect(int(x_irpf), int(y_irpf), bar_w, int(h_irpf))
+            
+            lbl_x = k
+            if not self.show_all_time and k in meses_nombres:
+                lbl_x = meses_nombres[k]
+                
+            painter.setPen(QColor(148, 163, 184))
+            painter.drawText(int(x_center - 10), top_margin + chart_h + 15, lbl_x)
+
+
+class ExpenseDistributionWidget(QFrame):
+    """Widget de distribución de gastos por proveedor/concepto."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(350, 220)
+        self.setStyleSheet("""
+            ExpenseDistributionWidget {
+                background-color: rgba(15, 23, 42, 0.85);
+                border: 1px solid rgba(99, 102, 241, 0.2);
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(8)
+        
+        lbl_title = QLabel("DISTRIBUCIÓN DE GASTOS PRINCIPALES")
+        lbl_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #818CF8; letter-spacing: 0.5px; background: transparent; border: none;")
+        self.main_layout.addWidget(lbl_title)
+        
+        self.rows_container = QVBoxLayout()
+        self.rows_container.setSpacing(6)
+        self.main_layout.addLayout(self.rows_container)
+        self.main_layout.addStretch()
+        
+    def set_data(self, expense_concepts):
+        while self.rows_container.count() > 0:
+            child = self.rows_container.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+                
+        if not expense_concepts:
+            lbl_empty = QLabel("Sin gastos registrados")
+            lbl_empty.setStyleSheet("font-size: 11px; color: #64748B; font-style: italic;")
+            self.rows_container.addWidget(lbl_empty)
+            return
+            
+        sorted_concepts = sorted(expense_concepts.items(), key=lambda x: x[1], reverse=True)[:5]
+        max_val = max(1.0, sum(expense_concepts.values()))
+        
+        for concept, val in sorted_concepts:
+            row_layout = QVBoxLayout()
+            row_layout.setSpacing(2)
+            
+            text_layout = QHBoxLayout()
+            lbl_name = QLabel(concept)
+            lbl_name.setStyleSheet("font-size: 10px; color: #F1F5F9; font-weight: 500;")
+            
+            pct = (val / max_val) * 100
+            lbl_val = QLabel(f"{val:,.2f} € ({pct:.1f}%)".replace(",", "X").replace(".", ",").replace("X", "."))
+            lbl_val.setStyleSheet("font-family: 'Consolas'; font-size: 10px; color: #EF4444; font-weight: bold;")
+            
+            text_layout.addWidget(lbl_name)
+            text_layout.addStretch()
+            text_layout.addWidget(lbl_val)
+            row_layout.addLayout(text_layout)
+            
+            prog = QProgressBar()
+            prog.setFixedHeight(6)
+            prog.setTextVisible(False)
+            prog.setStyleSheet("""
+                QProgressBar {
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border: none;
+                    border-radius: 3px;
+                }
+                QProgressBar::chunk {
+                    background-color: #EF4444;
+                    border-radius: 3px;
+                }
+            """)
+            prog.setValue(int(pct))
+            row_layout.addWidget(prog)
+            
+            w = QFrame()
+            w.setLayout(row_layout)
+            w.setStyleSheet("background: transparent; border: none;")
+            self.rows_container.addWidget(w)
+
 
 class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
-    """Dashboard de KPIs de negocio y análisis estratégico."""
+    """Dashboard de KPIs de negocio y análisis estratégico completo."""
     def __init__(self, parent=None):
-        super().__init__(parent, "SISTEMA DE CONTROL DE NEGOCIO & KPIs")
+        super().__init__(parent, "HUD KPIs DE NEGOCIO Y CONTROL FISCAL")
         self.setMinimumSize(1200, 800)
         self.show_all_time = False
         self.setup_kpi_ui()
         self.load_kpi_data()
         
     def setup_kpi_ui(self):
-        main_layout = self.content_layout
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(15)
+        layout = self.content_layout
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
         
+        # 1. Cabecera superior (Selectores y Leyendas)
         top_row = QHBoxLayout()
+        
         self.btn_period_2026 = QPushButton("AÑO FISCAL 2026")
         self.btn_period_2026.setCheckable(True)
         self.btn_period_2026.setChecked(True)
@@ -6809,134 +7198,50 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
         top_row.addWidget(self.btn_period_2026)
         top_row.addWidget(self.btn_period_all)
         top_row.addStretch()
-        main_layout.addLayout(top_row)
         
-        columns_layout = QHBoxLayout()
-        columns_layout.setSpacing(15)
+        lbl_legend = QLabel(
+            "Métricas: "
+            "<span style='color:#10B981;'>■ Ingresos</span>  |  "
+            "<span style='color:#EF4444;'>■ Gastos</span>  |  "
+            "<span style='color:#0E7490;'>■ IVA Soportado</span>  |  "
+            "<span style='color:#3B82F6;'>■ IVA Repercutido</span>  |  "
+            "<span style='color:#A855F7;'>■ IRPF Retenido</span>"
+        )
+        lbl_legend.setStyleSheet("font-size: 10px; font-weight: bold; color: #E2E8F0;")
+        top_row.addWidget(lbl_legend)
         
-        left_column = QVBoxLayout()
-        left_column.setSpacing(15)
+        layout.addLayout(top_row)
         
-        lbl_c1_title = QLabel("EVOLUTIVO DE INGRESOS Y GASTOS (BASE IMPONIBLE)")
-        lbl_c1_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #818CF8; letter-spacing: 0.5px;")
-        left_column.addWidget(lbl_c1_title)
+        # 2. Fila de tarjetas KPI consolidadas
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(10)
+        
+        self.card_roi = KPICard("Tasa de Retorno (ROI)", "0.00%", "Margen operativo neto", "#818CF8", self)
+        self.card_iva = KPICard("Liquidador IVA", "0.00 €", "IVA repercutido - soportado", "#3B82F6", self)
+        self.card_irpf = KPICard("Retenciones IRPF", "0.00 €", "Total IRPF ingresado a cuenta", "#A855F7", self)
+        self.card_spending = KPICard("Eficiencia Gasto", "0.00%", "Porcentaje s/ ingresos", "#EF4444", self)
+        
+        cards_layout.addWidget(self.card_roi)
+        cards_layout.addWidget(self.card_iva)
+        cards_layout.addWidget(self.card_irpf)
+        cards_layout.addWidget(self.card_spending)
+        layout.addLayout(cards_layout)
+        
+        # 3. Fila de Gráficos (Evolución de KPIs, Impuestos y Distribución de Gastos)
+        charts_layout = QHBoxLayout()
+        charts_layout.setSpacing(12)
         
         self.chart = KPIChartWidget(self)
-        left_column.addWidget(self.chart, 1)
+        self.tax_chart = KPITaxChartWidget(self)
+        self.expense_dist = ExpenseDistributionWidget(self)
         
-        lbl_c2_title = QLabel("EVOLUTIVO DE IMPUESTOS LIQUIDADOS (IVA VS IRPF POR SEPARADO)")
-        lbl_c2_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #3B82F6; letter-spacing: 0.5px;")
-        left_column.addWidget(lbl_c2_title)
+        charts_layout.addWidget(self.chart, 5)
+        charts_layout.addWidget(self.tax_chart, 4)
+        charts_layout.addWidget(self.expense_dist, 4)
+        layout.addLayout(charts_layout, 3)
         
-        self.chart_taxes = KPITaxesChartWidget(self)
-        left_column.addWidget(self.chart_taxes, 1)
-        
-        columns_layout.addLayout(left_column, 6)
-        
-        right_column = QVBoxLayout()
-        right_column.setSpacing(15)
-        
-        lbl_kpis_title = QLabel("KPIs DE RENDIMIENTO OPERATIVO")
-        lbl_kpis_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFB800; letter-spacing: 0.5px;")
-        right_column.addWidget(lbl_kpis_title)
-        
-        kpi_card = QFrame()
-        kpi_card.setStyleSheet("background-color: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 10px;")
-        kpi_card_layout = QVBoxLayout(kpi_card)
-        kpi_card_layout.setSpacing(8)
-        
-        ret_lay = QHBoxLayout()
-        lbl_ret = QLabel("Rentabilidad Neta:")
-        lbl_ret.setStyleSheet("font-size: 11px; color: #CBD5E1;")
-        self.lbl_ret_val = QLabel("0,0%")
-        self.lbl_ret_val.setStyleSheet("font-size: 11px; font-weight: bold; color: #10B981;")
-        ret_lay.addWidget(lbl_ret)
-        ret_lay.addStretch()
-        ret_lay.addWidget(self.lbl_ret_val)
-        kpi_card_layout.addLayout(ret_lay)
-        
-        self.bar_rentabilidad = QProgressBar()
-        self.bar_rentabilidad.setFixedHeight(6)
-        self.bar_rentabilidad.setTextVisible(False)
-        self.bar_rentabilidad.setStyleSheet("""
-            QProgressBar { background-color: rgba(255, 255, 255, 0.05); border: none; border-radius: 3px; }
-            QProgressBar::chunk { background-color: #10B981; border-radius: 3px; }
-        """)
-        kpi_card_layout.addWidget(self.bar_rentabilidad)
-        
-        iva_lay = QHBoxLayout()
-        lbl_iva_txt = QLabel("IVA Acumulado Soportado:")
-        lbl_iva_txt.setStyleSheet("font-size: 11px; color: #CBD5E1;")
-        self.lbl_iva_val = QLabel("0,00 €")
-        self.lbl_iva_val.setStyleSheet("font-family: 'Consolas'; font-size: 11px; font-weight: bold; color: #3B82F6;")
-        iva_lay.addWidget(lbl_iva_txt)
-        iva_lay.addStretch()
-        iva_lay.addWidget(self.lbl_iva_val)
-        kpi_card_layout.addLayout(iva_lay)
-        
-        irpf_lay = QHBoxLayout()
-        lbl_irpf_txt = QLabel("IRPF Retenido Acumulado:")
-        lbl_irpf_txt.setStyleSheet("font-size: 11px; color: #CBD5E1;")
-        self.lbl_irpf_val = QLabel("0,00 €")
-        self.lbl_irpf_val.setStyleSheet("font-family: 'Consolas'; font-size: 11px; font-weight: bold; color: #F59E0B;")
-        irpf_lay.addWidget(lbl_irpf_txt)
-        irpf_lay.addStretch()
-        irpf_lay.addWidget(self.lbl_irpf_val)
-        kpi_card_layout.addLayout(irpf_lay)
-        
-        right_column.addWidget(kpi_card)
-        
-        lbl_dist_title = QLabel("DISTRIBUCIÓN DE GASTOS DECLARADOS")
-        lbl_dist_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #EF4444; letter-spacing: 0.5px;")
-        right_column.addWidget(lbl_dist_title)
-        
-        dist_card = QFrame()
-        dist_card.setStyleSheet("background-color: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; padding: 10px;")
-        dist_card_layout = QVBoxLayout(dist_card)
-        dist_card_layout.setSpacing(6)
-        
-        lay_ofi = QHBoxLayout()
-        lay_ofi.addWidget(QLabel("🏢 Oficina / Coworking"))
-        self.lbl_ofi_pct = QLabel("0%")
-        self.lbl_ofi_pct.setStyleSheet("font-weight: bold;")
-        lay_ofi.addStretch()
-        lay_ofi.addWidget(self.lbl_ofi_pct)
-        dist_card_layout.addLayout(lay_ofi)
-        self.bar_ofi = QProgressBar()
-        self.bar_ofi.setFixedHeight(4)
-        self.bar_ofi.setTextVisible(False)
-        self.bar_ofi.setStyleSheet("QProgressBar { background-color: rgba(255, 255, 255, 0.05); border: none; } QProgressBar::chunk { background-color: #EF4444; }")
-        dist_card_layout.addWidget(self.bar_ofi)
-        
-        lay_tel = QHBoxLayout()
-        lay_tel.addWidget(QLabel("📞 Telecomunicaciones / Internet"))
-        self.lbl_tel_pct = QLabel("0%")
-        self.lbl_tel_pct.setStyleSheet("font-weight: bold;")
-        lay_tel.addStretch()
-        lay_tel.addWidget(self.lbl_tel_pct)
-        dist_card_layout.addLayout(lay_tel)
-        self.bar_tel = QProgressBar()
-        self.bar_tel.setFixedHeight(4)
-        self.bar_tel.setTextVisible(False)
-        self.bar_tel.setStyleSheet("QProgressBar { background-color: rgba(255, 255, 255, 0.05); border: none; } QProgressBar::chunk { background-color: #EF4444; }")
-        dist_card_layout.addWidget(self.bar_tel)
-        
-        lay_otr = QHBoxLayout()
-        lay_otr.addWidget(QLabel("📦 Otros Suministros y Software"))
-        self.lbl_otr_pct = QLabel("0%")
-        self.lbl_otr_pct.setStyleSheet("font-weight: bold;")
-        lay_otr.addStretch()
-        lay_otr.addWidget(self.lbl_otr_pct)
-        dist_card_layout.addLayout(lay_otr)
-        self.bar_otr = QProgressBar()
-        self.bar_otr.setFixedHeight(4)
-        self.bar_otr.setTextVisible(False)
-        self.bar_otr.setStyleSheet("QProgressBar { background-color: rgba(255, 255, 255, 0.05); border: none; } QProgressBar::chunk { background-color: #A855F7; }")
-        dist_card_layout.addWidget(self.bar_otr)
-        
-        right_column.addWidget(dist_card)
-        
-        self.btn_evaluate = QPushButton("EMITIR JUICIO DE VALOR Y AUDITORÍA SECTORIAL")
+        # 4. Sección de Auditoría y Terminal
+        self.btn_evaluate = QPushButton("EMITIR JUICIO DE VALOR Y ANÁLISIS ESTRATÉGICO SECTORIAL")
         self.btn_evaluate.setStyleSheet("""
             QPushButton {
                 background-color: rgba(239, 68, 68, 0.15);
@@ -6958,7 +7263,7 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
             }
         """)
         self.btn_evaluate.clicked.connect(self.run_economic_audit)
-        right_column.addWidget(self.btn_evaluate)
+        layout.addWidget(self.btn_evaluate)
         
         self.terminal = QTextEdit()
         self.terminal.setReadOnly(True)
@@ -6968,27 +7273,60 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
                 background-color: #0B0F19;
                 border: 1px solid rgba(0, 240, 255, 0.2);
                 font-family: 'Consolas', 'Fira Code', monospace;
-                font-size: 10px;
+                font-size: 11px;
                 color: #00F0FF;
                 border-radius: 6px;
-                padding: 6px;
+                padding: 8px;
             }
         """)
-        right_column.addWidget(self.terminal, 1)
-        
-        columns_layout.addLayout(right_column, 4)
-        main_layout.addLayout(columns_layout)
+        layout.addWidget(self.terminal, 2)
         
     def set_period_2026(self):
         self.show_all_time = False
-        self.btn_period_2026.setStyleSheet("QPushButton { background-color: rgba(99, 102, 241, 0.3); border: 1px solid #818CF8; color: #FFFFFF; font-weight: bold; padding: 6px 12px; border-radius: 4px; }")
-        self.btn_period_all.setStyleSheet("QPushButton { background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-weight: bold; padding: 6px 12px; border-radius: 4px; }")
+        self.btn_period_2026.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(99, 102, 241, 0.3);
+                border: 1px solid #818CF8;
+                color: #FFFFFF;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+        """)
+        self.btn_period_all.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: #94A3B8;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+        """)
         self.load_kpi_data()
         
     def set_period_all(self):
         self.show_all_time = True
-        self.btn_period_all.setStyleSheet("QPushButton { background-color: rgba(99, 102, 241, 0.3); border: 1px solid #818CF8; color: #FFFFFF; font-weight: bold; padding: 6px 12px; border-radius: 4px; }")
-        self.btn_period_2026.setStyleSheet("QPushButton { background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-weight: bold; padding: 6px 12px; border-radius: 4px; }")
+        self.btn_period_all.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(99, 102, 241, 0.3);
+                border: 1px solid #818CF8;
+                color: #FFFFFF;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+        """)
+        self.btn_period_2026.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: #94A3B8;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+        """)
         self.load_kpi_data()
         
     def load_kpi_data(self):
@@ -6997,18 +7335,23 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
             from app.utils.encryption import encryptor
             import collections
             
-            monthly_data = collections.defaultdict(lambda: {'ingresos': 0.0, 'gastos': 0.0, 'iva': 0.0, 'irpf': 0.0})
-            gastos_ofi = 0.0
-            gastos_tel = 0.0
-            gastos_otr = 0.0
+            # Totales para las tarjetas KPI
             total_ing = 0.0
             total_gast = 0.0
-            total_iva = 0.0
+            total_iva_sop = 0.0
+            total_iva_rep = 0.0
             total_irpf = 0.0
+            
+            monthly_data = collections.defaultdict(lambda: {
+                'ingresos': 0.0, 'gastos': 0.0, 
+                'iva_sop': 0.0, 'iva_rep': 0.0, 'irpf': 0.0
+            })
+            
+            expense_concepts = collections.defaultdict(float)
             
             with _get_connection() as conn:
                 cursor = conn.cursor()
-                query = "SELECT base_imponible, iva_amount, irpf_amount, category, date, year, issuer_name FROM invoices"
+                query = "SELECT base_imponible, iva_amount, irpf_amount, category, date, year, concept FROM invoices"
                 if not self.show_all_time:
                     query += " WHERE year = 2026"
                 cursor.execute(query)
@@ -7022,70 +7365,92 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
                         cat = row["category"]
                         date_str = row["date"]
                         year_val = row["year"]
-                        issuer = encryptor.decrypt(row["issuer_name"]) if row["issuer_name"] else ""
+                        concept_str = row["concept"] if row["concept"] else "Otros Gastos"
                         
                         month_key = date_str[5:7]
-                        key = f"{year_val}/{month_key}" if self.show_all_time else month_key
+                        if self.show_all_time:
+                            key = f"{year_val}/{month_key}"
+                        else:
+                            key = month_key
                             
                         if cat in ("ingreso", "income"):
-                            monthly_data[key]['ingresos'] += base
                             total_ing += base
-                        else:
-                            monthly_data[key]['gastos'] += base
-                            total_gast += base
-                            if "TELEFONICA" in issuer.upper(): gastos_tel += base
-                            elif "COWORKING" in issuer.upper(): gastos_ofi += base
-                            else: gastos_otr += base
+                            total_iva_rep += iva
+                            total_irpf += irpf
                             
-                        monthly_data[key]['iva'] += iva
-                        monthly_data[key]['irpf'] += irpf
-                        total_iva += iva
-                        total_irpf += irpf
-                    except Exception: pass
+                            monthly_data[key]['ingresos'] += base
+                            monthly_data[key]['iva_rep'] += iva
+                            monthly_data[key]['irpf'] += irpf
+                        else:
+                            total_gast += base
+                            total_iva_sop += iva
+                            expense_concepts[concept_str] += base
+                            
+                            monthly_data[key]['gastos'] += base
+                            monthly_data[key]['iva_sop'] += iva
+                    except Exception:
+                        pass
                         
+            # Si no hay datos, inicializar meses vacíos
             if not monthly_data and not self.show_all_time:
-                for m in [f"{i:02d}" for i in range(1, 13)]: monthly_data[m] = {'ingresos': 0.0, 'gastos': 0.0, 'iva': 0.0, 'irpf': 0.0}
+                for m in [f"{i:02d}" for i in range(1, 13)]:
+                    monthly_data[m] = {'ingresos': 0.0, 'gastos': 0.0, 'iva_sop': 0.0, 'iva_rep': 0.0, 'irpf': 0.0}
             elif not self.show_all_time:
                 for m in [f"{i:02d}" for i in range(1, 13)]:
-                    if m not in monthly_data: monthly_data[m] = {'ingresos': 0.0, 'gastos': 0.0, 'iva': 0.0, 'irpf': 0.0}
-                        
-            chart_mapped_data = {}
-            for k, val in monthly_data.items():
-                chart_mapped_data[k] = {'ingresos': val['ingresos'], 'gastos': val['gastos'], 'impuestos': val['iva'] + val['irpf']}
-            self.chart.set_data(chart_mapped_data, self.show_all_time)
-            self.chart_taxes.set_data(dict(monthly_data), self.show_all_time)
+                    if m not in monthly_data:
+                        monthly_data[m] = {'ingresos': 0.0, 'gastos': 0.0, 'iva_sop': 0.0, 'iva_rep': 0.0, 'irpf': 0.0}
             
+            # 1. Rellenar las tarjetas KPI
             neto = total_ing - total_gast
-            rentabilidad = (neto / total_ing * 100) if total_ing > 0 else 0.0
+            roi = (neto / total_ing * 100) if total_ing > 0 else 0.0
+            efficiency = (total_gast / total_ing * 100) if total_ing > 0 else 0.0
             
-            self.lbl_ret_val.setText(f"{rentabilidad:.1f}%")
-            self.bar_rentabilidad.setValue(int(min(100, max(0, rentabilidad))))
-            self.lbl_iva_val.setText(f"{total_iva:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
-            self.lbl_irpf_val.setText(f"{total_irpf:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+            self.card_roi.update_values(
+                f"{roi:.1f}%", 
+                f"Resultado Neto: {neto:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+            self.card_iva.update_values(
+                f"{(total_iva_rep - total_iva_sop):,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."),
+                f"Rep: {total_iva_rep:,.0f}€ | Sop: {total_iva_sop:,.0f}€".replace(",", ".")
+            )
+            self.card_irpf.update_values(
+                f"{total_irpf:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."),
+                "Pagos a cuenta del ejercicio"
+            )
+            self.card_spending.update_values(
+                f"{efficiency:.1f}%",
+                f"Consumido: {total_gast:,.0f}€ de {total_ing:,.0f}€".replace(",", ".")
+            )
             
-            total_desglose = gastos_ofi + gastos_tel + gastos_otr
-            pct_ofi = (gastos_ofi / total_desglose * 100) if total_desglose > 0 else 0.0
-            pct_tel = (gastos_tel / total_desglose * 100) if total_desglose > 0 else 0.0
-            pct_otr = (gastos_otr / total_desglose * 100) if total_desglose > 0 else 0.0
-                
-            self.lbl_ofi_pct.setText(f"{pct_ofi:.1f}%")
-            self.bar_ofi.setValue(int(pct_ofi))
-            self.lbl_tel_pct.setText(f"{pct_tel:.1f}%")
-            self.bar_tel.setValue(int(pct_tel))
-            self.lbl_otr_pct.setText(f"{pct_otr:.1f}%")
-            self.bar_otr.setValue(int(pct_otr))
+            # 2. Cargar los gráficos
+            self.chart.set_data(dict(monthly_data), self.show_all_time)
+            self.tax_chart.set_data(dict(monthly_data), self.show_all_time)
+            self.expense_dist.set_data(dict(expense_concepts))
             
-        except Exception as e: print(f"Error cargando KPIs: {e}")
+        except Exception as e:
+            print(f"Error cargando KPIs: {e}")
             
     def run_economic_audit(self):
         try:
-            total_ing = sum(v['ingresos'] for v in self.chart_taxes.data.values())
-            total_gast = sum(v['gastos'] for v in self.chart_taxes.data.values())
-            total_iva = sum(v['iva'] for v in self.chart_taxes.data.values())
-            total_irpf = sum(v['irpf'] for v in self.chart_taxes.data.values())
-            stats = {'total_ingresos': total_ing, 'total_gastos': total_gast, 'total_iva': total_iva, 'total_irpf': total_irpf}
+            total_ingresos = 0.0
+            total_gastos = 0.0
+            total_impuestos = 0.0
+            
+            chart_data = self.chart.data
+            for val in chart_data.values():
+                total_ingresos += val['ingresos']
+                total_gastos += val['gastos']
+                total_impuestos += val['iva_rep'] + val['irpf']
+                
+            stats = {
+                'total_ingresos': total_ingresos,
+                'total_gastos': total_gastos,
+                'total_impuestos': total_impuestos
+            }
+            
             self.btn_evaluate.setEnabled(False)
             self.terminal.clear()
+            
             self.worker = EconomicAnalyzerThread(stats)
             self.worker.progress_signal.connect(self.log_to_terminal)
             self.worker.result_signal.connect(self.show_audit_result)
@@ -7094,7 +7459,8 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
             self.terminal.setText(f"Error al iniciar auditoría: {e}")
             self.btn_evaluate.setEnabled(True)
             
-    def log_to_terminal(self, text): self.terminal.append(text)
+    def log_to_terminal(self, text):
+        self.terminal.append(text)
         
     def show_audit_result(self, result_text):
         self.terminal.append("\n" + result_text)
@@ -7102,5 +7468,7 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
 
 
 def launch(config):
+    app = QApplication(sys.argv)
+    dashboard = AlfonsoHUDDashboard(config)
     dashboard.show()
     sys.exit(app.exec())
