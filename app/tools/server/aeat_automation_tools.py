@@ -211,9 +211,9 @@ async def generate_modelo_130_autofill_script(year: int, quarter: int) -> dict:
             function findField(casillaNumber) {{
                 const padded = String(casillaNumber).padStart(2, '0');
                 const selectors = [
-                    `input[id$='C${padded}']`, `input[id$='C${casillaNumber}']`,
-                    `input[name$='C${padded}']`, `input[name$='C${casillaNumber}']`,
-                    `#C${padded}`, `#C${casillaNumber}`
+                    `input[id$='C${{padded}}']`, `input[id$='C${{casillaNumber}}']`,
+                    `input[name$='C${{padded}}']`, `input[name$='C${{casillaNumber}}']`,
+                    `#C${{padded}}`, `#C${{casillaNumber}}`
                 ];
                 for (const sel of selectors) {{
                     const el = document.querySelector(sel);
@@ -274,7 +274,7 @@ async def generate_modelo_111_autofill_script(year: int, quarter: int) -> dict:
         js_code = f"""
         (function() {{
             console.log("Alfonso Autónomo: Iniciando autocompletado del Modelo 111...");
-            function findField(c) {{ return document.querySelector(`input[id$='C${c}']`) || document.querySelector(`#C${c}`); }}
+            function findField(c) {{ return document.querySelector(`input[id$='C${{c}}']`) || document.querySelector(`#C${{c}}`); }}
             
             const fields = {{
                 "perceptores_07": {{ casilla: "07", value: "{retention_count}" }},
@@ -359,7 +359,7 @@ async def generate_modelo_115_autofill_script(year: int, quarter: int) -> dict:
         js_code = f"""
         (function() {{
             console.log("Alfonso: Iniciando autocompletado del Modelo 115...");
-            function findField(c) {{ return document.querySelector(`input[id$='C${c}']`) || document.querySelector(`#C${c}`); }}
+            function findField(c) {{ return document.querySelector(`input[id$='C${{c}}']`) || document.querySelector(`#C${{c}}`); }}
             
             const fields = {{
                 "perceptores_01": {{ casilla: "01", value: "{perceptores}" }},

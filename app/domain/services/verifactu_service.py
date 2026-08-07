@@ -22,6 +22,7 @@ class VerifactuService:
     """
 
     _private_key_path = Path(__file__).resolve().parents[3] / "data" / "keys" / "verifactu_private_key.pem"
+    _worker_started = False
 
     @classmethod
     def init_verifactu_schema(cls) -> None:
@@ -49,6 +50,14 @@ class VerifactuService:
                 conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN status TEXT DEFAULT 'ALTA'")
             except sqlite3.OperationalError:
                 pass
+            try:
+                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN delivery_status TEXT DEFAULT 'PENDIENTE'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN delivery_error TEXT")
+            except sqlite3.OperationalError:
+                pass
                 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sif_event_log (
@@ -62,6 +71,20 @@ class VerifactuService:
                 )
             """)
             conn.commit()
+
+        # Iniciar worker de reintentos en segundo plano si no está corriendo
+        if not cls._worker_started:
+            cls._worker_started = True
+            def run_worker():
+                import time
+                while True:
+                    time.sleep(30)  # Cada 30 segundos escanea y reintenta
+                    try:
+                        cls.process_pending_deliveries()
+                    except Exception:
+                        pass
+            t = threading.Thread(target=run_worker, daemon=True)
+            t.start()
 
     @classmethod
     def get_or_create_private_key(cls) -> rsa.RSAPrivateKey:
@@ -208,9 +231,10 @@ class VerifactuService:
             etree.SubElement(detalle_iva, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
             
             # Datos de Infraestructura del Software (Requerido por Verifactu)
+            from app.config import settings
             sistema = etree.SubElement(reg_alta, "SistemaInformatico")
             etree.SubElement(sistema, "Nombre").text = "Alfonso Autónomo SIF"
-            etree.SubElement(sistema, "NIFProductor").text = "B00000000"
+            etree.SubElement(sistema, "NIFProductor").text = settings.ALFONSO_SIF_PRODUCER_NIF
             etree.SubElement(sistema, "NumInstalacion").text = "000001"
             etree.SubElement(sistema, "Version").text = "2.0.0"
             
@@ -267,6 +291,21 @@ class VerifactuService:
 
             # Envío inmediato (real/simulado) al Sistema Informático de Facturación (SIF) de la AEAT
             aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
+
+            # Determinar estado de envío contable
+            status_map = {
+                "accepted": "ENVIADO",
+                "offline_simulated": "PENDIENTE"
+            }
+            delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
+            delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+
+            with _get_connection() as conn:
+                conn.execute(
+                    "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
+                    (delivery_status, delivery_error, invoice_data["invoice_number"])
+                )
+                conn.commit()
 
             return {
                 "status": "success",
@@ -355,9 +394,10 @@ class VerifactuService:
             etree.SubElement(reg_anulacion, "NombreRazonEmisor").text = issuer_name
             
             # SistemaInformatico
+            from app.config import settings
             sistema = etree.SubElement(reg_anulacion, "SistemaInformatico")
             etree.SubElement(sistema, "Nombre").text = "Alfonso Autónomo SIF"
-            etree.SubElement(sistema, "NIFProductor").text = "B00000000"
+            etree.SubElement(sistema, "NIFProductor").text = settings.ALFONSO_SIF_PRODUCER_NIF
             etree.SubElement(sistema, "NumInstalacion").text = "000001"
             etree.SubElement(sistema, "Version").text = "2.0.0"
             
@@ -422,6 +462,21 @@ class VerifactuService:
 
             aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
 
+            # Determinar estado de envío contable
+            status_map = {
+                "accepted": "ENVIADO",
+                "offline_simulated": "PENDIENTE"
+            }
+            delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
+            delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+
+            with _get_connection() as conn:
+                conn.execute(
+                    "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
+                    (delivery_status, delivery_error, invoice_number_local)
+                )
+                conn.commit()
+
             return {
                 "status": "success",
                 "invoice_number": invoice_number,
@@ -435,15 +490,71 @@ class VerifactuService:
     def send_to_aeat_sif(cls, xml_content: str) -> Dict[str, Any]:
         """
         Envía el XML firmado del registro al endpoint SOAP oficial de VERIFACTU de la AEAT.
-        Si no hay certificados del sistema instalados, retorna un estado offline simulado transparente.
+        Si no hay certificados en el perfil fiscal de usuario, retorna un estado offline simulado.
         """
         import httpx
+        import tempfile
+        from cryptography.hazmat.primitives.serialization import pkcs12
+        from app.utils.encryption import encryptor
+
         # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas)
         AEAT_URL = "https://prewww10.aeat.es/wlpl/PORT-SSII/ws/fe/RegFactuSistemaFacturacionSOAP"
         
-        cert_path = os.environ.get("ALFONSO_AEAT_CERT")
-        key_path = os.environ.get("ALFONSO_AEAT_KEY")
-        
+        cert_path = None
+        key_path = None
+        cert_pem_file = None
+        key_pem_file = None
+
+        # Obtener certificado de la DB (user_profile)
+        cert_path_db = None
+        cert_password_db = None
+        try:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT cert_path, cert_password FROM user_profile LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    if row["cert_path"]:
+                        cert_path_db = encryptor.decrypt(row["cert_path"])
+                    if row["cert_password"]:
+                        cert_password_db = encryptor.decrypt(row["cert_password"])
+        except Exception:
+            pass
+
+        # Si hay certificado en la DB, extraer clave y cert a archivos temporales PEM
+        if cert_path_db and os.path.exists(cert_path_db):
+            try:
+                with open(cert_path_db, "rb") as f:
+                    p12_data = f.read()
+                
+                password = cert_password_db.encode("utf-8") if cert_password_db else None
+                private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
+                    p12_data, password
+                )
+                
+                if private_key and certificate:
+                    cert_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
+                    cert_pem_file.write(certificate.public_bytes(serialization.Encoding.PEM))
+                    cert_pem_file.close()
+                    
+                    key_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
+                    key_pem_file.write(private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ))
+                    key_pem_file.close()
+                    
+                    cert_path = cert_pem_file.name
+                    key_path = key_pem_file.name
+            except Exception as cert_err:
+                app_logger.warning("No se pudo cargar el certificado P12/PFX del perfil para mTLS: %s", cert_err)
+
+        # Fallback a variables de entorno para compatibilidad y testing
+        if not cert_path and not key_path:
+            cert_path = os.environ.get("ALFONSO_AEAT_CERT")
+            key_path = os.environ.get("ALFONSO_AEAT_KEY")
+
         # Envoltorio SOAP reglamentario Verifactu
         soap_envelope = f"""<?xml version="1.0" encoding="utf-8"?>
         <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:val="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/ssii/fact/ws/RegFactuSistemaFacturacion.xsd">
@@ -459,25 +570,81 @@ class VerifactuService:
             "SOAPAction": "https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/ws/fe/RegFactuSistemaFacturacionSOAP"
         }
 
-        # Si el usuario configuró certificado electrónico cualificado, intentamos mTLS
-        if cert_path and key_path and os.path.exists(cert_path):
-            try:
-                # Realizar llamada cliente con autenticación por certificado de cliente
-                with httpx.Client(cert=(cert_path, key_path), verify=True) as client:
-                    response = client.post(AEAT_URL, content=soap_envelope, headers=headers, timeout=10.0)
-                    if response.status_code == 200:
-                        return {"status": "accepted", "code": 200, "message": "Registro aceptado por la AEAT."}
-                    else:
-                        return {"status": "rejected", "code": response.status_code, "error": response.text}
-            except Exception as e:
-                return {"status": "incident", "message": f"Incidencia de red o TLS en el envío a la AEAT: {str(e)}"}
-        
-        # Simulación de pruebas offline para evitar falsas aceptaciones
-        return {
-            "status": "offline_simulated",
-            "code": 200,
-            "message": "Registro local guardado y firmado. Envío pendiente de firma por mTLS (Entorno de desarrollo local sin certificado)."
-        }
+        try:
+            # Si se configuró certificado electrónico cualificado, realizamos mTLS real
+            if cert_path and key_path and os.path.exists(cert_path):
+                try:
+                    with httpx.Client(cert=(cert_path, key_path), verify=True) as client:
+                        response = client.post(AEAT_URL, content=soap_envelope, headers=headers, timeout=10.0)
+                        if response.status_code == 200:
+                            return {"status": "accepted", "code": 200, "message": "Registro aceptado por la AEAT."}
+                        else:
+                            return {"status": "rejected", "code": response.status_code, "error": response.text}
+                except Exception as e:
+                    return {"status": "incident", "message": f"Incidencia de red o TLS en el envío a la AEAT: {str(e)}"}
+            
+            # Simulación de pruebas offline para evitar falsas aceptaciones
+            return {
+                "status": "offline_simulated",
+                "code": 200,
+                "message": "Registro local guardado y firmado. Envío pendiente de firma por mTLS (Entorno de desarrollo local sin certificado)."
+            }
+        finally:
+            # Limpiar archivos temporales de certificados de forma segura
+            if cert_pem_file and os.path.exists(cert_pem_file.name):
+                try:
+                    os.remove(cert_pem_file.name)
+                except OSError:
+                    pass
+            if key_pem_file and os.path.exists(key_pem_file.name):
+                try:
+                    os.remove(key_pem_file.name)
+                except OSError:
+                    pass
+
+    @classmethod
+    def process_pending_deliveries(cls) -> None:
+        """
+        Escanea y reintenta el envío de facturas que estén en estado PENDIENTE o ERROR.
+        """
+        with cls._lock:
+            cls.init_verifactu_schema()
+            with _get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT invoice_number, status FROM verifactu_invoices WHERE delivery_status IN ('PENDIENTE', 'ERROR')"
+                ).fetchall()
+            
+            for row in rows:
+                invoice_num = row["invoice_number"]
+                is_anulacion = row["status"] == "ANULADA"
+                
+                # Cargar el XML firmado guardado localmente
+                xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
+                xml_name = f"{invoice_num.replace('_ANUL', '')}_anulacion_verifactu.xml" if is_anulacion else f"{invoice_num}_verifactu.xml"
+                xml_path = xml_dir / xml_name
+                
+                if xml_path.exists():
+                    try:
+                        with open(xml_path, "r", encoding="utf-8") as f:
+                            xml_content = f.read()
+                        
+                        aeat_response = cls.send_to_aeat_sif(xml_content)
+                        
+                        status_map = {
+                            "accepted": "ENVIADO",
+                            "offline_simulated": "PENDIENTE"
+                        }
+                        delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
+                        delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+                        
+                        with _get_connection() as conn:
+                            conn.execute(
+                                "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
+                                (delivery_status, delivery_error, invoice_num)
+                            )
+                            conn.commit()
+                    except Exception as err:
+                        app_logger.warning(f"No se pudo procesar el reenvío de la factura {invoice_num}: {err}")
 
     @classmethod
     def verify_chain_integrity(cls) -> Dict[str, Any]:

@@ -241,9 +241,21 @@ async def generate_invoice_pdf(
                 finally:
                     conn.close()
 
-        # Datos fiscales del emisor (Luis Domingo)
+        # Obtener datos reales del perfil del usuario emisor
         emisor_name = "LUIS DOMINGO"
         emisor_nif = "12345678Z"
+        try:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT razon_social, nif FROM user_profile LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    if row["razon_social"]:
+                        emisor_name = encryptor.decrypt(row["razon_social"])
+                    if row["nif"]:
+                        emisor_nif = encryptor.decrypt(row["nif"])
+        except Exception:
+            pass
 
         # 4. Cálculos económicos
         iva_amount = round(amount * (iva_rate / 100.0), 2)
@@ -257,7 +269,7 @@ async def generate_invoice_pdf(
             year = parsed_date.year
         except ValueError:
             quarter = (now.month - 1) // 3 + 1
-            year = 2026
+            year = now.year
 
         target_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal" / "facturas pendientes"
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -355,43 +367,63 @@ async def generate_invoice_pdf(
             current_hash = ""
             signature_base64 = ""
         else:
-            # 6. Registrar en el encadenamiento Verifactu (AEAT) si es una factura firme
-            verifactu_data = {
-                "invoice_number": invoice_id,
-                "date_of_issue": date_str,
-                "issuer_nif": emisor_nif,
-                "receiver_nif": client_nif,
-                "base_imponible": amount,
-                "iva_amount": iva_amount,
-                "total_amount": total_amount
-            }
-            verifactu_res = VerifactuService.register_invoice(verifactu_data)
-            current_hash = verifactu_res["current_hash"]
-            signature_base64 = verifactu_res["signature"]
-
-            # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU
-            qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFacturaVerifactu?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
-            qr = qrcode.QRCode(version=1, box_size=3, border=1)
-            qr.add_data(qr_url)
-            qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="black", back_color="white")
+            from app.config import settings
             
-            qr_temp_path = target_dir / f"qr_{invoice_id}.png"
-            qr_img.save(str(qr_temp_path))
+            if settings.VERIFACTU_ACTIVE:
+                # 6. Registrar en el encadenamiento Verifactu (AEAT) si es una factura firme
+                verifactu_data = {
+                    "invoice_number": invoice_id,
+                    "date_of_issue": date_str,
+                    "issuer_nif": emisor_nif,
+                    "receiver_nif": client_nif,
+                    "base_imponible": amount,
+                    "iva_amount": iva_amount,
+                    "total_amount": total_amount
+                }
+                verifactu_res = VerifactuService.register_invoice(verifactu_data)
+                current_hash = verifactu_res["current_hash"]
+                signature_base64 = verifactu_res["signature"]
 
-            # Dibujar QR en el Canvas PDF
-            c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
+                # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU
+                qr_url = f"https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/VerificaFacturaVerifactu?nif={emisor_nif}&num={invoice_id}&fecha={date_str}&importe={total_amount:.2f}"
+                qr = qrcode.QRCode(version=1, box_size=3, border=1)
+                qr.add_data(qr_url)
+                qr.make(fit=True)
+                qr_img = qr.make_image(fill_color="black", back_color="white")
+                
+                qr_temp_path = target_dir / f"qr_{invoice_id}.png"
+                qr_img.save(str(qr_temp_path))
 
-            # Añadir leyenda oficial imperativa de VERIFACTU y metadatos del XML firmado
-            c.setFont("Helvetica-Bold", 9)
-            c.setFillColorRGB(0.12, 0.23, 0.35)
-            c.drawString(135, 175, "VERIFACTU - FACTURA VERIFICABLE")
-            
-            c.setFont("Helvetica", 7)
-            c.setFillColorRGB(0.3, 0.3, 0.3)
-            c.drawString(135, 163, "Factura verificable en la Sede electrónica de la AEAT")
-            c.drawString(135, 151, f"Huella de encadenamiento (SHA256): {current_hash}")
-            c.drawString(135, 140, "Este registro de facturación ha sido firmado digitalmente y enviado a la AEAT.")
+                # Dibujar QR en el Canvas PDF
+                c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
+
+                # Añadir leyenda oficial imperativa de VERIFACTU y metadatos del XML firmado
+                c.setFont("Helvetica-Bold", 9)
+                c.setFillColorRGB(0.12, 0.23, 0.35)
+                c.drawString(135, 175, "VERIFACTU - FACTURA VERIFICABLE")
+                
+                c.setFont("Helvetica", 7)
+                c.setFillColorRGB(0.3, 0.3, 0.3)
+                c.drawString(135, 163, "Factura verificable en la Sede electrónica de la AEAT")
+                c.drawString(135, 151, f"Huella de encadenamiento (SHA256): {current_hash}")
+                c.drawString(135, 140, "Este registro de facturación ha sido firmado digitalmente y enviado a la AEAT.")
+
+                # Limpiar QR temporal
+                if qr_temp_path.exists():
+                    os.remove(qr_temp_path)
+            else:
+                # Modo NO VERIFACTU (SIF estándar)
+                current_hash = ""
+                signature_base64 = ""
+                
+                c.setFont("Helvetica-Bold", 9)
+                c.setFillColorRGB(0.12, 0.23, 0.35)
+                c.drawString(55, 175, "SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF)")
+                
+                c.setFont("Helvetica", 7)
+                c.setFillColorRGB(0.3, 0.3, 0.3)
+                c.drawString(55, 163, "Factura emitida de conformidad con los requisitos de integridad y conservación del Real Decreto 1007/2023.")
+                c.drawString(55, 151, "Conservación inalterable de registros de facturación local garantizada.")
 
             # Notas finales
             c.setFont("Helvetica-Oblique", 8)
@@ -399,10 +431,6 @@ async def generate_invoice_pdf(
             c.drawString(55, 75, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
             
             c.save()
-
-            # Limpiar QR temporal
-            if qr_temp_path.exists():
-                os.remove(qr_temp_path)
 
         # Si el archivo PDF viejo existe y el nombre/ruta cambió, lo borramos
         if existing_file_path and existing_file_path != str(pdf_path):
@@ -569,13 +597,25 @@ async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
         if not pdf_path_str:
             return {"status": "error", "message": f"No se encontró el archivo físico de la factura {invoice_id} en la base de datos."}
 
-        subject = f"Factura {invoice_id} emitida por LUIS DOMINGO"
+        # Obtener emisor_name dinámico
+        emisor_name = "LUIS DOMINGO"
+        try:
+            with _get_connection() as conn_profile:
+                cursor_profile = conn_profile.cursor()
+                cursor_profile.execute("SELECT razon_social FROM user_profile LIMIT 1")
+                row_profile = cursor_profile.fetchone()
+                if row_profile and row_profile["razon_social"]:
+                    emisor_name = encryptor.decrypt(row_profile["razon_social"])
+        except Exception:
+            pass
+
+        subject = f"Factura {invoice_id} emitida por {emisor_name.upper()}"
         body = (
             f"Estimado cliente,\n\n"
             f"Adjunto a este correo le enviamos la factura correspondiente {invoice_id}.\n"
             f"El archivo se encuentra archivado físicamente en la ruta: {pdf_path_str}\n\n"
             f"Atentamente,\n"
-            f"Luis Domingo"
+            f"{emisor_name}"
         )
         
         res = await mail_send_email(recipient=recipient_email, subject=subject, body=body)
