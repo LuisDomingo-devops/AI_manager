@@ -85,8 +85,10 @@ class DatabaseEncryptor:
             
         try:
             return self.fernet.decrypt(cipher_text.encode('utf-8')).decode('utf-8')
-        except Exception:
-            # En caso de error (texto plano, datos corruptos o cifrado fallback antiguo), devolver la cadena original
+        except Exception as e:
+            if cipher_text.startswith("gAAAA"):
+                raise RuntimeError("Error crítico al descifrar un dato corrupto o clave incorrecta.") from e
+            # En caso de error (texto plano o cifrado fallback antiguo), devolver la cadena original
             return cipher_text
 
 

@@ -92,13 +92,32 @@ class VerifactuService:
         Obtiene la clave privada RSA de Verifactu local o la crea si no existe.
         Representa la firma digital (FNMT/DNIe) en el modelo local-first.
         """
+        from app.utils.encryption import encryptor
         cls._private_key_path.parent.mkdir(parents=True, exist_ok=True)
         if cls._private_key_path.exists():
-            with open(cls._private_key_path, "rb") as key_file:
-                return serialization.load_pem_private_key(
-                    key_file.read(),
-                    password=None
-                )
+            try:
+                with open(cls._private_key_path, "r", encoding="utf-8") as key_file:
+                    content = key_file.read().strip()
+                if content.startswith("gAAAA"):
+                    decrypted_bytes = encryptor.decrypt(content).encode('utf-8')
+                else:
+                    raise ValueError("Plaintext key")
+            except Exception:
+                # Caso fallback o migración si es texto plano
+                with open(cls._private_key_path, "rb") as raw_file:
+                    raw_pem = raw_file.read()
+                try:
+                    encrypted_pem = encryptor.encrypt(raw_pem.decode('utf-8'))
+                    with open(cls._private_key_path, "w", encoding="utf-8") as key_file:
+                        key_file.write(encrypted_pem)
+                except Exception:
+                    pass
+                decrypted_bytes = raw_pem
+
+            return serialization.load_pem_private_key(
+                decrypted_bytes,
+                password=None
+            )
         
         # Generar nueva clave de 2048 bits
         private_key = rsa.generate_private_key(
@@ -106,14 +125,15 @@ class VerifactuService:
             key_size=2048
         )
         
-        # Guardar en disco local de forma segura
+        # Guardar en disco local de forma segura/cifrada
         pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
-        with open(cls._private_key_path, "wb") as key_file:
-            key_file.write(pem)
+        encrypted_pem = encryptor.encrypt(pem.decode('utf-8'))
+        with open(cls._private_key_path, "w", encoding="utf-8") as key_file:
+            key_file.write(encrypted_pem)
             
         return private_key
 
@@ -586,8 +606,8 @@ class VerifactuService:
             # Simulación de pruebas offline para evitar falsas aceptaciones
             return {
                 "status": "offline_simulated",
-                "code": 200,
-                "message": "Registro local guardado y firmado. Envío pendiente de firma por mTLS (Entorno de desarrollo local sin certificado)."
+                "code": 202,
+                "message": "ATENCIÓN: Registro firmado y guardado localmente, pero PENDIENTE de envío a la AEAT por falta de certificado cualificado en el perfil."
             }
         finally:
             # Limpiar archivos temporales de certificados de forma segura

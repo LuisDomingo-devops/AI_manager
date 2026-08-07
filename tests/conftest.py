@@ -40,3 +40,17 @@ def mock_memory(request):
         # Configuramos comportamientos básicos si es necesario
         mocked.get_summary.return_value = ""
         yield mocked
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_test_databases():
+    import os
+    from pathlib import Path
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    for db_name in ["memory_test.db", "memory_test_mail.db"]:
+        db_path = data_dir / db_name
+        if db_path.exists():
+            try:
+                db_path.unlink()
+            except Exception:
+                pass
+    yield

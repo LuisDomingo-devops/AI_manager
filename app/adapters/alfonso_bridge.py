@@ -63,7 +63,7 @@ class AlfonsoBridge(BridgePort):
 
     async def start(self):
         from app.config import settings
-        if settings.ENV == "production" and not settings.ALFONSO_BRIDGE_TOKEN:
+        if not settings.ALFONSO_BRIDGE_TOKEN:
             logger.error("ERROR DE SEGURIDAD CRÍTICO: ALFONSO_BRIDGE_TOKEN no está configurado. El bridge no iniciará.")
             raise ValueError("ALFONSO_BRIDGE_TOKEN obligatorio no configurado.")
             

@@ -111,6 +111,168 @@ async def create_client(name: str, nif: str, email: str, address: str = "") -> d
         tool_logger.exception("Error al registrar cliente")
         return {"status": "error", "message": str(e)}
 
+def _find_existing_invoice_data(invoice_id: str, client_name: str, client_nif: str, amount: float, concept: str):
+    existing_id_db = None
+    existing_file_path = None
+    if invoice_id:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, base_imponible, concept, file_path FROM invoices")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_id = encryptor.decrypt(r["invoice_id"])
+                    if dec_id.upper() == invoice_id.upper():
+                        existing_id_db = r["id"]
+                        existing_file_path = encryptor.decrypt(r["file_path"])
+                        
+                        if not client_name or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                            dec_client_name = encryptor.decrypt(r["receiver_name"])
+                            if dec_client_name and dec_client_name.lower().strip() not in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                                client_name = dec_client_name
+                        
+                        if not client_nif or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                            dec_client_nif = encryptor.decrypt(r["receiver_nif"])
+                            if dec_client_nif and dec_client_nif.lower().strip() not in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                                client_nif = dec_client_nif
+                        
+                        if not amount or float(amount) <= 0.0:
+                            dec_amount = float(encryptor.decrypt(r["base_imponible"]))
+                            if dec_amount > 0.0:
+                                amount = dec_amount
+                                
+                        if not concept or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                            dec_concept = encryptor.decrypt(r["concept"])
+                            if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                                concept = dec_concept
+                        break
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+    return existing_id_db, existing_file_path, client_name, client_nif, amount, concept
+
+def _generate_unique_invoice_id(is_draft: bool, invoice_id: str) -> str:
+    if is_draft:
+        if not invoice_id or not invoice_id.startswith("BORRADOR-"):
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT invoice_id FROM invoices")
+                rows = cursor.fetchall()
+                draft_count = 0
+                for r in rows:
+                    try:
+                        dec_id = encryptor.decrypt(r["invoice_id"])
+                        if dec_id.startswith("BORRADOR-"):
+                            draft_count += 1
+                    except Exception:
+                        pass
+                invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
+            finally:
+                conn.close()
+    else:
+        if not invoice_id or invoice_id.startswith("BORRADOR-"):
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT invoice_id FROM invoices")
+                rows = cursor.fetchall()
+                firm_count = 0
+                for r in rows:
+                    try:
+                        dec_id = encryptor.decrypt(r["invoice_id"])
+                        if dec_id.startswith("F-"):
+                            firm_count += 1
+                    except Exception:
+                        pass
+                invoice_id = f"F-2026-{firm_count + 101:03d}"
+            finally:
+                conn.close()
+    return invoice_id
+
+def _save_invoice_db(invoice_db_data: dict, existing_id_db: int = None) -> None:
+    if existing_id_db:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE invoices SET
+                    invoice_id = ?, date = ?, issuer_name = ?, issuer_nif = ?, receiver_name = ?, receiver_nif = ?,
+                    base_imponible = ?, iva_rate = ?, iva_amount = ?, irpf_rate = ?, irpf_amount = ?, total_amount = ?,
+                    category = ?, quarter = ?, year = ?, file_path = ?, status = ?, concept = ?
+                WHERE id = ?
+            """, (
+                encryptor.encrypt(invoice_db_data["invoice_id"]),
+                encryptor.encrypt(invoice_db_data["date"]),
+                encryptor.encrypt(invoice_db_data["issuer_name"]),
+                encryptor.encrypt(invoice_db_data["issuer_nif"]),
+                encryptor.encrypt(invoice_db_data["receiver_name"]),
+                encryptor.encrypt(invoice_db_data["receiver_nif"]),
+                encryptor.encrypt(str(invoice_db_data["base_imponible"])),
+                encryptor.encrypt(str(invoice_db_data["iva_rate"])),
+                encryptor.encrypt(str(invoice_db_data["iva_amount"])),
+                encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
+                encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
+                encryptor.encrypt(str(invoice_db_data["total_amount"])),
+                invoice_db_data["category"],
+                invoice_db_data["quarter"],
+                invoice_db_data["year"],
+                encryptor.encrypt(invoice_db_data["file_path"]),
+                invoice_db_data["status"],
+                encryptor.encrypt(invoice_db_data["concept"]),
+                existing_id_db
+            ))
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO invoices (
+                    invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                    base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                    category, quarter, year, file_path, status, concept
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                encryptor.encrypt(invoice_db_data["invoice_id"]),
+                encryptor.encrypt(invoice_db_data["date"]),
+                encryptor.encrypt(invoice_db_data["issuer_name"]),
+                encryptor.encrypt(invoice_db_data["issuer_nif"]),
+                encryptor.encrypt(invoice_db_data["receiver_name"]),
+                encryptor.encrypt(invoice_db_data["receiver_nif"]),
+                encryptor.encrypt(str(invoice_db_data["base_imponible"])),
+                encryptor.encrypt(str(invoice_db_data["iva_rate"])),
+                encryptor.encrypt(str(invoice_db_data["iva_amount"])),
+                encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
+                encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
+                encryptor.encrypt(str(invoice_db_data["total_amount"])),
+                invoice_db_data["category"],
+                invoice_db_data["quarter"],
+                invoice_db_data["year"],
+                encryptor.encrypt(invoice_db_data["file_path"]),
+                invoice_db_data["status"],
+                encryptor.encrypt(invoice_db_data["concept"])
+            ))
+            conn.commit()
+        finally:
+            conn.close()
+
+def _sync_external_services(is_draft: bool, invoice_db_data: dict) -> None:
+    if not is_draft:
+        try:
+            LedgerService.record_invoice_asiento(invoice_db_data)
+        except Exception as cont_err:
+            tool_logger.warning("No se pudo generar el asiento contable automáticamente: %s", cont_err)
+
+        try:
+            ExcelSyncService.sync_invoices_to_excel()
+        except Exception as xls_err:
+            tool_logger.warning("No se pudo sincronizar con el archivo Excel local: %s", xls_err)
+
 async def generate_invoice_pdf(
     client_name: str,
     client_nif: str,
@@ -129,55 +291,9 @@ async def generate_invoice_pdf(
     """
     try:
         # 1. Buscar si existe un registro previo con el invoice_id proporcionado
-        existing_id_db = None
-        existing_file_path = None
-        is_updating = False
-
-        if invoice_id:
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT id, invoice_id, date, receiver_name, receiver_nif, base_imponible, concept, file_path, status
-                    FROM invoices
-                """)
-                rows = cursor.fetchall()
-                for r in rows:
-                    try:
-                        dec_id = encryptor.decrypt(r["invoice_id"])
-                        if dec_id.upper() == invoice_id.upper():
-                            existing_id_db = r["id"]
-                            existing_file_path = encryptor.decrypt(r["file_path"])
-                            is_updating = True
-                            
-                            # Cargar valores antiguos si los nuevos no son válidos/proporcionados
-                            if not client_name or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
-                                dec_client_name = encryptor.decrypt(r["receiver_name"])
-                                if dec_client_name and dec_client_name.lower().strip() not in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
-                                    client_name = dec_client_name
-                            
-                            if not client_nif or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
-                                dec_client_nif = encryptor.decrypt(r["receiver_nif"])
-                                if dec_client_nif and dec_client_nif.lower().strip() not in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
-                                    client_nif = dec_client_nif
-                            
-                            if not amount or float(amount) <= 0.0:
-                                dec_amount = float(encryptor.decrypt(r["base_imponible"]))
-                                if dec_amount > 0.0:
-                                    amount = dec_amount
-                                    
-                            if not concept or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
-                                try:
-                                    dec_concept = encryptor.decrypt(r["concept"])
-                                    if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
-                                        concept = dec_concept
-                                except Exception:
-                                    pass
-                            break
-                    except Exception:
-                        pass
-            finally:
-                conn.close()
+        existing_id_db, existing_file_path, client_name, client_nif, amount, concept = _find_existing_invoice_data(
+            invoice_id, client_name, client_nif, amount, concept
+        )
 
         # 2. Evaluar si es borrador (faltan datos o se solicita explícitamente)
         is_incomplete_name = not client_name or client_name.strip() == "" or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido", "cliente_desconocido")
@@ -200,46 +316,8 @@ async def generate_invoice_pdf(
         else:
             date_str = date
 
-        # Si ya teníamos un ID asignado y sigue siendo borrador, lo mantenemos.
-        # Si era borrador y ahora se completa, le asignamos un ID secuencial de factura real.
-        if is_draft:
-            if not invoice_id or not invoice_id.startswith("BORRADOR-"):
-                # Generar nuevo ID de borrador secuencial
-                conn = _get_connection()
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT invoice_id FROM invoices")
-                    rows = cursor.fetchall()
-                    draft_count = 0
-                    for r in rows:
-                        try:
-                            dec_id = encryptor.decrypt(r["invoice_id"])
-                            if dec_id.startswith("BORRADOR-"):
-                                draft_count += 1
-                        except Exception:
-                            pass
-                    invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
-                finally:
-                    conn.close()
-        else:
-            # Es factura completa/firme. Si venía de un borrador o no tiene ID, le generamos un ID de la serie de facturas F-
-            if not invoice_id or invoice_id.startswith("BORRADOR-"):
-                conn = _get_connection()
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT invoice_id FROM invoices")
-                    rows = cursor.fetchall()
-                    firm_count = 0
-                    for r in rows:
-                        try:
-                            dec_id = encryptor.decrypt(r["invoice_id"])
-                            if dec_id.startswith("F-"):
-                                firm_count += 1
-                        except Exception:
-                            pass
-                    invoice_id = f"F-2026-{firm_count + 101:03d}"
-                finally:
-                    conn.close()
+        # Resolver ID único
+        invoice_id = _generate_unique_invoice_id(is_draft, invoice_id)
 
         # Obtener datos reales del perfil del usuario emisor
         emisor_name = "LUIS DOMINGO"
@@ -462,85 +540,10 @@ async def generate_invoice_pdf(
             "concept": concept if concept else ""
         }
 
-        if existing_id_db:
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE invoices SET
-                        invoice_id = ?, date = ?, issuer_name = ?, issuer_nif = ?, receiver_name = ?, receiver_nif = ?,
-                        base_imponible = ?, iva_rate = ?, iva_amount = ?, irpf_rate = ?, irpf_amount = ?, total_amount = ?,
-                        category = ?, quarter = ?, year = ?, file_path = ?, status = ?, concept = ?
-                    WHERE id = ?
-                """, (
-                    encryptor.encrypt(invoice_db_data["invoice_id"]),
-                    encryptor.encrypt(invoice_db_data["date"]),
-                    encryptor.encrypt(invoice_db_data["issuer_name"]),
-                    encryptor.encrypt(invoice_db_data["issuer_nif"]),
-                    encryptor.encrypt(invoice_db_data["receiver_name"]),
-                    encryptor.encrypt(invoice_db_data["receiver_nif"]),
-                    encryptor.encrypt(str(invoice_db_data["base_imponible"])),
-                    encryptor.encrypt(str(invoice_db_data["iva_rate"])),
-                    encryptor.encrypt(str(invoice_db_data["iva_amount"])),
-                    encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
-                    encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
-                    encryptor.encrypt(str(invoice_db_data["total_amount"])),
-                    invoice_db_data["category"],
-                    invoice_db_data["quarter"],
-                    invoice_db_data["year"],
-                    encryptor.encrypt(invoice_db_data["file_path"]),
-                    invoice_db_data["status"],
-                    encryptor.encrypt(invoice_db_data["concept"]),
-                    existing_id_db
-                ))
-                conn.commit()
-            finally:
-                conn.close()
-        else:
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO invoices (
-                        invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
-                        base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                        category, quarter, year, file_path, status, concept
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    encryptor.encrypt(invoice_db_data["invoice_id"]),
-                    encryptor.encrypt(invoice_db_data["date"]),
-                    encryptor.encrypt(invoice_db_data["issuer_name"]),
-                    encryptor.encrypt(invoice_db_data["issuer_nif"]),
-                    encryptor.encrypt(invoice_db_data["receiver_name"]),
-                    encryptor.encrypt(invoice_db_data["receiver_nif"]),
-                    encryptor.encrypt(str(invoice_db_data["base_imponible"])),
-                    encryptor.encrypt(str(invoice_db_data["iva_rate"])),
-                    encryptor.encrypt(str(invoice_db_data["iva_amount"])),
-                    encryptor.encrypt(str(invoice_db_data["irpf_rate"])),
-                    encryptor.encrypt(str(invoice_db_data["irpf_amount"])),
-                    encryptor.encrypt(str(invoice_db_data["total_amount"])),
-                    invoice_db_data["category"],
-                    invoice_db_data["quarter"],
-                    invoice_db_data["year"],
-                    encryptor.encrypt(invoice_db_data["file_path"]),
-                    invoice_db_data["status"],
-                    encryptor.encrypt(invoice_db_data["concept"])
-                ))
-                conn.commit()
-            finally:
-                conn.close()
+        _save_invoice_db(invoice_db_data, existing_id_db)
 
         # 8. Registrar asiento contable PGC y sincronizar Excel SOLO si no es borrador
-        if not is_draft:
-            try:
-                LedgerService.record_invoice_asiento(invoice_db_data)
-            except Exception as cont_err:
-                tool_logger.warning("No se pudo generar el asiento contable automáticamente: %s", cont_err)
-
-            try:
-                ExcelSyncService.sync_invoices_to_excel()
-            except Exception as xls_err:
-                tool_logger.warning("No se pudo sincronizar con el archivo Excel local: %s", xls_err)
+        _sync_external_services(is_draft, invoice_db_data)
 
         msg_detail = f"Borrador {invoice_id} creado" if is_draft else f"Factura {invoice_id} creada y registrada ante la AEAT (Veri*Factu)"
         return {

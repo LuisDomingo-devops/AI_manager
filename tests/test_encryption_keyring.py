@@ -4,22 +4,14 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 import pytest
 
-from app.utils.encryption import get_or_create_key, KEY_PATH
+from app.utils.encryption import get_or_create_key
+import app.utils.encryption
 
 @pytest.fixture(autouse=True)
-def clean_local_key():
-    # Asegurar que el archivo local de clave no existe antes y después de cada test
-    if KEY_PATH.exists():
-        try:
-            KEY_PATH.unlink()
-        except Exception:
-            pass
-    yield
-    if KEY_PATH.exists():
-        try:
-            KEY_PATH.unlink()
-        except Exception:
-            pass
+def mock_key_path(tmp_path):
+    temp_key = tmp_path / ".key"
+    with patch("app.utils.encryption.KEY_PATH", temp_key):
+        yield
 
 def test_keyring_storage_success():
     # 1. Simular que keyring funciona correctamente
@@ -38,7 +30,7 @@ def test_keyring_storage_success():
         key1 = get_or_create_key()
         assert len(key1) == 32
         # No debe haber creado el archivo local
-        assert not KEY_PATH.exists()
+        assert not app.utils.encryption.KEY_PATH.exists()
         
         # Debe haberse guardado en el keyring
         stored_b64 = keyring_store.get("alfonso_autonomo:db_encryption_key")
@@ -64,8 +56,8 @@ def test_keyring_failure_fallback_to_file():
         key1 = get_or_create_key()
         assert len(key1) == 32
         # Debe haber creado el archivo local como fallback
-        assert KEY_PATH.exists()
-        assert KEY_PATH.read_bytes() == key1
+        assert app.utils.encryption.KEY_PATH.exists()
+        assert app.utils.encryption.KEY_PATH.read_bytes() == key1
         
         # Segunda llamada recupera la misma clave del archivo
         key2 = get_or_create_key()
