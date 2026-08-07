@@ -84,6 +84,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             file_path       TEXT,
             status          TEXT DEFAULT 'firmada',
             concept         TEXT,
+            blind_index     TEXT,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -99,10 +100,18 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE invoices ADD COLUMN concept TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        conn.execute("ALTER TABLE invoices ADD COLUMN blind_index TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_session
         ON messages (session_id, client_id, id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_invoices_blind_index
+        ON invoices (blind_index)
     """)
     
     # --- PLAN GENERAL CONTABLE (PGC) PARA PYMES ---

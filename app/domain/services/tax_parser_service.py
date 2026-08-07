@@ -376,26 +376,28 @@ class TaxParserService:
         """
         Persiste los datos de una factura en la base de datos SQLite.
         """
+        from app.domain.schemas import InvoiceSchema
         from app.utils.encryption import encryptor
         
-        # Control de duplicados: Desencriptar y comparar con facturas existentes
+        # Validar y normalizar datos contables mediante Pydantic
+        validated_data = InvoiceSchema(**data).model_dump()
+        data = validated_data
+        
+        # Control de duplicados: Buscar de forma eficiente usando blind_index (O(1)) sin descifrar en bucle
         target_invoice_id = str(data.get("invoice_id", "")).strip().upper()
         target_issuer_nif = str(data.get("issuer_nif", "")).strip().upper()
+        
+        import hashlib
+        blind_raw = f"{target_invoice_id}:{target_issuer_nif}".encode("utf-8")
+        blind_index = hashlib.sha256(blind_raw).hexdigest()
+
         if target_invoice_id and target_issuer_nif:
             with _get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, invoice_id, issuer_nif FROM invoices")
-                rows = cursor.fetchall()
-                for row in rows:
-                    try:
-                        dec_id = str(encryptor.decrypt(row["invoice_id"]) or "").strip().upper()
-                        dec_nif = str(encryptor.decrypt(row["issuer_nif"]) or "").strip().upper()
-                        if dec_id == target_invoice_id and dec_nif == target_issuer_nif:
-                            raise ValueError(f"Factura duplicada detectada: {target_invoice_id} del emisor {target_issuer_nif}")
-                    except ValueError as ve:
-                        raise ve
-                    except Exception:
-                        pass
+                cursor.execute("SELECT id FROM invoices WHERE blind_index = ? LIMIT 1", (blind_index,))
+                row = cursor.fetchone()
+                if row:
+                    raise ValueError(f"Factura duplicada detectada: {target_invoice_id} del emisor {target_issuer_nif}")
 
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -403,8 +405,8 @@ class TaxParserService:
                 INSERT INTO invoices (
                     invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
                     base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                    category, quarter, year, file_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    category, quarter, year, file_path, blind_index
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 encryptor.encrypt(data["invoice_id"]),
                 encryptor.encrypt(data["date"]),
@@ -421,7 +423,8 @@ class TaxParserService:
                 data["category"],
                 data["quarter"],
                 data["year"],
-                encryptor.encrypt(file_path)
+                encryptor.encrypt(file_path),
+                blind_index
             ))
             conn.commit()
             last_id = cursor.lastrowid

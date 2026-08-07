@@ -47,12 +47,12 @@ API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def verify_api_key(api_key: str = Depends(api_key_header)):
-    if settings.ALFONSO_API_KEY:
-        if not api_key or not secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API Key or API Key missing"
-            )
+    # La API Key siempre está garantizada en settings gracias a la inicialización segura en config.py
+    if not api_key or not secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key or API Key missing"
+        )
     return api_key
 
 # ── Routers ─────────────────────────────────────────────────────────────────
@@ -915,6 +915,25 @@ async def save_user_profile(
     certificate: Optional[UploadFile] = File(None)
 ):
     try:
+        from app.domain.schemas import UserProfileSchema
+        from pydantic import ValidationError
+        
+        try:
+            profile = UserProfileSchema(
+                user_type=user_type,
+                nif=nif,
+                razon_social=razon_social,
+                direccion=direccion,
+                cert_password=cert_password
+            )
+            # Usar los campos normalizados/limpios por Pydantic
+            user_type = profile.user_type
+            nif = profile.nif
+            razon_social = profile.razon_social
+            direccion = profile.direccion
+        except ValidationError as val_err:
+            raise HTTPException(status_code=400, detail=str(val_err))
+
         from app.adapters.memory.memory import _get_connection
         from app.utils.encryption import encryptor
         import shutil

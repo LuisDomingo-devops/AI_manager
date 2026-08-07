@@ -48,7 +48,7 @@ def test_invoice_saving_triggers_excel_sync():
     """
     invoice_data = {
         "invoice_id": "FAC-2026-001",
-        "date": "03/08/2026",
+        "date": "2026-08-03",
         "issuer_name": "Servicios Digitales SL",
         "issuer_nif": "B12345678",
         "receiver_name": "Luis Domingo Pérez",

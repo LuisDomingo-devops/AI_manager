@@ -187,10 +187,11 @@ async def test_verify_api_key(monkeypatch):
     from app.config import settings
     from fastapi import HTTPException
     
-    # Caso 1: Sin API Key configurada
+    # Caso 1: Sin API Key configurada (o vacía) -> Debe fallar con 401 si se intenta usar cualquier key
     monkeypatch.setattr(settings, "ALFONSO_API_KEY", "")
-    res = await verify_api_key("cualquier_key")
-    assert res == "cualquier_key"
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_api_key("cualquier_key")
+    assert exc_info.value.status_code == 401
     
     # Caso 2: API Key configurada y válida
     monkeypatch.setattr(settings, "ALFONSO_API_KEY", "secret_key_123")

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="RegFactuSistemaFacturacion">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Cabecera">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="ObligadoEmision">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="NombreRazon" type="xs:string"/>
+                    <xs:element name="NIF" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:choice>
+          <xs:element name="RegistroFacturacionAlta">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="IDFactura">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="NumSerieFacturaEmisor" type="xs:string"/>
+                      <xs:element name="FechaExpedicionFacturaEmisor" type="xs:string"/>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="NombreRazonEmisor" type="xs:string"/>
+                <xs:element name="Receptor">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="NombreRazonReceptor" type="xs:string"/>
+                      <xs:element name="NIFReceptor" type="xs:string"/>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="DetalleFactura">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="TipoFactura" type="xs:string"/>
+                      <xs:element name="ClaveRegimenEspecialOTrascendencia" type="xs:string"/>
+                      <xs:element name="ImporteTotal" type="xs:string"/>
+                      <xs:element name="Desglose">
+                        <xs:complexType>
+                          <xs:sequence>
+                            <xs:element name="DetalleIVA">
+                              <xs:complexType>
+                                <xs:sequence>
+                                  <xs:element name="BaseImponible" type="xs:string"/>
+                                  <xs:element name="CuotaIVA" type="xs:string"/>
+                                </xs:sequence>
+                              </xs:complexType>
+                            </xs:element>
+                          </xs:sequence>
+                        </xs:complexType>
+                      </xs:element>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="SistemaInformatico">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="Nombre" type="xs:string"/>
+                      <xs:element name="NIFProductor" type="xs:string"/>
+                      <xs:element name="NumInstalacion" type="xs:string"/>
+                      <xs:element name="Version" type="xs:string"/>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="Encadenamiento" minOccurs="0">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="RegistroAnterior">
+                        <xs:complexType>
+                          <xs:sequence>
+                            <xs:element name="Huella" type="xs:string"/>
+                          </xs:sequence>
+                        </xs:complexType>
+                      </xs:element>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="RegistroFacturacionAnulacion">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="IDFacturaAnulada">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="NumSerieFacturaEmisor" type="xs:string"/>
+                      <xs:element name="FechaExpedicionFacturaEmisor" type="xs:string"/>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="NombreRazonEmisor" type="xs:string"/>
+                <xs:element name="SistemaInformatico">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="Nombre" type="xs:string"/>
+                      <xs:element name="NIFProductor" type="xs:string"/>
+                      <xs:element name="NumInstalacion" type="xs:string"/>
+                      <xs:element name="Version" type="xs:string"/>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+                <xs:element name="Encadenamiento" minOccurs="0">
+                  <xs:complexType>
+                    <xs:sequence>
+                      <xs:element name="RegistroAnterior">
+                        <xs:complexType>
+                          <xs:sequence>
+                            <xs:element name="Huella" type="xs:string"/>
+                          </xs:sequence>
+                        </xs:complexType>
+                      </xs:element>
+                    </xs:sequence>
+                  </xs:complexType>
+                </xs:element>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

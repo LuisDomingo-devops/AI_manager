@@ -117,9 +117,26 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-if settings.ENV == "production":
-    if not settings.ALFONSO_API_KEY or not settings.ALFONSO_BRIDGE_TOKEN:
-        raise ValueError(
-            "CRITICAL SECURITY ERROR: ALFONSO_API_KEY and ALFONSO_BRIDGE_TOKEN "
-            "must not be empty in production environment!"
-        )
+# Asegurar la presencia de credenciales seguras de forma persistente y compartida
+import secrets
+from pathlib import Path
+
+data_dir = Path(__file__).resolve().parent.parent / "data"
+data_dir.mkdir(parents=True, exist_ok=True)
+
+api_key_file = data_dir / ".api_key"
+bridge_token_file = data_dir / ".bridge_token"
+
+if not settings.ALFONSO_API_KEY or settings.ALFONSO_API_KEY.strip() == "":
+    if api_key_file.exists():
+        settings.ALFONSO_API_KEY = api_key_file.read_text(encoding="utf-8").strip()
+    else:
+        settings.ALFONSO_API_KEY = secrets.token_hex(32)
+        api_key_file.write_text(settings.ALFONSO_API_KEY, encoding="utf-8")
+
+if not settings.ALFONSO_BRIDGE_TOKEN or settings.ALFONSO_BRIDGE_TOKEN.strip() == "":
+    if bridge_token_file.exists():
+        settings.ALFONSO_BRIDGE_TOKEN = bridge_token_file.read_text(encoding="utf-8").strip()
+    else:
+        settings.ALFONSO_BRIDGE_TOKEN = secrets.token_hex(32)
+        bridge_token_file.write_text(settings.ALFONSO_BRIDGE_TOKEN, encoding="utf-8")

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from app.adapters.memory.memory import _get_connection
+from app.utils.logger import app_logger
 
 # Cryptography imports for real local signing
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -156,13 +157,26 @@ class VerifactuService:
                 encryption_algorithm=serialization.NoEncryption()
             )
 
+            # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
+            from app.utils.encryption import encryptor
+            issuer_name = "Alfonso SIF User"
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("SELECT razon_social FROM user_profile LIMIT 1")
+                    profile_row = cursor.fetchone()
+                    if profile_row and profile_row["razon_social"]:
+                        issuer_name = encryptor.decrypt(profile_row["razon_social"])
+                except Exception:
+                    pass
+
             # Estructura del XML oficial de Verifactu (Orden HAC/1177/2024)
             registro_xml = etree.Element("RegFactuSistemaFacturacion")
             
             # Cabecera
             cabecera = etree.SubElement(registro_xml, "Cabecera")
             obligado = etree.SubElement(cabecera, "ObligadoEmision")
-            etree.SubElement(obligado, "NombreRazon").text = "Alfonso SIF User"
+            etree.SubElement(obligado, "NombreRazon").text = issuer_name
             etree.SubElement(obligado, "NIF").text = str(invoice_data.get("issuer_nif", ""))
             
             # Bloque de RegistroFacturacionAlta
@@ -174,7 +188,7 @@ class VerifactuService:
             etree.SubElement(id_factura, "FechaExpedicionFacturaEmisor").text = str(invoice_data.get("date_of_issue", ""))
             
             # Datos del emisor
-            etree.SubElement(reg_alta, "NombreRazonEmisor").text = "Alfonso SIF User"
+            etree.SubElement(reg_alta, "NombreRazonEmisor").text = issuer_name
             
             # Datos del receptor
             receptor = etree.SubElement(reg_alta, "Receptor")
@@ -205,6 +219,17 @@ class VerifactuService:
                 encadenamiento = etree.SubElement(reg_alta, "Encadenamiento")
                 registro_ant = etree.SubElement(encadenamiento, "RegistroAnterior")
                 etree.SubElement(registro_ant, "Huella").text = prev_hash
+
+            # Validar XML generado contra el esquema XSD oficial local de Veri*Factu
+            xsd_path = Path(__file__).resolve().parent.parent / "schemas" / "verifactu.xsd"
+            if xsd_path.exists():
+                try:
+                    xmlschema_doc = etree.parse(str(xsd_path))
+                    xmlschema = etree.XMLSchema(xmlschema_doc)
+                    xmlschema.assertValid(registro_xml)
+                except Exception as xml_err:
+                    app_logger.error(f"Error de validación contra el esquema XSD de Veri*Factu (Alta): {xml_err}")
+                    raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
             # Firmar digitalmente el elemento XMLDSig/XAdES envelopado
             signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
@@ -298,12 +323,25 @@ class VerifactuService:
                 encryption_algorithm=serialization.NoEncryption()
             )
 
+            # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
+            from app.utils.encryption import encryptor
+            issuer_name = "Alfonso SIF User"
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("SELECT razon_social FROM user_profile LIMIT 1")
+                    profile_row = cursor.fetchone()
+                    if profile_row and profile_row["razon_social"]:
+                        issuer_name = encryptor.decrypt(profile_row["razon_social"])
+                except Exception:
+                    pass
+
             # Estructura XML de anulación
             registro_xml = etree.Element("RegFactuSistemaFacturacion")
             
             cabecera = etree.SubElement(registro_xml, "Cabecera")
             obligado = etree.SubElement(cabecera, "ObligadoEmision")
-            etree.SubElement(obligado, "NombreRazon").text = "Alfonso SIF User"
+            etree.SubElement(obligado, "NombreRazon").text = issuer_name
             etree.SubElement(obligado, "NIF").text = row["issuer_nif"]
             
             reg_anulacion = etree.SubElement(registro_xml, "RegistroFacturacionAnulacion")
@@ -314,7 +352,7 @@ class VerifactuService:
             etree.SubElement(id_factura, "FechaExpedicionFacturaEmisor").text = row["date_of_issue"]
             
             # Datos del emisor
-            etree.SubElement(reg_anulacion, "NombreRazonEmisor").text = "Alfonso SIF User"
+            etree.SubElement(reg_anulacion, "NombreRazonEmisor").text = issuer_name
             
             # SistemaInformatico
             sistema = etree.SubElement(reg_anulacion, "SistemaInformatico")
@@ -328,6 +366,17 @@ class VerifactuService:
                 encadenamiento = etree.SubElement(reg_anulacion, "Encadenamiento")
                 registro_ant = etree.SubElement(encadenamiento, "RegistroAnterior")
                 etree.SubElement(registro_ant, "Huella").text = prev_hash
+
+            # Validar XML generado contra el esquema XSD oficial local de Veri*Factu
+            xsd_path = Path(__file__).resolve().parent.parent / "schemas" / "verifactu.xsd"
+            if xsd_path.exists():
+                try:
+                    xmlschema_doc = etree.parse(str(xsd_path))
+                    xmlschema = etree.XMLSchema(xmlschema_doc)
+                    xmlschema.assertValid(registro_xml)
+                except Exception as xml_err:
+                    app_logger.error(f"Error de validación contra el esquema XSD de Veri*Factu (Anulación): {xml_err}")
+                    raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
             # Firmar
             signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
