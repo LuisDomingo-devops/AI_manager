@@ -286,3 +286,12 @@ class AlfonsoAPI:
             return r.json()
         except Exception as e:
             return {"status": "error", "aggregates": [], "message": str(e)}
+
+    def get_compliance_declaration(self) -> dict:
+        """Obtiene la declaración responsable de conformidad con el RD 1007/2023 de Verifactu."""
+        try:
+            r = requests.get(f"{self.base_url}/compliance-declaration", timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}

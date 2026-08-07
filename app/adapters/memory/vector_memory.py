@@ -32,10 +32,14 @@ class VectorMemory(VectorMemoryPort):
     para ejecutarse 100% in-process y de forma offline.
     """
     def __init__(self):
-        self.db_path = Path(settings.CHROMA_DB_PATH)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        self.client = chromadb.PersistentClient(path=str(self.db_path))
+        import sys
+        is_testing = "pytest" in sys.modules
+        if is_testing:
+            self.client = chromadb.EphemeralClient()
+        else:
+            self.db_path = Path(settings.CHROMA_DB_PATH)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self.client = chromadb.PersistentClient(path=str(self.db_path))
         self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
         self._refresh_collection()
 

@@ -425,16 +425,7 @@ async def window_close(title: str, client_id: str | None = None) -> dict:
 # Código Importado de command_executor.py
 # ---------------------------------------------------------------------------
 
-DANGEROUS_COMMANDS = {
-    "rm",
-    "del",
-    "shutdown",
-    "reboot",
-    "poweroff",
-    "format",
-    "mkfs",
-    "dd",
-}
+ALLOWED_BINARIES = {"python", "python3", "pip", "pytest", "git", "uvicorn", "npm", "echo"}
 
 _FORK_BOMB_PATTERN = re.compile(r":\s*\(\s*\)\s*\{")
 
@@ -446,9 +437,27 @@ def _normalize_terminal_command(command: str | Sequence[str]) -> list[str]:
 
 
 def _is_safe_command(command_parts: list[str]) -> bool:
-    for token in command_parts:
-        if token.lower() in DANGEROUS_COMMANDS:
+    if not command_parts:
+        return False
+        
+    binary = Path(command_parts[0]).name.lower()
+    if binary.endswith(".exe"):
+        binary = binary[:-4]
+        
+    if binary not in ALLOWED_BINARIES:
+        return False
+        
+    # Bloquear argumentos peligrosos y ejecución en línea
+    dangerous_patterns = [";", "&&", "||", "|", "`", "$(", "$", "\n", "\r", ">", "<"]
+    for part in command_parts:
+        part_clean = part.strip()
+        # Bloquear ejecución de scripts python arbitrarios en línea
+        if part_clean == "-c":
             return False
+        for pat in dangerous_patterns:
+            if pat in part:
+                return False
+                
     return True
 
 

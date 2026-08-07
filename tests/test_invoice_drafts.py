@@ -6,6 +6,24 @@ from app.utils.encryption import encryptor
 from app.tools.server.billing_tools import generate_invoice_pdf
 from app.domain.services.verifactu_service import VerifactuService
 
+@pytest.fixture(autouse=True)
+def clean_db(tmp_path, monkeypatch):
+    import sys
+    import app.adapters.memory.memory
+    memory_module = sys.modules["app.adapters.memory.memory"]
+    test_db = tmp_path / "memory_test_invoice_drafts.db"
+    monkeypatch.setattr(memory_module, "DB_PATH", test_db)
+    
+    with _get_connection() as conn:
+        conn.execute("DROP TABLE IF EXISTS invoices")
+        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.commit()
+        
+        from app.adapters.memory.memory import _init_db_schema
+        _init_db_schema(conn)
+        VerifactuService.init_verifactu_schema()
+    yield
+
 @pytest.mark.asyncio
 async def test_invoice_draft_creation_and_finalization():
     # 1. Crear una factura incompleta (falta NIF) -> debe ser borrador
@@ -14,7 +32,8 @@ async def test_invoice_draft_creation_and_finalization():
         client_nif="", # NIF vacío
         amount=100.0,
         concept="Servicios de desarrollo de software",
-        date="15/07/2026"
+        date="15/07/2026",
+        confirmed_by_user=True
     )
     
     assert res_draft["status"] == "ok"
@@ -59,7 +78,8 @@ async def test_invoice_draft_creation_and_finalization():
         amount=100.0,
         concept="Servicios de desarrollo de software",
         invoice_id=draft_id, # ID del borrador a completar
-        date="15/07/2026"
+        date="15/07/2026",
+        confirmed_by_user=True
     )
 
     assert res_firm["status"] == "ok"

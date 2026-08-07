@@ -7,9 +7,11 @@ from app.adapters.memory.memory import _get_connection
 
 @pytest.fixture(autouse=True)
 def clean_verifactu_db(tmp_path, monkeypatch):
-    import app.adapters.memory.memory as memory
+    import sys
+    import app.adapters.memory.memory
+    memory_module = sys.modules["app.adapters.memory.memory"]
     test_db = tmp_path / "memory_test_verifactu_qa_stress.db"
-    monkeypatch.setattr(memory, "DB_PATH", test_db)
+    monkeypatch.setattr(memory_module, "DB_PATH", test_db)
 
     with _get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS verifactu_invoices")

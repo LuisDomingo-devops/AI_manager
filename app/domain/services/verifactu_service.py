@@ -25,6 +25,7 @@ class VerifactuService:
     @classmethod
     def init_verifactu_schema(cls) -> None:
         """Inicializa la tabla de facturas emitidas bajo regulación Verifactu."""
+        import sqlite3
         with _get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS verifactu_invoices (
@@ -39,9 +40,15 @@ class VerifactuService:
                     prev_hash       TEXT,
                     current_hash    TEXT NOT NULL,
                     signature       TEXT,
+                    status          TEXT NOT NULL DEFAULT 'ALTA',
                     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
                 )
             """)
+            try:
+                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN status TEXT DEFAULT 'ALTA'")
+            except sqlite3.OperationalError:
+                pass
+                
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sif_event_log (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,6 +112,8 @@ class VerifactuService:
         """
         issuer_nif = str(invoice_data.get("issuer_nif", "")).strip().upper()
         invoice_number = str(invoice_data.get("invoice_number", "")).strip().upper()
+        if invoice_number.endswith("_ANUL"):
+            invoice_number = invoice_number[:-5]
         date_of_issue = str(invoice_data.get("date_of_issue", "")).strip()
         
         # Formatear números con dos decimales y punto decimal
@@ -147,12 +156,14 @@ class VerifactuService:
                 encryption_algorithm=serialization.NoEncryption()
             )
 
-            # Estructura del XML del registro de facturación de alta según Verifactu
-            registro_xml = etree.Element("SuministroLRRegistroFacturacionAlta")
+            # Estructura del XML oficial de Verifactu (Orden HAC/1177/2024)
+            registro_xml = etree.Element("RegFactuSistemaFacturacion")
             
             # Cabecera
             cabecera = etree.SubElement(registro_xml, "Cabecera")
-            etree.SubElement(cabecera, "ObligadoEmision").text = str(invoice_data.get("issuer_nif", ""))
+            obligado = etree.SubElement(cabecera, "ObligadoEmision")
+            etree.SubElement(obligado, "NombreRazon").text = "Alfonso SIF User"
+            etree.SubElement(obligado, "NIF").text = str(invoice_data.get("issuer_nif", ""))
             
             # Bloque de RegistroFacturacionAlta
             reg_alta = etree.SubElement(registro_xml, "RegistroFacturacionAlta")
@@ -163,20 +174,24 @@ class VerifactuService:
             etree.SubElement(id_factura, "FechaExpedicionFacturaEmisor").text = str(invoice_data.get("date_of_issue", ""))
             
             # Datos del emisor
-            emisor = etree.SubElement(reg_alta, "Emisor")
-            etree.SubElement(emisor, "NIF").text = str(invoice_data.get("issuer_nif", ""))
+            etree.SubElement(reg_alta, "NombreRazonEmisor").text = "Alfonso SIF User"
             
             # Datos del receptor
             receptor = etree.SubElement(reg_alta, "Receptor")
-            etree.SubElement(receptor, "NIF").text = str(invoice_data.get("receiver_nif", ""))
+            etree.SubElement(receptor, "NombreRazonReceptor").text = "Cliente Final"
+            etree.SubElement(receptor, "NIFReceptor").text = str(invoice_data.get("receiver_nif", ""))
             
             # DetalleFactura
             detalle = etree.SubElement(reg_alta, "DetalleFactura")
             etree.SubElement(detalle, "TipoFactura").text = "F1"  # Factura Ordinaria
             etree.SubElement(detalle, "ClaveRegimenEspecialOTrascendencia").text = "01"  # Régimen común
-            etree.SubElement(detalle, "BaseImponible").text = f"{float(invoice_data.get('base_imponible', 0.0)):.2f}"
-            etree.SubElement(detalle, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
             etree.SubElement(detalle, "ImporteTotal").text = f"{float(invoice_data.get('total_amount', 0.0)):.2f}"
+            
+            # Desglose (con IVA)
+            desglose = etree.SubElement(detalle, "Desglose")
+            detalle_iva = etree.SubElement(desglose, "DetalleIVA")
+            etree.SubElement(detalle_iva, "BaseImponible").text = f"{float(invoice_data.get('base_imponible', 0.0)):.2f}"
+            etree.SubElement(detalle_iva, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
             
             # Datos de Infraestructura del Software (Requerido por Verifactu)
             sistema = etree.SubElement(reg_alta, "SistemaInformatico")
@@ -186,8 +201,8 @@ class VerifactuService:
             etree.SubElement(sistema, "Version").text = "2.0.0"
             
             # Encadenamiento criptográfico Verifactu oficial
-            encadenamiento = etree.SubElement(reg_alta, "Encadenamiento")
             if prev_hash:
+                encadenamiento = etree.SubElement(reg_alta, "Encadenamiento")
                 registro_ant = etree.SubElement(encadenamiento, "RegistroAnterior")
                 etree.SubElement(registro_ant, "Huella").text = prev_hash
 
@@ -202,8 +217,8 @@ class VerifactuService:
                 conn.execute("""
                     INSERT INTO verifactu_invoices (
                         invoice_number, date_of_issue, issuer_nif, receiver_nif,
-                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ALTA')
                 """, (
                     invoice_data["invoice_number"],
                     invoice_data["date_of_issue"],
@@ -238,6 +253,136 @@ class VerifactuService:
             }
 
     @classmethod
+    def cancel_invoice(cls, invoice_number: str) -> Dict[str, Any]:
+        """
+        Anula una factura registrada en Verifactu.
+        Genera el XML oficial de anulación y calcula su hash encadenado.
+        """
+        with cls._lock:
+            cls.init_verifactu_schema()
+            
+            # Obtener datos de la factura original
+            with _get_connection() as conn:
+                row = conn.execute(
+                    "SELECT * FROM verifactu_invoices WHERE invoice_number = ? AND status = 'ALTA' LIMIT 1",
+                    (invoice_number,)
+                ).fetchone()
+                
+            if not row:
+                return {"status": "error", "message": f"Factura {invoice_number} no encontrada o ya anulada."}
+
+            prev_hash = cls.get_last_invoice_hash()
+            
+            # Preparar datos para hash de anulación
+            invoice_data = {
+                "invoice_number": invoice_number,
+                "date_of_issue": row["date_of_issue"],
+                "issuer_nif": row["issuer_nif"],
+                "receiver_nif": row["receiver_nif"],
+                "base_imponible": row["base_imponible"],
+                "iva_amount": row["iva_amount"],
+                "total_amount": row["total_amount"]
+            }
+            
+            current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
+
+            from lxml import etree
+            import signxml
+            from signxml import XMLSigner
+
+            # Obtener claves y firmar
+            private_key = cls.get_or_create_private_key()
+            pem_key_bytes = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+
+            # Estructura XML de anulación
+            registro_xml = etree.Element("RegFactuSistemaFacturacion")
+            
+            cabecera = etree.SubElement(registro_xml, "Cabecera")
+            obligado = etree.SubElement(cabecera, "ObligadoEmision")
+            etree.SubElement(obligado, "NombreRazon").text = "Alfonso SIF User"
+            etree.SubElement(obligado, "NIF").text = row["issuer_nif"]
+            
+            reg_anulacion = etree.SubElement(registro_xml, "RegistroFacturacionAnulacion")
+            
+            # IDFacturaAnulada
+            id_factura = etree.SubElement(reg_anulacion, "IDFacturaAnulada")
+            etree.SubElement(id_factura, "NumSerieFacturaEmisor").text = invoice_number
+            etree.SubElement(id_factura, "FechaExpedicionFacturaEmisor").text = row["date_of_issue"]
+            
+            # Datos del emisor
+            etree.SubElement(reg_anulacion, "NombreRazonEmisor").text = "Alfonso SIF User"
+            
+            # SistemaInformatico
+            sistema = etree.SubElement(reg_anulacion, "SistemaInformatico")
+            etree.SubElement(sistema, "Nombre").text = "Alfonso Autónomo SIF"
+            etree.SubElement(sistema, "NIFProductor").text = "B00000000"
+            etree.SubElement(sistema, "NumInstalacion").text = "000001"
+            etree.SubElement(sistema, "Version").text = "2.0.0"
+            
+            # Encadenamiento
+            if prev_hash:
+                encadenamiento = etree.SubElement(reg_anulacion, "Encadenamiento")
+                registro_ant = etree.SubElement(encadenamiento, "RegistroAnterior")
+                etree.SubElement(registro_ant, "Huella").text = prev_hash
+
+            # Firmar
+            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
+            signed_root = signer.sign(registro_xml, key=pem_key_bytes)
+            
+            xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
+            real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
+
+            # Registrar la anulación como nueva fila con sufijo local para evitar UNIQUE constraint de SQLite
+            invoice_number_local = f"{invoice_number}_ANUL"
+            with _get_connection() as conn:
+                # 1. Actualizar estado de la factura original a ANULADA
+                conn.execute(
+                    "UPDATE verifactu_invoices SET status = 'ANULADA' WHERE id = ?",
+                    (row["id"],)
+                )
+                # 2. Insertar el registro de anulación en la cadena
+                conn.execute("""
+                    INSERT INTO verifactu_invoices (
+                        invoice_number, date_of_issue, issuer_nif, receiver_nif,
+                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ANULADA')
+                """, (
+                    invoice_number_local,
+                    row["date_of_issue"],
+                    row["issuer_nif"],
+                    row["receiver_nif"],
+                    row["base_imponible"],
+                    row["iva_amount"],
+                    row["total_amount"],
+                    prev_hash,
+                    current_hash,
+                    real_sig_base64
+                ))
+                conn.commit()
+
+            # Guardar XML local
+            xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
+            xml_dir.mkdir(parents=True, exist_ok=True)
+            xml_file = xml_dir / f"{invoice_number}_anulacion_verifactu.xml"
+            with open(xml_file, "w", encoding="utf-8") as f:
+                f.write(xml_firmado_str)
+
+            aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
+
+            return {
+                "status": "success",
+                "invoice_number": invoice_number,
+                "prev_hash": prev_hash,
+                "current_hash": current_hash,
+                "signature": real_sig_base64,
+                "aeat_delivery": aeat_response
+            }
+
+    @classmethod
     def send_to_aeat_sif(cls, xml_content: str) -> Dict[str, Any]:
         """
         Envía el XML firmado del registro al endpoint SOAP oficial de VERIFACTU de la AEAT.
@@ -245,14 +390,14 @@ class VerifactuService:
         """
         import httpx
         # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas)
-        AEAT_URL = "https://prewww10.aeat.es/wlpl/SSII-FACT/ws/fe/SiiFactFEV1SOAP"
+        AEAT_URL = "https://prewww10.aeat.es/wlpl/PORT-SSII/ws/fe/RegFactuSistemaFacturacionSOAP"
         
         cert_path = os.environ.get("ALFONSO_AEAT_CERT")
         key_path = os.environ.get("ALFONSO_AEAT_KEY")
         
-        # Envoltorio SOAP reglamentario
+        # Envoltorio SOAP reglamentario Verifactu
         soap_envelope = f"""<?xml version="1.0" encoding="utf-8"?>
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:val="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/ssii/fact/ws/SiiFactFEV1.xsd">
+        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:val="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/ssii/fact/ws/RegFactuSistemaFacturacion.xsd">
            <soapenv:Header/>
            <soapenv:Body>
               {xml_content}
@@ -262,7 +407,7 @@ class VerifactuService:
 
         headers = {
             "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": "https://www2.agenciatributaria.gob.es/wlpl/SSII-FACT/ws/fe/SiiFactFEV1SOAP/RegFactFacturacion"
+            "SOAPAction": "https://www2.agenciatributaria.gob.es/wlpl/PORT-SSII/ws/fe/RegFactuSistemaFacturacionSOAP"
         }
 
         # Si el usuario configuró certificado electrónico cualificado, intentamos mTLS
@@ -299,8 +444,12 @@ class VerifactuService:
 
         expected_prev_hash = None
         for i, row in enumerate(rows):
+            inv_num = row["invoice_number"]
+            if inv_num.endswith("_ANUL"):
+                inv_num = inv_num[:-5]
+                
             invoice_data = {
-                "invoice_number": row["invoice_number"],
+                "invoice_number": inv_num,
                 "date_of_issue": row["date_of_issue"],
                 "issuer_nif": row["issuer_nif"],
                 "receiver_nif": row["receiver_nif"],

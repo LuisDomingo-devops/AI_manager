@@ -29,9 +29,11 @@ def mock_memory(request):
     """
     Fixture para parchear la instancia global 'memory' en app.adapters.memory
     y en cualquier módulo que la importe, como planner_orchestrator.
-    Esto evita que los tests interactúen con la DB real.
+    Esto evita que los tests de agentes interactúen con la DB real, pero
+    permite a los tests de persistencia usar la DB física aislada.
     """
-    if "test_memory" in request.node.nodeid:
+    db_tests = ["test_memory", "test_verifactu", "test_encryption", "test_license", "test_invoice_drafts", "test_qa_integration"]
+    if any(x in request.node.nodeid for x in db_tests):
         yield
         return
     with patch("app.adapters.memory.memory") as mocked:

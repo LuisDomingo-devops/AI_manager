@@ -119,7 +119,8 @@ async def generate_invoice_pdf(
     invoice_id: str = None,
     date: str = None,
     iva_rate: float = 21.0,
-    irpf_rate: float = 15.0
+    irpf_rate: float = 15.0,
+    confirmed_by_user: bool = False
 ) -> dict:
     """
     Genera una factura en PDF con formato profesional de venta en la carpeta Facturas_Pendientes_Cobro del Escritorio,
@@ -185,6 +186,12 @@ async def generate_invoice_pdf(
         is_incomplete_amount = not amount or float(amount) <= 0.0
 
         is_draft = is_incomplete_name or is_incomplete_nif or is_incomplete_concept or is_incomplete_amount
+
+        # Capa de confirmación humana obligatoria antes de emitir factura firme
+        force_draft_msg = None
+        if not is_draft and not confirmed_by_user:
+            is_draft = True
+            force_draft_msg = "La factura tiene todos los campos necesarios, pero se ha generado como BORRADOR sin validez fiscal porque requiere la confirmación explícita del usuario (confirmed_by_user=True) para su registro firme en Verifactu (AEAT)."
 
         # 3. Resolver fechas e identificadores secuenciales
         now = datetime.now()
@@ -515,10 +522,26 @@ async def generate_invoice_pdf(
             "pdf_path": str(pdf_path),
             "total_amount": total_amount,
             "base_imponible": amount,
-            "message": f"{msg_detail} y guardada en 'archivo fiscal/facturas pendientes'."
+            "message": force_draft_msg if force_draft_msg else f"{msg_detail} y guardada en 'archivo fiscal/facturas pendientes'."
         }
     except Exception as e:
         tool_logger.exception("Error al generar e inyectar la factura")
+        return {"status": "error", "message": str(e)}
+
+async def cancel_invoice(invoice_id: str) -> dict:
+    """
+    Anula una factura emitida de forma firme bajo la regulación Verifactu (AEAT).
+    Genera el XML de anulación correspondiente y lo envía / registra en la cadena de huellas de auditoría.
+    """
+    try:
+        from app.domain.services.verifactu_service import VerifactuService
+        res = VerifactuService.cancel_invoice(invoice_id)
+        if res["status"] == "success":
+            return {"status": "ok", "message": f"Factura {invoice_id} anulada correctamente en Verifactu (AEAT).", "detail": res}
+        else:
+            return {"status": "error", "message": res.get("message", "Error al anular la factura.")}
+    except Exception as e:
+        tool_logger.exception("Error al anular la factura")
         return {"status": "error", "message": str(e)}
 
 async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
@@ -568,4 +591,5 @@ TOOLS = {
     "create_client": create_client,
     "generate_invoice_pdf": generate_invoice_pdf,
     "send_invoice_email": send_invoice_email,
+    "cancel_invoice": cancel_invoice,
 }

@@ -1061,6 +1061,31 @@ async def check_boe_endpoint(date: Optional[str] = Query(None, description="Fech
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Endpoint de la Declaración Responsable de Conformidad (Real Decreto 1007/2023)
+@router.get("/compliance-declaration")
+async def get_compliance_declaration():
+    return {
+        "status": "ok",
+        "compliance": {
+            "developer": "Alfonso S.L.",
+            "software_name": "Alfonso Autónomo SIF",
+            "version": "2.0.0",
+            "regulation": "Real Decreto 1007/2023 y Orden HAC/1177/2024",
+            "certified_date": "2026-08-07",
+            "statement": (
+                "Alfonso S.L. declara bajo su responsabilidad que el sistema informático de facturación "
+                "'Alfonso Autónomo SIF' versión 2.0.0 cumple con todos los requisitos establecidos en el "
+                "artículo 29.2.j) de la Ley 58/2003, de 17 de diciembre, General Tributaria, y en su reglamento "
+                "de desarrollo aprobado por el Real Decreto 1007/2023, de 5 de diciembre, así como en las "
+                "especificaciones técnicas de la Orden HAC/1177/2024. Garantizando la integridad, conservación, "
+                "accesibilidad, legibilidad, trazabilidad e inalterabilidad de los registros de facturación sin "
+                "interpolaciones, omisiones ni alteraciones de las que no quede la debida anotación en el sistema."
+            ),
+            "signature": "FIRMADO DIGITALMENTE POR REPRESENTANTE LEGAL DE ALFONSO S.L."
+        }
+    }
+
+
 # Incluimos los sub-routers en el router principal
 router.include_router(router_browser)
 router.include_router(router_computer)

@@ -8,13 +8,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 # Clave pública RSA por defecto para validar firmas de licencias de Alfonso Autónomo
 # En producción, esto corresponde a la clave privada en posesión de Alfonso S.L.
 PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzqXzR8F3X5h1S8jD1Y7g
-Vb5Z4y3sX4bH26mZ+8W4Kj4Y2Xk1CjX4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S
-1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1
-X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X
-4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4
-K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K2+S1X4K
-wIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4vxqcQyYeJuz3wEr1IRZ
+QJ70ygRTchcOqNroZYZRSEM0ngBLl8S/J24Vy0Me/j4mjmWJo75NO7UsDXCTll9E
+GBDD+PEYoSsIIre1l6RNqI31iBTetaIcbjKiQ9P7ExYWflhPH8N0Xm5ESPktQw7W
+Q8NJHdR1/ovUdEC3EC1hjac3HcNtEgcpwc3HZtIds7+QuQTFaHxyMFCpovUnmddY
+sEVP8t0jwc9TiXc3BcnCIqJyx3ymvIyEM23wMrl1mpG07PQkn0jO0sY8ThwyXqM0
+Oum6lYfIVVrzBeciDHky82Q60xyqpaArkXRu2zqBnXaa0/FHzRAuGUn38NN58W4x
+lwIDAQAB
 -----END PUBLIC KEY-----"""
 
 LICENSE_PATH = Path(__file__).resolve().parents[2] / "data" / "license.lic"
@@ -24,10 +24,12 @@ def is_premium_license_valid() -> bool:
     Verifica criptográficamente si la licencia premium local es válida.
     Comprueba firma, fecha de expiración y tipo de licencia.
     """
-    # 1. Fallback rápido de desarrollo: Si se inyecta una clave de bypass válida de desarrollo, habilitarla temporalmente
-    dev_bypass = os.getenv("ALFONSO_DEV_PREMIUM_BYPASS")
-    if dev_bypass == "AlfonsoDevelopmentToken2026!":
-        return True
+    # 1. Fallback rápido de desarrollo: Permitido ÚNICAMENTE en entorno de test automatizado (pytest)
+    is_testing = os.getenv("ALFONSO_IS_TESTING") == "True" or os.getenv("PYTEST_CURRENT_TEST") is not None
+    if is_testing:
+        dev_bypass = os.getenv("ALFONSO_DEV_PREMIUM_BYPASS")
+        if dev_bypass == "AlfonsoDevelopmentToken2026!":
+            return True
 
     # 2. Si no hay archivo de licencia, no es premium
     if not LICENSE_PATH.exists():

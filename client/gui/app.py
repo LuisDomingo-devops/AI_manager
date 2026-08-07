@@ -38,6 +38,8 @@ class AssistantThread(QThread):
     open_editor = pyqtSignal()
     close_editor = pyqtSignal()
     switch_session_requested = pyqtSignal(str, str, str) # session_id, project_name, title
+    confirm_invoice_requested = pyqtSignal(dict) # datos de la factura para popup
+
 
 
     def __init__(self, config):
@@ -124,6 +126,22 @@ class AssistantThread(QThread):
                         response_data = chat_res.get("result", {})
                         response_text = self.processor.format_response(response_data)
                         self.new_message.emit("Alfonso", response_text)
+
+                        # Detectar confirmación humana requerida para facturación
+                        pending_invoice = None
+                        if response_data.get("type") == "multi_tool":
+                            for r in response_data.get("results", []):
+                                if r.get("tool") == "generate_invoice_pdf":
+                                    res_tool = r.get("result", {})
+                                    if res_tool.get("is_draft") and "requiere la confirmación" in res_tool.get("message", ""):
+                                        pending_invoice = {**r.get("args", {}), **res_tool}
+                        elif response_data.get("tool") == "generate_invoice_pdf":
+                            res_tool = response_data.get("result", {})
+                            if res_tool.get("is_draft") and "requiere la confirmación" in res_tool.get("message", ""):
+                                pending_invoice = {**response_data.get("args", {}), **res_tool}
+
+                        if pending_invoice:
+                            self.confirm_invoice_requested.emit(pending_invoice)
 
                         tools_to_trigger = []
                         if response_data.get("type") == "multi_tool":
@@ -1409,6 +1427,9 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.tab_aeat.clicked.connect(self.show_aeat)
         self.tab_config = AlfonsoDashboardModuleButton("CONFIG")
         self.tab_config.clicked.connect(self.show_config)
+
+        self.tab_compliance = AlfonsoDashboardModuleButton("CERTIFICACIÓN SIF")
+        self.tab_compliance.clicked.connect(self.show_compliance)
         
         header_layout.addWidget(self.tab_dashboard)
         
@@ -1420,7 +1441,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         
         self.tab_archive = AlfonsoDashboardModuleButton("ARCHIVO FISCAL")
         self.tab_archive.clicked.connect(self.show_archive)
- 
+  
         header_layout.addWidget(self.tab_reconcile)
         header_layout.addWidget(self.tab_ledger)
         header_layout.addWidget(self.tab_archive)
@@ -1429,6 +1450,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         header_layout.addWidget(self.tab_kpi)
         header_layout.addWidget(self.tab_aeat)
         header_layout.addWidget(self.tab_config)
+        header_layout.addWidget(self.tab_compliance)
 
 
         header_layout.addStretch()
@@ -1792,6 +1814,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.thread.close_mail.connect(self.hide_mail)
         self.thread.sync_mail.connect(self.reload_mail_events)
         self.thread.switch_session_requested.connect(self.handler_switch_session)
+        self.thread.confirm_invoice_requested.connect(self.show_invoice_confirmation)
         self.thread.start()
 
     def hide_calendar(self):
@@ -1801,6 +1824,22 @@ class AlfonsoHUDDashboard(QMainWindow):
     def reload_calendar_events(self):
         if self.calendar_window and self.calendar_window.isVisible():
             self.calendar_window.load_events()
+
+    def show_compliance(self):
+        try:
+            dialog = AlfonsoComplianceDialog(self)
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo abrir el diálogo de conformidad: {e}")
+
+    def show_invoice_confirmation(self, invoice_data):
+        try:
+            dialog = AlfonsoInvoiceConfirmDialog(self, invoice_data)
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.confirmed:
+                invoice_id = invoice_data.get("invoice_id")
+                self.thread.send_text_message(f"Confirmo la emisión y registro de la factura {invoice_id} en la AEAT de forma firme.")
+        except Exception as e:
+            print(f"Error mostrando confirmación de factura: {e}")
 
     def update_module_button_states(self):
         # CALENDARIO
@@ -2494,6 +2533,142 @@ class AlfonsoBaseDialog(QDialog):
                 color: #FFFFFF;
             }
         """)
+
+
+class AlfonsoComplianceDialog(AlfonsoBaseDialog):
+    """Diálogo para consultar la Declaración Responsable de Conformidad (Real Decreto 1007/2023)."""
+    def __init__(self, parent=None):
+        super().__init__(parent, "DECLARACIÓN RESPONSABLE DE CONFORMIDAD SIF")
+        self.setMinimumSize(550, 450)
+        self.setup_ui()
+
+    def setup_ui(self):
+        lbl_info = QLabel("<b>Certificación de Cumplimiento Legal (Ley General Tributaria):</b>")
+        lbl_info.setStyleSheet("color: #FFB800; font-size: 13px; font-weight: bold;")
+        self.content_layout.addWidget(lbl_info)
+
+        self.txt_declaration = QTextBrowser()
+        self.txt_declaration.setStyleSheet("background-color: #0A0F1D; color: #E2E8F0; border: 1px solid rgba(255, 184, 0, 30); font-family: 'Consolas', monospace; font-size: 11px; padding: 10px;")
+        self.txt_declaration.setOpenExternalLinks(True)
+        self.content_layout.addWidget(self.txt_declaration)
+
+        # Cargar los datos desde el backend
+        api = self.parent().thread.api if self.parent() and hasattr(self.parent(), 'thread') else None
+        if api:
+            try:
+                res = api.get_compliance_declaration()
+                if res.get("status") == "ok":
+                    comp = res.get("compliance", {})
+                    text = (
+                        f"<b>DESARROLLADOR:</b> {comp.get('developer')}<br>"
+                        f"<b>SISTEMA INFORMÁTICO:</b> {comp.get('software_name')} v{comp.get('version')}<br>"
+                        f"<b>NORMATIVA APLICABLE:</b> {comp.get('regulation')}<br>"
+                        f"<b>FECHA DE CERTIFICACIÓN:</b> {comp.get('certified_date')}<br><br>"
+                        f"<hr style='border-color: rgba(255, 184, 0, 30);'><br>"
+                        f"<b>DECLARACIÓN FORMAL DE CONFORMIDAD:</b><br><br>"
+                        f"<i>\"{comp.get('statement')}\"</i><br><br>"
+                        f"<hr style='border-color: rgba(255, 184, 0, 30);'><br>"
+                        f"<font color='#10B981'><b>FIRMA DIGITAL REGLAMENTARIA:</b></font><br>"
+                        f"<small>{comp.get('signature')}</small>"
+                    )
+                    self.txt_declaration.setHtml(text)
+                else:
+                    self.txt_declaration.setPlainText(f"Error al obtener declaración del backend: {res.get('message')}")
+            except Exception as e:
+                self.txt_declaration.setPlainText(f"Error de conexión con el backend: {e}")
+        else:
+            self.txt_declaration.setPlainText("API no disponible en este momento.")
+
+        btn_close = QPushButton("Cerrar")
+        btn_close.clicked.connect(self.accept)
+        btn_close.setStyleSheet("background-color: rgba(255, 184, 0, 0.15); border-color: #FFB800; color: #FFD25F;")
+        self.content_layout.addWidget(btn_close)
+
+
+class AlfonsoInvoiceConfirmDialog(QDialog):
+    """Diálogo popup para la confirmación humana obligatoria antes de emitir una factura firme."""
+    def __init__(self, parent, invoice_data):
+        super().__init__(parent)
+        self.setWindowTitle("CONFIRMACIÓN DE EMISIÓN DE FACTURA (VERI*FACTU)")
+        self.setMinimumSize(450, 320)
+        self.setStyleSheet("background-color: #0F172A; color: #E2E8F0; font-family: 'Segoe UI', sans-serif;")
+        
+        self.invoice_data = invoice_data
+        self.confirmed = False
+        
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        title = QLabel("⚠️ REVISIÓN PREVIA FISCAL REGLAMENTARIA")
+        title.setStyleSheet("color: #F59E0B; font-size: 14px; font-weight: bold;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "De acuerdo con el Real Decreto 1007/2023, la emisión de esta factura generará un registro local "
+            "inalterable y se remitirá a la AEAT (Veri*Factu). Por favor, confirme que los datos son correctos:"
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        layout.addWidget(desc)
+
+        # Detalles en un GroupBox
+        group = QGroupBox("Datos del Registro")
+        group.setStyleSheet("QGroupBox { border: 1px solid rgba(245, 158, 11, 40); border-radius: 4px; margin-top: 10px; padding-top: 10px; } QGroupBox::title { color: #F59E0B; subcontrol-origin: margin; left: 10px; }")
+        grid = QFormLayout()
+        grid.setSpacing(6)
+        
+        lbl_cliente = QLabel(self.invoice_data.get("client_name", "Desconocido"))
+        lbl_cliente.setStyleSheet("font-weight: bold; color: #F8FAFC;")
+        grid.addRow("Cliente:", lbl_cliente)
+        
+        lbl_nif = QLabel(self.invoice_data.get("client_nif", "Desconocido"))
+        lbl_nif.setStyleSheet("font-weight: bold; color: #F8FAFC;")
+        grid.addRow("NIF:", lbl_nif)
+
+        lbl_concepto = QLabel(self.invoice_data.get("concept", "Desconocido"))
+        lbl_concepto.setStyleSheet("font-weight: bold; color: #F8FAFC;")
+        grid.addRow("Concepto:", lbl_concepto)
+        
+        total = float(self.invoice_data.get("amount", 0.0))
+        iva_rate = float(self.invoice_data.get("iva_rate", 21.0))
+        iva_amount = total * (iva_rate / 100.0)
+        total_amount = total + iva_amount
+        
+        lbl_base = QLabel(f"{total:,.2f} €")
+        lbl_base.setStyleSheet("font-weight: bold; color: #F8FAFC;")
+        grid.addRow("Base Imponible:", lbl_base)
+
+        lbl_total = QLabel(f"{total_amount:,.2f} € (IVA {iva_rate}% incl.)")
+        lbl_total.setStyleSheet("font-weight: bold; color: #10B981; font-size: 12px;")
+        grid.addRow("Importe Total:", lbl_total)
+
+        group.setLayout(grid)
+        layout.addWidget(group)
+
+        # Botones de Acción
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        btn_cancel = QPushButton("Guardar como Borrador")
+        btn_cancel.setStyleSheet("background-color: rgba(148, 163, 184, 0.15); border: 1px solid #64748B; color: #94A3B8; height: 32px; font-weight: bold;")
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancel)
+
+        btn_confirm = QPushButton("Confirmar y Registrar (AEAT)")
+        btn_confirm.setStyleSheet("background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; color: #34D399; height: 32px; font-weight: bold;")
+        btn_confirm.clicked.connect(self.confirm_invoice)
+        btn_layout.addWidget(btn_confirm)
+
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+
+    def confirm_invoice(self):
+        self.confirmed = True
+        self.accept()
 
 
 class CalendarWidget(AlfonsoBaseDialog):

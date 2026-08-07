@@ -10,9 +10,11 @@ from app.adapters.memory.memory import _get_connection
 
 @pytest.fixture(autouse=True)
 def clean_verifactu_db(tmp_path, monkeypatch):
-    import app.adapters.memory.memory as memory
+    import sys
+    import app.adapters.memory.memory
+    memory_module = sys.modules["app.adapters.memory.memory"]
     test_db = tmp_path / "memory_test_verifactu_integrity.db"
-    monkeypatch.setattr(memory, "DB_PATH", test_db)
+    monkeypatch.setattr(memory_module, "DB_PATH", test_db)
 
     with _get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
@@ -47,8 +49,8 @@ def test_xml_structure_xsd_compliance():
     parser = etree.XMLParser(resolve_entities=False, no_network=True)
     root = etree.fromstring(xml_content.encode("utf-8"), parser=parser)
     
-    # Debe ser SuministroLRRegistroFacturacionAlta
-    assert root.tag == "SuministroLRRegistroFacturacionAlta"
+    # Debe ser RegFactuSistemaFacturacion
+    assert root.tag == "RegFactuSistemaFacturacion"
     
     # Debe contener Cabecera y RegistroFacturacionAlta
     cabecera = root.find("Cabecera")

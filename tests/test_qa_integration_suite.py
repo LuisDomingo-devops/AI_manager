@@ -10,8 +10,14 @@ from app.adapters.memory.memory import _get_connection, memory
 from app.adapters.mail_db import create_email, list_emails
 
 @pytest.fixture(autouse=True)
-def clean_system_state():
+def clean_system_state(tmp_path, monkeypatch):
     """Limpia el estado de la base de datos de test antes de cada ejecución."""
+    import sys
+    import app.adapters.memory.memory
+    memory_mod = sys.modules["app.adapters.memory.memory"]
+    test_db = tmp_path / "memory_test_qa_integration.db"
+    monkeypatch.setattr(memory_mod, "DB_PATH", test_db)
+
     with _get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS messages")
         conn.execute("DROP TABLE IF EXISTS conversation_metadata")
