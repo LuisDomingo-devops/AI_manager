@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import qrcode
+import sqlite3
 from pathlib import Path
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
@@ -12,6 +13,7 @@ from app.domain.services.ledger_service import LedgerService
 from app.domain.services.excel_sync import ExcelSyncService
 from app.domain.services.verifactu_service import VerifactuService
 from app.utils.logger import tool_logger
+from app.utils.validators import validate_nif_nie_cif
 
 
 async def get_projects_wip() -> dict:
@@ -94,13 +96,17 @@ async def create_client(name: str, nif: str, email: str, address: str = "") -> d
     Registra un nuevo cliente en la base de datos para automatizar futuras facturas.
     """
     try:
+        nif_clean = nif.strip().upper()
+        if not validate_nif_nie_cif(nif_clean):
+            return {"status": "error", "message": f"El NIF/CIF/NIE '{nif}' no es válido formalmente."}
+
         conn = _get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO clients (name, nif, email, address)
                 VALUES (?, ?, ?, ?)
-            """, (name.strip(), nif.strip().upper(), email.strip(), address.strip()))
+            """, (name.strip(), nif_clean, email.strip(), address.strip()))
             conn.commit()
             return {"status": "ok", "message": f"Cliente '{name}' registrado con éxito en la base de datos."}
         except sqlite3.IntegrityError:
@@ -109,6 +115,483 @@ async def create_client(name: str, nif: str, email: str, address: str = "") -> d
             conn.close()
     except Exception as e:
         tool_logger.exception("Error al registrar cliente")
+        return {"status": "error", "message": str(e)}
+
+async def update_client(client_id: int, name: str = None, nif: str = None, email: str = None, address: str = None) -> dict:
+    """
+    Actualiza los datos de un cliente existente por su ID.
+    """
+    try:
+        if nif is not None:
+            nif_clean = nif.strip().upper()
+            if not validate_nif_nie_cif(nif_clean):
+                return {"status": "error", "message": f"El NIF/CIF/NIE '{nif}' no es válido formalmente."}
+        
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM clients WHERE id = ?", (client_id,))
+            if not cursor.fetchone():
+                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
+
+            fields_to_update = []
+            params = []
+            if name is not None:
+                fields_to_update.append("name = ?")
+                params.append(name.strip())
+            if nif is not None:
+                fields_to_update.append("nif = ?")
+                params.append(nif.strip().upper())
+            if email is not None:
+                fields_to_update.append("email = ?")
+                params.append(email.strip())
+            if address is not None:
+                fields_to_update.append("address = ?")
+                params.append(address.strip())
+
+            if not fields_to_update:
+                return {"status": "ok", "message": "No se especificaron campos para actualizar."}
+
+            params.append(client_id)
+            query = f"UPDATE clients SET {', '.join(fields_to_update)} WHERE id = ?"
+            cursor.execute(query, tuple(params))
+            conn.commit()
+            return {"status": "ok", "message": f"Cliente con ID {client_id} actualizado con éxito."}
+        except sqlite3.IntegrityError:
+            return {"status": "error", "message": "El nombre del cliente ya está registrado por otro cliente."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al actualizar cliente")
+        return {"status": "error", "message": str(e)}
+
+async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict:
+    """
+    Elimina un cliente existente por su ID. Requiere confirmación explícita del usuario.
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"¿Confirmas que deseas eliminar permanentemente al cliente con ID {client_id} de tu base de datos?"
+        }
+
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM clients WHERE id = ?", (client_id,))
+            if not cursor.fetchone():
+                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
+
+            cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+            conn.commit()
+            return {"status": "ok", "message": f"Cliente con ID {client_id} eliminado con éxito."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al eliminar cliente")
+        return {"status": "error", "message": str(e)}
+
+async def create_product(sku: str, name: str, price: float, description: str = "", iva_rate: float = 21.0) -> dict:
+    """
+    Registra un nuevo producto o servicio en el catálogo.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO products (sku, name, description, price, iva_rate)
+                VALUES (?, ?, ?, ?, ?)
+            """, (sku.strip().upper(), name.strip(), description.strip(), float(price), float(iva_rate)))
+            conn.commit()
+            return {"status": "ok", "message": f"Producto '{name}' con SKU '{sku}' registrado exitosamente."}
+        except sqlite3.IntegrityError:
+            return {"status": "error", "message": f"El producto/servicio con SKU '{sku}' ya existe."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al registrar producto")
+        return {"status": "error", "message": str(e)}
+
+async def get_products() -> dict:
+    """
+    Retorna la lista de todos los productos y servicios del catálogo.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, sku, name, description, price, iva_rate FROM products")
+            rows = cursor.fetchall()
+            products = []
+            for r in rows:
+                products.append({
+                    "id": r["id"],
+                    "sku": r["sku"],
+                    "name": r["name"],
+                    "description": r["description"],
+                    "price": float(r["price"]),
+                    "iva_rate": float(r["iva_rate"])
+                })
+            return {"status": "ok", "products": products}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al obtener catálogo de productos")
+        return {"status": "error", "message": str(e)}
+
+async def update_product(sku: str, name: str = None, price: float = None, description: str = None, iva_rate: float = None) -> dict:
+    """
+    Actualiza la información de un producto o servicio por su SKU.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            sku_upper = sku.strip().upper()
+            cursor.execute("SELECT id FROM products WHERE sku = ?", (sku_upper,))
+            if not cursor.fetchone():
+                return {"status": "error", "message": f"No se encontró ningún producto con SKU '{sku}'."}
+
+            fields_to_update = []
+            params = []
+            if name is not None:
+                fields_to_update.append("name = ?")
+                params.append(name.strip())
+            if price is not None:
+                fields_to_update.append("price = ?")
+                params.append(float(price))
+            if description is not None:
+                fields_to_update.append("description = ?")
+                params.append(description.strip())
+            if iva_rate is not None:
+                fields_to_update.append("iva_rate = ?")
+                params.append(float(iva_rate))
+
+            if not fields_to_update:
+                return {"status": "ok", "message": "No se especificaron campos para actualizar."}
+
+            params.append(sku_upper)
+            query = f"UPDATE products SET {', '.join(fields_to_update)} WHERE sku = ?"
+            cursor.execute(query, tuple(params))
+            conn.commit()
+            return {"status": "ok", "message": f"Producto con SKU '{sku}' actualizado exitosamente."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al actualizar producto")
+        return {"status": "error", "message": str(e)}
+
+async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
+    """
+    Elimina un producto o servicio del catálogo por su SKU. Requiere confirmación explícita del usuario.
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"¿Confirmas que deseas eliminar permanentemente el producto/servicio con SKU '{sku}' del catálogo?"
+        }
+
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            sku_upper = sku.strip().upper()
+            cursor.execute("SELECT id FROM products WHERE sku = ?", (sku_upper,))
+            if not cursor.fetchone():
+                return {"status": "error", "message": f"No se encontró ningún producto con SKU '{sku}'."}
+
+            cursor.execute("DELETE FROM products WHERE sku = ?", (sku_upper,))
+            conn.commit()
+            return {"status": "ok", "message": f"Producto con SKU '{sku}' eliminado del catálogo."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al eliminar producto")
+        return {"status": "error", "message": str(e)}
+
+def _generate_unique_quote_id(is_draft: bool, quote_id: str = None) -> str:
+    if quote_id:
+        return quote_id
+        
+    conn = _get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT quote_id FROM quotes")
+        rows = cursor.fetchall()
+        count = 0
+        prefix = "P-BORRADOR-2026-" if is_draft else "P-2026-"
+        for r in rows:
+            try:
+                dec_id = encryptor.decrypt(r["quote_id"])
+                if dec_id.startswith(prefix):
+                    count += 1
+            except Exception:
+                pass
+        return f"{prefix}{count + 101:03d}"
+    finally:
+        conn.close()
+
+async def create_quote(
+    client_name: str,
+    client_nif: str,
+    amount: float,
+    concept: str,
+    quote_id: str = None,
+    date: str = None,
+    iva_rate: float = 21.0,
+    irpf_rate: float = 15.0,
+    is_draft: bool = True
+) -> dict:
+    """
+    Genera un presupuesto en PDF (PDF de presupuesto/Quote), guarda sus detalles cifrados en la DB de presupuestos,
+    y devuelve la ruta del PDF y el ID de presupuesto.
+    """
+    try:
+        now = datetime.now()
+        if not date:
+            date_str = now.strftime("%d/%m/%Y")
+        else:
+            date_str = date
+
+        quote_id = _generate_unique_quote_id(is_draft, quote_id)
+
+        # Razón social del emisor
+        emisor_name = "LUIS DOMINGO"
+        emisor_nif = "12345678Z"
+        try:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT razon_social, nif FROM user_profile LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    if row["razon_social"]:
+                        emisor_name = encryptor.decrypt(row["razon_social"])
+                    if row["nif"]:
+                        emisor_nif = encryptor.decrypt(row["nif"])
+        except Exception:
+            pass
+
+        iva_amount = round(amount * (iva_rate / 100.0), 2)
+        irpf_amount = round(amount * (irpf_rate / 100.0), 2)
+        total_amount = round(amount + iva_amount - irpf_amount, 2)
+
+        target_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal" / "presupuestos"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        pdf_filename = f"Presupuesto_{quote_id}.pdf"
+        pdf_path = target_dir / pdf_filename
+
+        # Generar PDF
+        c = canvas.Canvas(str(pdf_path), pagesize=letter)
+        c.setFillColorRGB(0.12, 0.35, 0.23) # Color institucional verde oscuro para diferenciar
+        c.rect(50, 720, 510, 40, fill=True, stroke=False)
+        
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(65, 732, "PRESUPUESTO DE SERVICIOS")
+        
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(380, 735, f"Nro Presupuesto: {quote_id}")
+        c.drawString(380, 723, f"Fecha Emisión: {date_str}")
+        
+        c.setStrokeColorRGB(0.8, 0.8, 0.8)
+        c.line(50, 700, 560, 700)
+        
+        # Emisor
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(55, 675, "DATOS DEL EMISOR:")
+        c.setFont("Helvetica", 10)
+        c.drawString(55, 655, f"Razón Social: {emisor_name}")
+        c.drawString(55, 640, f"NIF/CIF: {emisor_nif}")
+        
+        # Receptor
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(320, 675, "DATOS DEL CLIENTE:")
+        c.setFont("Helvetica", 10)
+        c.drawString(320, 655, f"Razón Social: {client_name}")
+        c.drawString(320, 640, f"NIF/CIF: {client_nif}")
+        
+        c.line(50, 605, 560, 605)
+        
+        c.setFillColorRGB(0.9, 0.9, 0.9)
+        c.rect(50, 570, 510, 20, fill=True, stroke=False)
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(60, 576, "Descripción / Concepto")
+        c.drawString(450, 576, "Importe Base")
+        
+        c.setFont("Helvetica", 10)
+        c.drawString(60, 545, concept)
+        c.drawString(450, 545, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        c.line(50, 520, 560, 520)
+        
+        y = 480
+        totals = [
+            ("Base Imponible:", amount),
+            (f"IVA (+{iva_rate:.1f}%):", iva_amount) if iva_rate > 0 else ("IVA (0%):", 0.0),
+            (f"Retención IRPF (-{irpf_rate:.1f}%):", irpf_amount) if irpf_rate > 0 else ("Retención IRPF (0%):", 0.0),
+        ]
+        
+        for label, val in totals:
+            c.setFont("Helvetica", 10)
+            c.drawString(340, y, label)
+            c.drawString(450, y, f"{val:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+            y -= 20
+            
+        c.line(340, y + 10, 560, y + 10)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(340, y - 5, "Total Presupuestado:")
+        c.drawString(450, y - 5, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        c.setFont("Helvetica-Oblique", 8)
+        c.drawString(55, 90, "Presupuesto válido por 30 días.")
+        status_text = "BORRADOR" if is_draft else "EMITIDO"
+        c.drawString(55, 75, f"Estado del Documento: {status_text}")
+        c.save()
+
+        # Insertar en DB
+        status = "borrador" if is_draft else "enviado"
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO quotes (
+                    quote_id, date, client_name, client_nif, base_imponible, iva_rate, iva_amount,
+                    irpf_rate, irpf_amount, total_amount, concept, file_path, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                encryptor.encrypt(quote_id),
+                encryptor.encrypt(date_str),
+                encryptor.encrypt(client_name),
+                encryptor.encrypt(client_nif),
+                encryptor.encrypt(str(amount)),
+                encryptor.encrypt(str(iva_rate)),
+                encryptor.encrypt(str(iva_amount)),
+                encryptor.encrypt(str(irpf_rate)),
+                encryptor.encrypt(str(irpf_amount)),
+                encryptor.encrypt(str(total_amount)),
+                encryptor.encrypt(concept),
+                encryptor.encrypt(str(pdf_path)),
+                status
+            ))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {
+            "status": "ok",
+            "message": f"Presupuesto '{quote_id}' creado exitosamente en {pdf_path}.",
+            "quote_id": quote_id,
+            "file_path": str(pdf_path)
+        }
+    except Exception as e:
+        tool_logger.exception("Error al crear presupuesto")
+        return {"status": "error", "message": str(e)}
+
+async def get_quotes() -> dict:
+    """
+    Retorna la lista de todos los presupuestos descifrados.
+    """
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, quote_id, date, client_name, client_nif, base_imponible, iva_rate,
+                       iva_amount, irpf_rate, irpf_amount, total_amount, concept, file_path, status
+                FROM quotes
+            """)
+            rows = cursor.fetchall()
+            quotes = []
+            for r in rows:
+                try:
+                    quotes.append({
+                        "id": r["id"],
+                        "quote_id": encryptor.decrypt(r["quote_id"]),
+                        "date": encryptor.decrypt(r["date"]),
+                        "client_name": encryptor.decrypt(r["client_name"]),
+                        "client_nif": encryptor.decrypt(r["client_nif"]),
+                        "base_imponible": float(encryptor.decrypt(r["base_imponible"])),
+                        "iva_rate": float(encryptor.decrypt(r["iva_rate"])),
+                        "iva_amount": float(encryptor.decrypt(r["iva_amount"])),
+                        "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])),
+                        "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])),
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                        "concept": encryptor.decrypt(r["concept"]),
+                        "file_path": encryptor.decrypt(r["file_path"]),
+                        "status": r["status"]
+                    })
+                except Exception:
+                    pass
+            return {"status": "ok", "quotes": quotes}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al obtener presupuestos")
+        return {"status": "error", "message": str(e)}
+
+async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = False) -> dict:
+    """
+    Convierte un presupuesto existente en una factura formal.
+    """
+    try:
+        conn = _get_connection()
+        quote_data = None
+        db_id = None
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, quote_id, client_name, client_nif, base_imponible, concept, iva_rate, irpf_rate FROM quotes")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_qid = encryptor.decrypt(r["quote_id"])
+                    if dec_qid == quote_id:
+                        db_id = r["id"]
+                        quote_data = {
+                            "client_name": encryptor.decrypt(r["client_name"]),
+                            "client_nif": encryptor.decrypt(r["client_nif"]),
+                            "base_imponible": float(encryptor.decrypt(r["base_imponible"])),
+                            "concept": encryptor.decrypt(r["concept"]),
+                            "iva_rate": float(encryptor.decrypt(r["iva_rate"])),
+                            "irpf_rate": float(encryptor.decrypt(r["irpf_rate"]))
+                        }
+                        break
+                except Exception:
+                    pass
+            
+            if not quote_data:
+                return {"status": "error", "message": f"No se encontró el presupuesto con ID '{quote_id}'."}
+
+            # Actualizar estado del presupuesto a 'facturado'
+            cursor.execute("UPDATE quotes SET status = 'facturado' WHERE id = ?", (db_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Generar factura PDF real
+        res = await generate_invoice_pdf(
+            client_name=quote_data["client_name"],
+            client_nif=quote_data["client_nif"],
+            amount=quote_data["base_imponible"],
+            concept=quote_data["concept"],
+            iva_rate=quote_data["iva_rate"],
+            irpf_rate=quote_data["irpf_rate"],
+            confirmed_by_user=confirmed_by_user
+        )
+        if res["status"] == "error":
+            return {"status": "error", "message": f"Presupuesto marcado como facturado, pero error al emitir factura: {res['message']}"}
+
+        return {
+            "status": "ok",
+            "message": f"Presupuesto '{quote_id}' convertido con éxito en la factura '{res['invoice_id']}'.",
+            "invoice_id": res["invoice_id"],
+            "invoice_detail": res
+        }
+    except Exception as e:
+        tool_logger.exception("Error al convertir presupuesto a factura")
         return {"status": "error", "message": str(e)}
 
 def _find_existing_invoice_data(invoice_id: str, client_name: str, client_nif: str, amount: float, concept: str):
@@ -627,12 +1110,491 @@ async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
         tool_logger.exception("Error al enviar el email de la factura")
         return {"status": "error", "message": f"Error al enviar correo: {str(e)}"}
 
+async def send_quote_email(quote_id: str, recipient_email: str) -> dict:
+    """
+    Envía por correo electrónico el presupuesto generado a la dirección de email especificada.
+    """
+    try:
+        from app.tools.server.mail_tools import mail_send_email
+        
+        # Buscar la ruta del presupuesto en DB
+        conn = _get_connection()
+        pdf_path_str = None
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT file_path FROM quotes")
+            rows = cursor.fetchall()
+            for r in rows:
+                p_dec = encryptor.decrypt(r["file_path"])
+                if quote_id in p_dec:
+                    pdf_path_str = p_dec
+                    break
+        finally:
+            conn.close()
+            
+        if not pdf_path_str:
+            return {"status": "error", "message": f"No se encontró el archivo físico del presupuesto {quote_id} en la base de datos."}
+
+        # Obtener emisor_name dinámico
+        emisor_name = "LUIS DOMINGO"
+        try:
+            with _get_connection() as conn_profile:
+                cursor_profile = conn_profile.cursor()
+                cursor_profile.execute("SELECT razon_social FROM user_profile LIMIT 1")
+                row_profile = cursor_profile.fetchone()
+                if row_profile and row_profile["razon_social"]:
+                    emisor_name = encryptor.decrypt(row_profile["razon_social"])
+        except Exception:
+            pass
+
+        subject = f"Presupuesto {quote_id} de {emisor_name.upper()}"
+        body = (
+            f"Estimado cliente,\n\n"
+            f"Adjunto a este correo le enviamos el presupuesto {quote_id} solicitado.\n"
+            f"El archivo se encuentra archivado físicamente en la ruta: {pdf_path_str}\n\n"
+            f"Atentamente,\n"
+            f"{emisor_name}"
+        )
+        
+        res = await mail_send_email(recipient=recipient_email, subject=subject, body=body)
+        return {"status": "ok", "message": f"Presupuesto {quote_id} enviado por correo electrónico a {recipient_email} correctamente.", "detail": res}
+    except Exception as e:
+        tool_logger.exception("Error al enviar el email del presupuesto")
+        return {"status": "error", "message": f"Error al enviar correo: {str(e)}"}
+
+async def sign_quote(quote_id: str) -> dict:
+    """
+    Firma criptográficamente los campos principales de un presupuesto usando la clave privada RSA de Verifactu.
+    Guarda la firma digital en formato Base64 en la base de datos.
+    """
+    try:
+        import hashlib
+        import base64
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from app.domain.services.verifactu_service import VerifactuService
+
+        # 1. Obtener datos del presupuesto
+        conn = _get_connection()
+        quote_data = None
+        db_id = None
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, quote_id, client_nif, total_amount, concept, date FROM quotes")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_qid = encryptor.decrypt(r["quote_id"])
+                    if dec_qid == quote_id:
+                        db_id = r["id"]
+                        quote_data = {
+                            "client_nif": encryptor.decrypt(r["client_nif"]),
+                            "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                            "concept": encryptor.decrypt(r["concept"]),
+                            "date": encryptor.decrypt(r["date"])
+                        }
+                        break
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+
+        if not quote_data:
+            return {"status": "error", "message": f"No se encontró el presupuesto '{quote_id}'."}
+
+        # 2. Generar cadena canónica y calcular su hash SHA-256
+        canonical_str = f"{quote_id}|{quote_data['client_nif']}|{quote_data['total_amount']:.2f}|{quote_data['concept']}|{quote_data['date']}"
+        data_bytes = canonical_str.encode('utf-8')
+        digest = hashlib.sha256(data_bytes).digest()
+
+        # 3. Obtener clave privada y firmar
+        private_key = VerifactuService.get_or_create_private_key()
+        signature_bytes = private_key.sign(
+            digest,
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+        signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
+
+        # 4. Guardar firma en DB
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE quotes SET signature = ? WHERE id = ?", (signature_b64, db_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {
+            "status": "ok",
+            "message": f"Presupuesto '{quote_id}' firmado criptográficamente con éxito.",
+            "signature": signature_b64,
+            "canonical_data": canonical_str
+        }
+    except Exception as e:
+        tool_logger.exception("Error al firmar presupuesto")
+        return {"status": "error", "message": str(e)}
+
+async def verify_quote_signature(quote_id: str) -> dict:
+    """
+    Verifica la autenticidad y la integridad de la firma digital de un presupuesto.
+    """
+    try:
+        import hashlib
+        import base64
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from app.domain.services.verifactu_service import VerifactuService
+
+        # 1. Obtener datos del presupuesto y la firma
+        conn = _get_connection()
+        quote_data = None
+        signature_b64 = None
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT quote_id, client_nif, total_amount, concept, date, signature FROM quotes")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_qid = encryptor.decrypt(r["quote_id"])
+                    if dec_qid == quote_id:
+                        signature_b64 = r["signature"]
+                        quote_data = {
+                            "client_nif": encryptor.decrypt(r["client_nif"]),
+                            "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                            "concept": encryptor.decrypt(r["concept"]),
+                            "date": encryptor.decrypt(r["date"])
+                        }
+                        break
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+
+        if not quote_data:
+            return {"status": "error", "message": f"No se encontró el presupuesto '{quote_id}'."}
+
+        if not signature_b64:
+            return {"status": "error", "message": f"El presupuesto '{quote_id}' no posee ninguna firma digital registrada."}
+
+        # 2. Generar cadena canónica y calcular su hash SHA-256
+        canonical_str = f"{quote_id}|{quote_data['client_nif']}|{quote_data['total_amount']:.2f}|{quote_data['concept']}|{quote_data['date']}"
+        data_bytes = canonical_str.encode('utf-8')
+        digest = hashlib.sha256(data_bytes).digest()
+
+        # 3. Obtener clave pública y verificar
+        private_key = VerifactuService.get_or_create_private_key()
+        public_key = private_key.public_key()
+        signature_bytes = base64.b64decode(signature_b64.encode('utf-8'))
+
+        try:
+            public_key.verify(
+                signature_bytes,
+                digest,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+            return {
+                "status": "ok",
+                "valid": True,
+                "message": f"Firma digital del presupuesto '{quote_id}' verificada y VÁLIDA. Integridad del documento garantizada."
+            }
+        except Exception:
+            return {
+                "status": "ok",
+                "valid": False,
+                "message": f"ATENCIÓN: La firma digital del presupuesto '{quote_id}' es INVÁLIDA. El documento ha sido modificado o alterado."
+            }
+    except Exception as e:
+        tool_logger.exception("Error al verificar firma de presupuesto")
+        return {"status": "error", "message": str(e)}
+
+def _find_invoice_by_id(invoice_id: str):
+    conn = _get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept FROM invoices")
+        rows = cursor.fetchall()
+        for r in rows:
+            try:
+                dec_id = encryptor.decrypt(r["invoice_id"])
+                if dec_id == invoice_id:
+                    return {
+                        "db_id": r["id"],
+                        "invoice_id": dec_id,
+                        "receiver_name": encryptor.decrypt(r["receiver_name"]),
+                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                        "status": r["status"],
+                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else ""
+                    }
+            except Exception:
+                pass
+        return None
+    finally:
+        conn.close()
+
+def _generate_unique_payment_id() -> str:
+    conn = _get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM payments")
+        count = cursor.fetchone()["count"]
+        return f"PAY-2026-{count + 101:03d}"
+    finally:
+        conn.close()
+
+async def register_payment(invoice_id: str, amount: float, payment_method: str = "transferencia", notes: str = "", date: str = None) -> dict:
+    """
+    Registra un cobro parcial o total contra una factura existente.
+    """
+    try:
+        inv = _find_invoice_by_id(invoice_id)
+        if not inv:
+            return {"status": "error", "message": f"No se encontró la factura con ID '{invoice_id}'."}
+
+        now = datetime.now()
+        if not date:
+            date_str = now.strftime("%d/%m/%Y")
+        else:
+            date_str = date
+
+        # Calcular cobros previos
+        conn = _get_connection()
+        total_paid_before = 0.0
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT amount FROM payments WHERE invoice_id = ?", (invoice_id,))
+            rows = cursor.fetchall()
+            for r in rows:
+                total_paid_before += float(r["amount"])
+        finally:
+            conn.close()
+
+        total_amount = inv["total_amount"]
+        pending = round(total_amount - total_paid_before, 2)
+
+        if pending <= 0.0:
+            return {"status": "error", "message": f"La factura '{invoice_id}' ya está totalmente cobrada."}
+
+        if round(amount, 2) > pending:
+            return {"status": "error", "message": f"El importe del cobro ({amount:.2f} €) excede el saldo pendiente ({pending:.2f} €)."}
+
+        payment_id = _generate_unique_payment_id()
+
+        # Registrar pago
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO payments (payment_id, invoice_id, date, amount, payment_method, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (payment_id, invoice_id, date_str, float(amount), payment_method, notes))
+            
+            # Si el pago actual completa la factura, actualizar su estado a 'cobrada'
+            new_total_paid = round(total_paid_before + amount, 2)
+            new_pending = round(total_amount - new_total_paid, 2)
+            if new_pending <= 0.0:
+                cursor.execute("UPDATE invoices SET status = 'cobrada' WHERE id = ?", (inv["db_id"],))
+                
+            conn.commit()
+        finally:
+            conn.close()
+
+        return {
+            "status": "ok",
+            "message": f"Pago '{payment_id}' de {amount:.2f} € registrado contra la factura '{invoice_id}' exitosamente.",
+            "payment_id": payment_id,
+            "invoice_id": invoice_id,
+            "invoice_total": total_amount,
+            "total_paid": new_total_paid,
+            "pending_balance": new_pending,
+            "status_factura": "cobrada" if new_pending <= 0.0 else inv["status"]
+        }
+    except Exception as e:
+        tool_logger.exception("Error al registrar pago")
+        return {"status": "error", "message": str(e)}
+
+async def get_invoice_payment_summary(invoice_id: str) -> dict:
+    """
+    Retorna el resumen de cobros y el saldo pendiente para una factura concreta.
+    """
+    try:
+        inv = _find_invoice_by_id(invoice_id)
+        if not inv:
+            return {"status": "error", "message": f"No se encontró la factura con ID '{invoice_id}'."}
+
+        conn = _get_connection()
+        payments = []
+        total_paid = 0.0
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT payment_id, date, amount, payment_method, notes FROM payments WHERE invoice_id = ?", (invoice_id,))
+            rows = cursor.fetchall()
+            for r in rows:
+                amt = float(r["amount"])
+                total_paid += amt
+                payments.append({
+                    "payment_id": r["payment_id"],
+                    "date": r["date"],
+                    "amount": amt,
+                    "payment_method": r["payment_method"],
+                    "notes": r["notes"]
+                })
+        finally:
+            conn.close()
+
+        total_amount = inv["total_amount"]
+        pending = round(total_amount - total_paid, 2)
+
+        return {
+            "status": "ok",
+            "invoice_id": invoice_id,
+            "client_name": inv["receiver_name"],
+            "invoice_total": total_amount,
+            "total_paid": total_paid,
+            "pending_balance": pending,
+            "payments": payments
+        }
+    except Exception as e:
+        tool_logger.exception("Error al obtener resumen de pagos")
+        return {"status": "error", "message": str(e)}
+
+async def get_pending_payments_report() -> dict:
+    """
+    Genera un listado consolidado de todas las facturas que tienen un saldo pendiente de cobro.
+    """
+    try:
+        conn = _get_connection()
+        invoices = []
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept, date FROM invoices")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    invoices.append({
+                        "db_id": r["id"],
+                        "invoice_id": encryptor.decrypt(r["invoice_id"]),
+                        "receiver_name": encryptor.decrypt(r["receiver_name"]),
+                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                        "status": r["status"],
+                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                        "date": encryptor.decrypt(r["date"])
+                    })
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+
+        conn = _get_connection()
+        pending_report = []
+        try:
+            cursor = conn.cursor()
+            for inv in invoices:
+                cursor.execute("SELECT SUM(amount) as total_paid FROM payments WHERE invoice_id = ?", (inv["invoice_id"],))
+                row = cursor.fetchone()
+                total_paid = float(row["total_paid"]) if row and row["total_paid"] else 0.0
+                pending = round(inv["total_amount"] - total_paid, 2)
+                if pending > 0.0:
+                    pending_report.append({
+                        "invoice_id": inv["invoice_id"],
+                        "client_name": inv["receiver_name"],
+                        "client_nif": inv["receiver_nif"],
+                        "date": inv["date"],
+                        "concept": inv["concept"],
+                        "invoice_total": inv["total_amount"],
+                        "total_paid": total_paid,
+                        "pending_balance": pending,
+                        "status": inv["status"]
+                    })
+        finally:
+            conn.close()
+
+        return {"status": "ok", "pending_invoices": pending_report}
+    except Exception as e:
+        tool_logger.exception("Error al generar reporte de cobros pendientes")
+        return {"status": "error", "message": str(e)}
+
+async def send_payment_reminder_email(invoice_id: str) -> dict:
+    """
+    Envía un email amigable de recordatorio de pago al cliente con el saldo pendiente de una factura.
+    """
+    try:
+        summary = await get_invoice_payment_summary(invoice_id)
+        if summary["status"] == "error":
+            return {"status": "error", "message": summary["message"]}
+
+        pending = summary["pending_balance"]
+        if pending <= 0.0:
+            return {"status": "ok", "message": f"La factura '{invoice_id}' ya está completamente pagada. No se requiere recordatorio."}
+
+        client_email = "cliente@correo.com"
+        client_name = summary["client_name"]
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT email FROM clients WHERE name = ?", (client_name,))
+            row = cursor.fetchone()
+            if row:
+                client_email = row["email"]
+        finally:
+            conn.close()
+
+        emisor_name = "LUIS DOMINGO"
+        try:
+            with _get_connection() as conn_profile:
+                cursor_profile = conn_profile.cursor()
+                cursor_profile.execute("SELECT razon_social FROM user_profile LIMIT 1")
+                row_profile = cursor_profile.fetchone()
+                if row_profile and row_profile["razon_social"]:
+                    emisor_name = encryptor.decrypt(row_profile["razon_social"])
+        except Exception:
+            pass
+
+        from app.tools.server.mail_tools import mail_send_email
+        subject = f"Recordatorio de pago pendiente — Factura {invoice_id}"
+        body = (
+            f"Estimado/a {client_name},\n\n"
+            f"Le escribimos para recordarle amigablemente que la factura {invoice_id} cuenta con un saldo pendiente de cobro.\n\n"
+            f"Detalles del saldo:\n"
+            f"- Total Factura: {summary['invoice_total']:.2f} €\n"
+            f"- Total Cobrado: {summary['total_paid']:.2f} €\n"
+            f"- Saldo Pendiente de Pago: {pending:.2f} €\n\n"
+            f"Por favor, realice el pago correspondiente mediante transferencia bancaria.\n\n"
+            f"Atentamente,\n"
+            f"{emisor_name}"
+        )
+
+        res = await mail_send_email(recipient=client_email, subject=subject, body=body)
+        return {"status": "ok", "message": f"Recordatorio de pago para factura '{invoice_id}' enviado a '{client_email}' correctamente.", "detail": res}
+    except Exception as e:
+        tool_logger.exception("Error al enviar recordatorio de pago")
+        return {"status": "error", "message": str(e)}
+
 TOOLS = {
     "get_projects_wip": get_projects_wip,
     "update_project_status": update_project_status,
     "get_clients": get_clients,
     "create_client": create_client,
+    "update_client": update_client,
+    "delete_client": delete_client,
+    "create_product": create_product,
+    "get_products": get_products,
+    "update_product": update_product,
+    "delete_product": delete_product,
+    "create_quote": create_quote,
+    "get_quotes": get_quotes,
+    "convert_quote_to_invoice": convert_quote_to_invoice,
+    "sign_quote": sign_quote,
+    "verify_quote_signature": verify_quote_signature,
+    "register_payment": register_payment,
+    "get_invoice_payment_summary": get_invoice_payment_summary,
+    "get_pending_payments_report": get_pending_payments_report,
+    "send_payment_reminder_email": send_payment_reminder_email,
     "generate_invoice_pdf": generate_invoice_pdf,
     "send_invoice_email": send_invoice_email,
+    "send_quote_email": send_quote_email,
     "cancel_invoice": cancel_invoice,
 }

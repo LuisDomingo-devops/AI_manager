@@ -19,10 +19,13 @@ import json
 import os
 import sqlite3
 import sys
+import contextvars
 from collections import deque
 from pathlib import Path
 from typing import Deque, Dict, List
 from app.domain.ports.memory_port import MemoryPort
+
+tenant_context = contextvars.ContextVar("tenant_context", default="default")
 
 # 1. DETECCIÓN DE ENTORNO DE PRUEBAS
 # Si se detecta pytest, usamos una base de datos temporal diferente (memory_test.db)
@@ -88,6 +91,49 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS quotes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_id        TEXT NOT NULL UNIQUE,
+            date            TEXT NOT NULL,
+            client_name     TEXT NOT NULL,
+            client_nif      TEXT NOT NULL,
+            base_imponible  TEXT NOT NULL,
+            iva_rate        TEXT NOT NULL,
+            iva_amount      TEXT NOT NULL,
+            irpf_rate       TEXT NOT NULL,
+            irpf_amount     TEXT NOT NULL,
+            total_amount    TEXT NOT NULL,
+            concept         TEXT NOT NULL,
+            file_path       TEXT,
+            status          TEXT DEFAULT 'borrador',
+            signature       TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku           TEXT NOT NULL UNIQUE,
+            name          TEXT NOT NULL,
+            description   TEXT,
+            price         REAL NOT NULL,
+            iva_rate      REAL NOT NULL DEFAULT 21.0,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            payment_id      TEXT NOT NULL UNIQUE,
+            invoice_id      TEXT NOT NULL,
+            date            TEXT NOT NULL,
+            amount          REAL NOT NULL,
+            payment_method  TEXT NOT NULL,
+            notes           TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN client_id TEXT NOT NULL DEFAULT 'default'")
     except sqlite3.OperationalError:
@@ -102,6 +148,10 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         pass
     try:
         conn.execute("ALTER TABLE invoices ADD COLUMN blind_index TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE quotes ADD COLUMN signature TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -285,22 +335,16 @@ _active_tenant = None
 def _get_connection(client_id: str = None) -> sqlite3.Connection:
     global _active_tenant
     
+    # Resolver client_id: usar tenant_context si no se pasa de forma explícita
+    cid = (client_id or tenant_context.get()).strip().lower()
+    
     # 1. Determinar el archivo de base de datos del Tenant
-    # Si es testing, seguimos usando el archivo en memoria/temporal común
     if IS_TESTING:
-        target_path = DB_PATH
+        if cid == "default":
+            target_path = DB_PATH
+        else:
+            target_path = DB_PATH.parent / f"test_memory_{cid}.db"
     else:
-        # Resolver client_id: si no se especifica, usamos 'default'
-        cid = (client_id or "default").strip().lower()
-        
-        # Lógica de protección de negocio: Limitar a un único tenant activo
-        # Si se intenta cambiar de inquilino sin una licencia premium, la app mantendrá 'default'
-        from app.utils.license_validator import is_premium_license_valid
-        has_premium = is_premium_license_valid()
-        
-        if not has_premium:
-            cid = "default" # Modo un solo autónomo (licencia básica)
-            
         target_path = DB_PATH.parent / f"memory_{cid}.db"
         
     if str(target_path) != ":memory:":

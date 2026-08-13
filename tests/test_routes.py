@@ -57,6 +57,18 @@ def test_memory_endpoints(client):
     assert resp3.status_code == 200
 
 
+def test_memory_endpoints_unauthorized():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as client_unauth:
+        resp1 = client_unauth.get("/memory")
+        assert resp1.status_code == 401
+        resp2 = client_unauth.get("/memory/test_session")
+        assert resp2.status_code == 401
+        resp3 = client_unauth.delete("/memory/test_session")
+        assert resp3.status_code == 401
+
+
 def test_mail_endpoints(client):
     resp_seed = client.post("/mail/emails/seed")
     assert resp_seed.status_code == 200

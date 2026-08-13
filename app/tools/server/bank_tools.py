@@ -38,10 +38,17 @@ async def import_bank_statement(filepath: str) -> dict:
         tool_logger.exception("Error al importar extracto Norma 43")
         return {"status": "error", "message": str(e)}
 
-async def run_bank_reconciliation() -> dict:
+async def run_bank_reconciliation(confirmed_by_user: bool = False) -> dict:
     """
     Ejecuta el algoritmo de conciliación contable automática cruzando movimientos y facturas.
+    Requiere confirmación explícita del usuario.
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": "Se va a ejecutar el proceso automático de conciliación bancaria que asocia los cobros reales a tus facturas. ¿Deseas proceder con la conciliación?"
+        }
+
     try:
         pairs = BankService.reconcile_matching_algorithm()
         return {
@@ -89,10 +96,39 @@ async def get_bank_balance() -> dict:
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+async def initiate_transfer(connection_id: int, recipient_name: str, recipient_iban: str, amount: float, concept: str, confirmed_by_user: bool = False) -> dict:
+    """
+    Inicia y realiza una transferencia bancaria simulada (operación PIS).
+    Requiere confirmación explícita del usuario por motivos de seguridad financiera.
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": (
+                f"¿Confirmas el inicio de una transferencia bancaria con los siguientes datos?\n"
+                f"- Destinatario: {recipient_name}\n"
+                f"- IBAN: {recipient_iban}\n"
+                f"- Importe: {amount:.2f} €\n"
+                f"- Concepto: {concept}"
+            )
+        }
+
+    try:
+        res = BankService.initiate_transfer(connection_id, recipient_name, recipient_iban, amount, concept)
+        return {
+            "status": "ok",
+            "message": f"Transferencia de {amount:.2f} € a {recipient_name} realizada con éxito.",
+            "data": res
+        }
+    except Exception as e:
+        tool_logger.exception("Error al iniciar transferencia bancaria")
+        return {"status": "error", "message": str(e)}
+
 TOOLS = {
     "add_manual_bank_movement": add_manual_bank_movement,
     "import_bank_statement": import_bank_statement,
     "run_bank_reconciliation": run_bank_reconciliation,
     "get_unreconciled_report_tool": get_unreconciled_report_tool,
     "get_bank_balance": get_bank_balance,
+    "initiate_transfer": initiate_transfer,
 }

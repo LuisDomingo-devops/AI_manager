@@ -205,16 +205,24 @@ async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
     logger = attach_request_id(app_logger, request_id)
-    logger.info("HTTP %s %s", request.method, request.url.path)
 
-    start_time = time.perf_counter()
-    response = await call_next(request)
-    duration = time.perf_counter() - start_time
+    # Extraer client_id de cabeceras o parámetros de consulta para aislamiento multi-tenant
+    client_id = request.headers.get("X-Client-ID") or request.query_params.get("client_id") or "default"
 
-    response.headers["X-Request-ID"] = request_id
-    increment_http_requests()
-    record_http_latency(duration)
-    return response
+    from app.adapters.memory.memory import tenant_context
+    token = tenant_context.set(client_id.strip().lower())
+    try:
+        logger.info("HTTP %s %s [Tenant: %s]", request.method, request.url.path, client_id)
+        start_time = time.perf_counter()
+        response = await call_next(request)
+        duration = time.perf_counter() - start_time
+
+        response.headers["X-Request-ID"] = request_id
+        increment_http_requests()
+        record_http_latency(duration)
+        return response
+    finally:
+        tenant_context.reset(token)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -250,8 +258,14 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 app.include_router(router)
 
-# Montar la web directamente en la raíz para servir index.html y los assets de forma relativa
-app.mount("/", StaticFiles(directory=str(Path(__file__).parent.parent / "landing_page"), html=True), name="landing")
+# Montar la web directamente en la raíz para servir index.html y los assets de forma relativa si existe
+landing_path = Path(__file__).parent.parent / "landing_page"
+if landing_path.exists():
+    app.mount("/", StaticFiles(directory=str(landing_path), html=True), name="landing")
+else:
+    @app.get("/")
+    async def read_root():
+        return {"message": "Alfonso API is running (landing_page directory not found)"}
 
 
 

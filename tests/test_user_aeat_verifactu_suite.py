@@ -158,7 +158,7 @@ async def test_tax_models_generation():
     TaxParserService.save_invoice_to_db(expense_invoice)
     
     # 1. Presentación de IVA: Modelo 303
-    res_303 = await generate_modelo_303_autofill_script(2026, 3)
+    res_303 = await generate_modelo_303_autofill_script(2026, 3, confirmed_by_user=True)
     assert res_303["status"] == "ok"
     assert res_303["data_used"]["income_base"] == 5000.0
     assert res_303["data_used"]["expense_base"] == 1000.0
@@ -171,7 +171,7 @@ async def test_tax_models_generation():
     assert res_390["summary"]["operaciones_interiores_deducibles_base"] == 1000.0
     
     # 3. Pago Fraccionado IRPF: Modelo 130
-    res_130 = await generate_modelo_130_autofill_script(2026, 3)
+    res_130 = await generate_modelo_130_autofill_script(2026, 3, confirmed_by_user=True)
     assert res_130["status"] == "ok"
     assert res_130["data_used"]["income_base"] == 5000.0
     assert res_130["data_used"]["expense_base"] == 1000.0
@@ -179,17 +179,17 @@ async def test_tax_models_generation():
     assert res_130["data_used"]["pago_fraccionado"] == 1006.0
     
     # 4. Retenciones a profesionales/trabajadores: Modelo 111
-    res_111 = await generate_modelo_111_autofill_script(2026, 3)
+    res_111 = await generate_modelo_111_autofill_script(2026, 3, confirmed_by_user=True)
     assert res_111["status"] == "ok"
     assert res_111["data_used"]["retenciones_monto"] == 190.0
     
     # 5. Retenciones de alquileres: Modelo 115
-    res_115 = await generate_modelo_115_autofill_script(2026, 3)
+    res_115 = await generate_modelo_115_autofill_script(2026, 3, confirmed_by_user=True)
     assert res_115["status"] == "ok"
     assert res_115["data_used"]["retenciones"] == 190.0
     
     # 6. Pago fraccionado Impuesto Sociedades: Modelo 202
-    res_202 = await generate_modelo_202_autofill_script(2027, 1)
+    res_202 = await generate_modelo_202_autofill_script(2027, 1, confirmed_by_user=True)
     assert res_202["status"] == "ok"
     
     # 7. Declaración operaciones con terceros: Modelo 347 (> 3005.06 €)
@@ -242,7 +242,12 @@ def test_logs_audit(caplog):
     """
     from app.utils.logger import app_logger
     
-    with caplog.at_level(logging.INFO):
-        app_logger.info("Auditoría de test: Alfonso ha ejecutado el módulo de AEAT correctamente.")
+    original_propagate = app_logger.propagate
+    app_logger.propagate = True
+    try:
+        with caplog.at_level(logging.INFO):
+            app_logger.info("Auditoria de test: Alfonso ha ejecutado el modulo de AEAT correctamente.")
+    finally:
+        app_logger.propagate = original_propagate
         
-    assert any("Auditoría de test" in record.message for record in caplog.records)
+    assert any("Auditoria de test" in record.message for record in caplog.records)

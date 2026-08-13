@@ -373,7 +373,7 @@ async def patch_conversation(session_id: str, payload: MetadataPatch):
     return {"status": "ok", "session_id": session_id}
 
 
-@router.get("/memory/{session_id}")
+@router.get("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
 async def get_memory(session_id: str):
     from app.adapters.memory import memory
     history = memory.get_history(session_id)
@@ -386,7 +386,7 @@ async def get_memory(session_id: str):
     }
 
 
-@router.delete("/memory/{session_id}")
+@router.delete("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
 async def clear_memory(session_id: str):
     from app.adapters.memory import memory
     memory.clear(session_id)
@@ -397,7 +397,7 @@ async def clear_memory(session_id: str):
     return {"status": "ok", "session_id": session_id, "message": "Historial borrado"}
 
 
-@router.get("/memory")
+@router.get("/memory", dependencies=[Depends(verify_api_key)])
 async def list_sessions():
     from app.adapters.memory import memory
     sessions = memory.list_sessions()

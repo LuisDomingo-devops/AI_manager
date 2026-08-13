@@ -43,43 +43,154 @@ class GoCardlessProvider(BaseBankProvider):
     Proveedor real para GoCardless (antes Nordigen) Bank Account Data API.
     Soporta la práctica totalidad de bancos en España y Europa.
     """
+    def _get_access_token(self, secret_id: str, secret_key: str) -> str:
+        import httpx
+        url = "https://bankaccountdata.gocardless.com/api/v2/token/new/"
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "secret_id": secret_id,
+            "secret_key": secret_key
+        }
+        res = httpx.post(url, headers=headers, json=payload, timeout=10.0)
+        res.raise_for_status()
+        return res.json()["access"]
+
     def get_auth_link(self, redirect_url: str, credentials_dict: Dict[str, Any]) -> str:
         secret_id = credentials_dict.get("secret_id", "")
         secret_key = credentials_dict.get("secret_key", "")
         institution_id = credentials_dict.get("institution_id", "SANDBOXFINANCE_SBOX1")
         bank_name = credentials_dict.get("bank_name", "Banco")
         
-        if not secret_id or not secret_key:
+        if not secret_id or not secret_key or secret_id.startswith("mock_"):
             return f"http://localhost:8000/api/tax/bank/mock-auth?redirect={redirect_url}&bank={bank_name}"
             
-        mock_req_id = "req_gocardless_123456"
-        return f"https://ob.gocardless.com/psd2/start/{mock_req_id}/{institution_id}?redirect={redirect_url}"
+        try:
+            import httpx
+            import uuid
+            token = self._get_access_token(secret_id, secret_key)
+            url = "https://bankaccountdata.gocardless.com/api/v2/requisitions/"
+            headers = {
+                "accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            reference = f"alfonso_{uuid.uuid4().hex[:12]}"
+            payload = {
+                "redirect": redirect_url,
+                "institution_id": institution_id,
+                "reference": reference,
+                "user_language": "ES"
+            }
+            res = httpx.post(url, headers=headers, json=payload, timeout=10.0)
+            res.raise_for_status()
+            return res.json()["link"]
+        except Exception as e:
+            return f"http://localhost:8000/api/tax/bank/mock-auth?redirect={redirect_url}&bank={bank_name}&error={str(e)}"
 
     def confirm_auth(self, requisition_id: str, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
-        # En producción se recuperan los IDs de cuenta (accounts) vinculados al requisition_id
-        return {
-            "status": "success",
-            "accounts": ["acc_gocardless_bbva_999"]
-        }
+        secret_id = credentials_dict.get("secret_id", "")
+        secret_key = credentials_dict.get("secret_key", "")
+        if not secret_id or not secret_key or secret_id.startswith("mock_") or requisition_id.startswith("req_gocardless"):
+            return {
+                "status": "success",
+                "accounts": ["acc_gocardless_bbva_999"]
+            }
+            
+        try:
+            import httpx
+            token = self._get_access_token(secret_id, secret_key)
+            url = f"https://bankaccountdata.gocardless.com/api/v2/requisitions/{requisition_id}/"
+            headers = {
+                "accept": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            res = httpx.get(url, headers=headers, timeout=10.0)
+            res.raise_for_status()
+            return {
+                "status": "success",
+                "accounts": res.json().get("accounts", [])
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error al confirmar la requisición: {str(e)}"
+            }
 
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
-        # En producción se llama a GET /api/v2/accounts/{account_id}/transactions/
-        # Y se mapea la respuesta estándar de Open Banking (JSON ISO20022).
-        # De momento, retornamos movimientos mockeados si se está usando una conexión sandbox.
-        return [
-            {
-                "date": "05/08/2026",
-                "concept": "Pago factura IBER-9812-401 Iberdrola",
-                "amount": -68.42,
-                "reference": "REF9812401"
-            },
-            {
-                "date": "06/08/2026",
-                "concept": "Cobro servicio consultoria Alfonso",
-                "amount": 1500.00,
-                "reference": "FAC-2026-001"
+        secret_id = credentials_dict.get("secret_id", "")
+        secret_key = credentials_dict.get("secret_key", "")
+        
+        if not secret_id or not secret_key or secret_id.startswith("mock_") or account_id.startswith("acc_gocardless"):
+            return [
+                {
+                    "date": "05/08/2026",
+                    "concept": "Pago factura IBER-9812-401 Iberdrola",
+                    "amount": -68.42,
+                    "reference": "REF9812401"
+                },
+                {
+                    "date": "06/08/2026",
+                    "concept": "Cobro servicio consultoria Alfonso",
+                    "amount": 1500.00,
+                    "reference": "FAC-2026-001"
+                }
+            ]
+            
+        try:
+            import httpx
+            from datetime import datetime
+            token = self._get_access_token(secret_id, secret_key)
+            url = f"https://bankaccountdata.gocardless.com/api/v2/accounts/{account_id}/transactions/"
+            headers = {
+                "accept": "application/json",
+                "Authorization": f"Bearer {token}"
             }
-        ]
+            res = httpx.get(url, headers=headers, timeout=15.0)
+            res.raise_for_status()
+            
+            data = res.json()
+            raw_txs = data.get("transactions", {})
+            booked = raw_txs.get("booked", [])
+            
+            normalized = []
+            for tx in booked:
+                raw_date = tx.get("bookingDate") or tx.get("valueDate") or ""
+                if raw_date:
+                    try:
+                        dt = datetime.strptime(raw_date, "%Y-%m-%d")
+                        formatted_date = dt.strftime("%d/%m/%Y")
+                    except Exception:
+                        formatted_date = raw_date
+                else:
+                    formatted_date = datetime.now().strftime("%d/%m/%Y")
+                
+                concept = tx.get("remittanceInformationUnstructured")
+                if not concept and tx.get("remittanceInformationUnstructuredArray"):
+                    arr = tx.get("remittanceInformationUnstructuredArray")
+                    if isinstance(arr, list) and len(arr) > 0:
+                        concept = arr[0]
+                if not concept:
+                    concept = tx.get("proprietaryBankTransactionCode", {}).get("issuer", "Movimiento bancario")
+                
+                amount_info = tx.get("transactionAmount", {})
+                amount_str = amount_info.get("amount", "0.0")
+                amount = float(amount_str)
+                
+                reference = tx.get("entryReference") or tx.get("transactionId") or ""
+                
+                normalized.append({
+                    "date": formatted_date,
+                    "concept": concept,
+                    "amount": amount,
+                    "reference": reference
+                })
+                
+            return normalized
+        except Exception as e:
+            raise RuntimeError(f"Error al descargar movimientos de GoCardless: {str(e)}")
 
 
 class MockBankProvider(BaseBankProvider):

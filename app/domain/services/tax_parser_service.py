@@ -205,41 +205,12 @@ class TaxParserService:
         # Clasificación de categoría (ingreso/gasto)
         category = "expense" if receiver_nif == user_nif_clean else "income"
 
+        from app.domain.services.tax_engine import TaxEngine
+
         # 2. Buscar Fecha
-        date_str = None
-        year = None
-        quarter = None
-
-        # Intentar buscar fecha formato ISO YYYY-MM-DD
-        iso_match = DATE_ISO_REGEX.search(text)
-        if iso_match:
-            yyyy, mm, dd = iso_match.groups()
-            date_str = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
-        else:
-            std_match = DATE_REGEX.search(text)
-            if std_match:
-                d, m, y = std_match.groups()
-                if len(y) == 2:
-                    y = "20" + y
-                date_str = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
-
-        if date_str:
-            try:
-                dt = datetime.strptime(date_str, "%Y-%m-%d")
-                year = dt.year
-                quarter = (dt.month - 1) // 3 + 1
-            except ValueError:
-                pass
-
-        if not date_str:
-            # Fallback a fecha de hoy si no se detecta
-            now = datetime.now()
-            date_str = now.strftime("%Y-%m-%d")
-            year = now.year
-            quarter = (now.month - 1) // 3 + 1
+        date_str, year, quarter = TaxEngine.resolve_dates(text)
 
         # 3. Nombres de emisor/receptor heurísticos
-        # Buscamos líneas que contengan "Emisor", "Proveedor", "Cliente", "Factura de"
         issuer_name = "Proveedor Desconocido" if category == "expense" else settings.ALFONSO_USER_NAME
         receiver_name = settings.ALFONSO_USER_NAME if category == "expense" else "Cliente Desconocido"
 
@@ -254,97 +225,10 @@ class TaxParserService:
                 if clean_line and len(clean_line) > 3:
                     receiver_name = clean_line
 
-        # 4. Buscar Importes (Base, IVA, IRPF, Total)
-        base_imponible = 0.0
-        iva_rate = 21.0
-        iva_amount = 0.0
-        irpf_rate = 0.0
-        irpf_amount = 0.0
-        total_amount = 0.0
-
-        # Heurística para buscar números
-        # Buscamos patrones del tipo "Total: 123,45" o "Base: 100.00"
+        # 4. Buscar Importes y Tasas delegando en el Motor Fiscal (TaxEngine)
         text_lower = text.lower()
-
-        def parse_number(val_str: str) -> float:
-            # Limpiar símbolos de moneda y espacios
-            val_str = val_str.replace("€", "").replace("$", "").strip()
-            # Si hay puntos y comas, determinar decimales
-            if "," in val_str and "." in val_str:
-                # Formato europeo: 1.234,56
-                val_str = val_str.replace(".", "").replace(",", ".")
-            elif "," in val_str:
-                # Formato 1234,56
-                val_str = val_str.replace(",", ".")
-            try:
-                return float(val_str)
-            except ValueError:
-                return 0.0
-
-        # Buscar IVA rate
-        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.)\s*(\d+)\s*%', text_lower)
-        if iva_rate_match:
-            iva_rate = float(iva_rate_match.group(1))
-
-        # Buscar IRPF rate
-        irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+)\s*%', text_lower)
-        if irpf_rate_match:
-            irpf_rate = abs(float(irpf_rate_match.group(1)))
-
-        # Buscar total de forma prioritaria
-        total_matches = re.findall(r'(?:total|importe total|a pagar|total factura)\s*(?:[a-z\s]+)?[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
-        if total_matches:
-            # Tomamos el último número válido
-            for m in reversed(total_matches):
-                val = parse_number(m)
-                if val > 0:
-                    total_amount = val
-                    break
-
-        # Buscar base imponible
-        base_matches = re.findall(r'(?:base imponible|subtotal|base|neto)[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
-        if base_matches:
-            for m in reversed(base_matches):
-                val = parse_number(m)
-                if val > 0:
-                    base_imponible = val
-                    break
-
-        # Si no encontramos Base ni Total, pero vemos números en el texto
-        if base_imponible == 0.0 and total_amount == 0.0:
-            # Buscar todos los importes posibles y tomar el mayor como Total
-            numbers = []
-            for m in re.finditer(r'\b\d{1,3}(?:\.\d{3})*(?:,\d{2})\b|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:[.,]\d{2})\b', text):
-                val = parse_number(m.group(0))
-                if val > 0:
-                    numbers.append(val)
-            if numbers:
-                total_amount = max(numbers)
-                # Si tenemos total, recalculamos base imponible hacia atrás por defecto (asumiendo IVA 21%)
-                base_imponible = round(total_amount / (1 + (iva_rate / 100.0)), 2)
-                iva_amount = round(total_amount - base_imponible, 2)
-
-        # Recalcular coherencia si falta alguna cantidad
-        if base_imponible > 0.0 and total_amount == 0.0:
-            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
-            total_amount = round(base_imponible + iva_amount - irpf_amount, 2)
-        elif total_amount > 0.0 and base_imponible > 0.0:
-            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
-        elif total_amount > 0.0 and base_imponible == 0.0:
-            # Estimar
-            divisor = 1.0 + (iva_rate / 100.0) - (irpf_rate / 100.0)
-            base_imponible = round(total_amount / divisor, 2)
-            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
-
-        # Reglas aritméticas de validación deterministas estrictas
-        expected_total = round(base_imponible + iva_amount - irpf_amount, 2)
-        if abs(total_amount - expected_total) > 0.05:
-            # Forzar corrección o levantar aviso de inconsistencia
-            app_logger.warning(f"Incoherencia aritmética en factura detectada. Total leído: {total_amount}, Esperado: {expected_total}. Ajustando valores.")
-            total_amount = expected_total
+        iva_rate, irpf_rate = TaxEngine.resolve_rates(text_lower)
+        base_imponible, iva_amount, irpf_amount, total_amount = TaxEngine.extract_financials(text, text_lower, iva_rate, irpf_rate)
 
         invoice_id_match = re.search(r'\b(?:factura\s+de\s+)([A-Za-z0-9 ]+)|(?:factura(?:\s+(?:n[uú]mero|nº|num))?|n[uú]mero|nº|num)[\s#:]*([A-Za-z0-9\-]*\d[A-Za-z0-9\-]*)', text_lower)
         invoice_id = (invoice_id_match.group(1) or invoice_id_match.group(2)).upper().strip() if invoice_id_match else f"FAC-{int(datetime.now().timestamp())}"

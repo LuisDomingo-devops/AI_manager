@@ -39,7 +39,7 @@ async def test_generate_modelo_303_autofill_script():
         "net_result": 1300.0
     }]
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=mock_data):
-        res = await generate_modelo_303_autofill_script(2026, 1)
+        res = await generate_modelo_303_autofill_script(2026, 1, confirmed_by_user=True)
         assert res["status"] == "ok"
         assert "1500.0" in res["script"]
         assert "315.0" in res["script"]

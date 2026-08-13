@@ -12,7 +12,6 @@ from app.utils.logger import tool_logger
 import os
 
 # Selectores para el Modelo 303 en la web de la AEAT (sujetos a cambios por la AEAT)
-# Estos selectores corresponden a las casillas típicas del Modelo 303.
 SELECTORS_303 = {
     "base_devengado_21": "input[id$='C01']",      # Casilla [01] Base imponible a tipo general (21%)
     "tipo_devengado_21": "input[id$='C02']",      # Casilla [02] Tipo (21%)
@@ -49,11 +48,17 @@ async def get_aeat_aggregated_data(year: int, quarter: int) -> Dict[str, Any]:
     return quarter_data
 
 
-async def generate_modelo_303_autofill_script(year: int, quarter: int) -> dict:
+async def generate_modelo_303_autofill_script(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script de JavaScript que el usuario puede ejecutar en la consola del navegador
     para autorellenar el formulario activo del Modelo 303 con los datos de facturación.
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a generar el script de autocompletado para el borrador del Modelo 303 del trimestre Q{quarter} {year}. ¿Deseas continuar?"
+        }
+
     try:
         data = await get_aeat_aggregated_data(year, quarter)
         
@@ -143,10 +148,16 @@ async def generate_modelo_303_autofill_script(year: int, quarter: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = False) -> dict:
+async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = False, confirmed_by_user: bool = False) -> dict:
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 303.
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a abrir un navegador controlado por Alfonso para ayudarte a rellenar el Modelo 303 Q{quarter} {year}. ¿Deseas abrir el navegador?"
+        }
+
     try:
         from playwright.async_api import async_playwright
     except ImportError:
@@ -165,7 +176,6 @@ async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = F
         # Guardar en logs y notificar al usuario
         tool_logger.info(f"Abriendo navegador controlado para rellenar Modelo 303 Q{quarter} {year}")
         
-        # Nota: No cerramos la sesión para permitir que el usuario interactúe
         pw = await async_playwright().start()
         browser = await pw.chromium.launch(headless=headless)
         context = await browser.new_context()
@@ -173,9 +183,6 @@ async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = F
         
         await page.goto(aeat_url)
         
-        # Retornamos éxito y dejamos el navegador abierto
-        # En un flujo interactivo real, el agente esperaría a que el usuario se autentique y llegue a la página
-        # del formulario para inyectar los valores.
         return {
             "status": "ok",
             "message": f"Navegador abierto en la página del Modelo 303. Usa el script inyectable cuando estés dentro.",
@@ -191,11 +198,17 @@ async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = F
         return {"status": "error", "message": str(e)}
 
 
-async def generate_modelo_130_autofill_script(year: int, quarter: int) -> dict:
+async def generate_modelo_130_autofill_script(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script de JavaScript para autocompletar el borrador del Modelo 130 (IRPF autónomos)
     en la Sede Electrónica de la AEAT con los datos contables del trimestre.
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a generar el script de autocompletado para el borrador del Modelo 130 de IRPF del trimestre Q{quarter} {year}. ¿Deseas continuar?"
+        }
+
     try:
         data = await get_aeat_aggregated_data(year, quarter)
         income_base = data["income"]["base"]
@@ -262,10 +275,53 @@ async def generate_modelo_130_autofill_script(year: int, quarter: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-async def generate_modelo_111_autofill_script(year: int, quarter: int) -> dict:
+async def fill_modelo_130_playwright(year: int, quarter: int, headless: bool = False, confirmed_by_user: bool = False) -> dict:
+    """
+    Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 130 (IRPF).
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a abrir un navegador controlado por Alfonso para ayudarte a rellenar el Modelo 130 Q{quarter} {year}. ¿Deseas abrir el navegador?"
+        }
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return {"status": "error", "message": "Playwright no está instalado."}
+
+    try:
+        data = await get_aeat_aggregated_data(year, quarter)
+        aeat_url = "https://sede.agenciatributaria.gob.es/Sede/procedimiento/G307.shtml"
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(aeat_url)
+        return {
+            "status": "ok",
+            "message": f"Navegador abierto en la página del Modelo 130. Usa el script inyectable cuando estés dentro.",
+            "data_used": {
+                "income_base": data["income"]["base"],
+                "expense_base": data["expense"]["base"],
+                "net_result": data["net_result"]
+            }
+        }
+    except Exception as e:
+        tool_logger.exception("Error en fill_modelo_130_playwright")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_modelo_111_autofill_script(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script para autocompletar el borrador del Modelo 111 (Retenciones de IRPF a profesionales/trabajadores).
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a generar el script de autocompletado para el borrador del Modelo 111 del trimestre Q{quarter} {year}. ¿Deseas continuar?"
+        }
+
     try:
         data = await get_aeat_aggregated_data(year, quarter)
         expense_irpf = data["expense"]["irpf"]
@@ -310,6 +366,42 @@ async def generate_modelo_111_autofill_script(year: int, quarter: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+async def fill_modelo_111_playwright(year: int, quarter: int, headless: bool = False, confirmed_by_user: bool = False) -> dict:
+    """
+    Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 111 (Retenciones IRPF).
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a abrir un navegador controlado por Alfonso para ayudarte a rellenar el Modelo 111 Q{quarter} {year}. ¿Deseas abrir el navegador?"
+        }
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return {"status": "error", "message": "Playwright no está instalado."}
+
+    try:
+        data = await get_aeat_aggregated_data(year, quarter)
+        aeat_url = "https://sede.agenciatributaria.gob.es/Sede/procedimiento/G301.shtml"
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(aeat_url)
+        return {
+            "status": "ok",
+            "message": f"Navegador abierto en la página del Modelo 111. Usa el script inyectable cuando estés dentro.",
+            "data_used": {
+                "expense_irpf": data["expense"]["irpf"],
+                "retention_count": data["expense"]["count"] if data["expense"]["irpf"] > 0 else 0
+            }
+        }
+    except Exception as e:
+        tool_logger.exception("Error en fill_modelo_111_playwright")
+        return {"status": "error", "message": str(e)}
+
+
 async def generate_modelo_390_summary(year: int) -> dict:
     """
     Genera el resumen contable anual necesario para la declaración informativa anual del IVA (Modelo 390).
@@ -346,10 +438,16 @@ async def generate_modelo_390_summary(year: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-async def generate_modelo_115_autofill_script(year: int, quarter: int) -> dict:
+async def generate_modelo_115_autofill_script(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script para autocompletar el borrador del Modelo 115 (Retenciones sobre alquileres de oficinas/locales).
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a generar el script de autocompletado para el borrador del Modelo 115 del trimestre Q{quarter} {year}. ¿Deseas continuar?"
+        }
+
     try:
         data = await get_aeat_aggregated_data(year, quarter)
         rent_retention = data["expense"]["irpf"]
@@ -396,6 +494,42 @@ async def generate_modelo_115_autofill_script(year: int, quarter: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+async def fill_modelo_115_playwright(year: int, quarter: int, headless: bool = False, confirmed_by_user: bool = False) -> dict:
+    """
+    Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 115 (Alquileres).
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a abrir un navegador controlado por Alfonso para ayudarte a rellenar el Modelo 115 Q{quarter} {year}. ¿Deseas abrir el navegador?"
+        }
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return {"status": "error", "message": "Playwright no está instalado."}
+
+    try:
+        data = await get_aeat_aggregated_data(year, quarter)
+        aeat_url = "https://sede.agenciatributaria.gob.es/Sede/procedimiento/G305.shtml"
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(aeat_url)
+        return {
+            "status": "ok",
+            "message": f"Navegador abierto en la página del Modelo 115. Usa el script inyectable cuando estés dentro.",
+            "data_used": {
+                "rent_retention": data["expense"]["irpf"],
+                "rent_base": data["expense"]["base"] if data["expense"]["irpf"] > 0 else 0.0
+            }
+        }
+    except Exception as e:
+        tool_logger.exception("Error en fill_modelo_115_playwright")
+        return {"status": "error", "message": str(e)}
+
+
 async def generate_modelo_200_summary(year: int) -> dict:
     """
     Genera el resumen contable anual y estimación para el Impuesto sobre Sociedades (Modelo 200).
@@ -427,10 +561,49 @@ async def generate_modelo_200_summary(year: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-async def generate_modelo_202_autofill_script(year: int, period: int) -> dict:
+async def fill_modelo_200_playwright(year: int, headless: bool = False, confirmed_by_user: bool = False) -> dict:
+    """
+    Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Impuesto sobre Sociedades (Modelo 200).
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a abrir un navegador controlado por Alfonso para ayudarte a rellenar el Modelo 200 del año {year}. ¿Deseas abrir el navegador?"
+        }
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return {"status": "error", "message": "Playwright no está instalado."}
+
+    try:
+        data = await generate_modelo_200_summary(year)
+        aeat_url = "https://sede.agenciatributaria.gob.es/Sede/procedimiento/G323.shtml"
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(aeat_url)
+        return {
+            "status": "ok",
+            "message": f"Navegador abierto en la página del Impuesto sobre Sociedades (Modelo 200). Usa el resumen contable como referencia.",
+            "data_used": data.get("summary", {})
+        }
+    except Exception as e:
+        tool_logger.exception("Error en fill_modelo_200_playwright")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_modelo_202_autofill_script(year: int, period: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script para autocompletar el borrador del Modelo 202 (Pago fraccionado del Impuesto sobre Sociedades).
     """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a generar el script de autocompletado para el borrador del Modelo 202 del año {year} (Periodo {period}P). ¿Deseas continuar?"
+        }
+
     try:
         prev_year = year - 1
         data_prev = await generate_modelo_200_summary(prev_year)
@@ -512,10 +685,14 @@ TOOLS = {
     "generate_modelo_303_autofill_script": generate_modelo_303_autofill_script,
     "fill_modelo_303_playwright": fill_modelo_303_playwright,
     "generate_modelo_130_autofill_script": generate_modelo_130_autofill_script,
+    "fill_modelo_130_playwright": fill_modelo_130_playwright,
     "generate_modelo_111_autofill_script": generate_modelo_111_autofill_script,
+    "fill_modelo_111_playwright": fill_modelo_111_playwright,
     "generate_modelo_390_summary": generate_modelo_390_summary,
     "generate_modelo_115_autofill_script": generate_modelo_115_autofill_script,
+    "fill_modelo_115_playwright": fill_modelo_115_playwright,
     "generate_modelo_200_summary": generate_modelo_200_summary,
+    "fill_modelo_200_playwright": fill_modelo_200_playwright,
     "generate_modelo_202_autofill_script": generate_modelo_202_autofill_script,
     "generate_modelo_347_summary": generate_modelo_347_summary,
 }

@@ -1,0 +1,224 @@
+import os
+import re
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Tuple, Dict, Any
+from app.utils.logger import app_logger
+
+# Expresiones regulares para NIF español (A1234567B, 12345678Z, etc.)
+NIF_REGEX = re.compile(r'\b[A-HJ-NP-SUVWXY\d]\d{7}[A-Z\d]\b', re.IGNORECASE)
+
+# Expresiones regulares para fechas comunes
+DATE_REGEX = re.compile(r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b')
+DATE_ISO_REGEX = re.compile(r'\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b')
+
+# Expresiones regulares para importes
+MONEY_REGEX = re.compile(r'\b\d+(?:[.,]\d{2})?\b')
+
+class TaxEngine:
+    _rules_path = Path(__file__).resolve().parent / "tax_rules.json"
+
+    @classmethod
+    def load_rules(cls) -> Dict[str, Any]:
+        """Carga las reglas fiscales desde el archivo JSON."""
+        try:
+            if cls._rules_path.exists():
+                with open(cls._rules_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            app_logger.error(f"Error al cargar tax_rules.json: {str(e)}")
+        
+        # Fallbacks por defecto si no se puede leer
+        return {
+            "iva_general_rate": 21.0,
+            "irpf_profesionales_rate": 15.0,
+            "last_updated": "2026-08-13",
+            "boe_reference": "Default Seed Fallback"
+        }
+
+    @classmethod
+    def update_tax_rules(cls, new_rules: Dict[str, Any], boe_link: str, boe_section: str, confirmed_by_user: bool = False) -> Dict[str, Any]:
+        """
+        Actualiza las reglas fiscales en tax_rules.json tras confirmación humana.
+        """
+        # Validar enlace obligatorio del BOE y sección
+        if not boe_link or not boe_link.startswith("http"):
+            return {"status": "error", "message": "Es obligatorio proporcionar un enlace web directo y válido al documento del BOE."}
+        if not boe_section or len(boe_section.strip()) < 3:
+            return {"status": "error", "message": "Es obligatorio citar el artículo, sección o página específica del BOE que respalda la norma."}
+
+        current_rules = cls.load_rules()
+        proposed = {**current_rules, **new_rules}
+        
+        # Identificar qué cambia
+        changes = []
+        for k, v in new_rules.items():
+            if k in current_rules and current_rules[k] != v:
+                changes.append(f"{k}: {current_rules[k]}% -> {v}%")
+            elif k not in current_rules:
+                changes.append(f"{k}: -> {v}%")
+
+        if not changes:
+            return {"status": "ok", "message": "No se especificaron cambios sobre las tasas fiscales vigentes."}
+
+        if not confirmed_by_user:
+            return {
+                "status": "pending_confirmation",
+                "message": (
+                    f"Propuesta de actualización de tasas fiscales detectada:\n"
+                    f"Cambios:\n" + "\n".join([f"- {c}" for c in changes]) + "\n"
+                    f"Respaldado por BOE: {boe_link} (Sección: {boe_section})\n\n"
+                    f"Por favor, confirme explícitamente para aplicar estos cambios (confirmed_by_user=True)."
+                ),
+                "proposed_rules": proposed,
+                "boe_link": boe_link,
+                "boe_section": boe_section
+            }
+
+        # Guardar en disco
+        try:
+            proposed["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+            proposed["boe_reference"] = f"{boe_link} ({boe_section})"
+            with open(cls._rules_path, "w", encoding="utf-8") as f:
+                json.dump(proposed, f, indent=2, ensure_ascii=False)
+            return {
+                "status": "ok",
+                "message": f"Reglas fiscales actualizadas exitosamente con los cambios: {', '.join(changes)}. Referencia del BOE guardada.",
+                "rules": proposed
+            }
+        except Exception as e:
+            app_logger.error(f"Error al escribir tax_rules.json: {str(e)}")
+            return {"status": "error", "message": f"Error interno al actualizar reglas fiscales: {str(e)}"}
+
+    @classmethod
+    def parse_number(cls, val_str: str) -> float:
+        """Limpia y parsea una cadena de texto en un número de coma flotante."""
+        val_str = val_str.replace("€", "").replace("$", "").strip()
+        if "," in val_str and "." in val_str:
+            # Formato europeo: 1.234,56 -> 1234.56
+            val_str = val_str.replace(".", "").replace(",", ".")
+        elif "," in val_str:
+            # Formato 1234,56 -> 1234.56
+            val_str = val_str.replace(",", ".")
+        try:
+            return float(val_str)
+        except ValueError:
+            return 0.0
+
+    @classmethod
+    def resolve_dates(cls, text: str) -> Tuple[str, int, int]:
+        """
+        Busca y resuelve la fecha de la factura resolviendo el año y el trimestre contable.
+        """
+        date_str = None
+        now = datetime.now()
+        
+        iso_match = DATE_ISO_REGEX.search(text)
+        if iso_match:
+            yyyy, mm, dd = iso_match.groups()
+            date_str = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+        else:
+            std_match = DATE_REGEX.search(text)
+            if std_match:
+                d, m, y = std_match.groups()
+                if len(y) == 2:
+                    y = "20" + y
+                date_str = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+
+        if date_str:
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                return date_str, dt.year, (dt.month - 1) // 3 + 1
+            except ValueError:
+                pass
+
+        # Fallback a la fecha actual
+        return now.strftime("%Y-%m-%d"), now.year, (now.month - 1) // 3 + 1
+
+    @classmethod
+    def resolve_rates(cls, text: str) -> Tuple[float, float]:
+        """
+        Busca tasas de IVA e IRPF. Si no las encuentra, usa las tasas por defecto de tax_rules.json.
+        """
+        rules = cls.load_rules()
+        iva_rate = rules.get("iva_general_rate", 21.0)
+        irpf_rate = 0.0  # IRPF suele ser 0% por defecto (venta/gasto genérico) o 15% para profesionales.
+        
+        text_lower = text.lower()
+        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.)[^0-9%]*?(\d+)\s*%', text_lower)
+        if iva_rate_match:
+            iva_rate = float(iva_rate_match.group(1))
+
+        irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+)\s*%', text_lower)
+        if irpf_rate_match:
+            irpf_rate = abs(float(irpf_rate_match.group(1)))
+
+        return iva_rate, irpf_rate
+
+    @classmethod
+    def extract_financials(cls, text: str, text_lower: str, iva_rate: float, irpf_rate: float) -> Tuple[float, float, float, float]:
+        """
+        Extrae base_imponible, iva_amount, irpf_amount y total_amount del texto de forma estructurada.
+        """
+        base_imponible = 0.0
+        total_amount = 0.0
+
+        # Buscar total de forma prioritaria
+        total_matches = re.findall(r'(?:total|importe total|a pagar|total factura)\s*(?:[a-z\s]+)?[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
+        if total_matches:
+            for m in reversed(total_matches):
+                val = cls.parse_number(m)
+                if val > 0:
+                    total_amount = val
+                    break
+
+        # Buscar base imponible
+        base_matches = re.findall(r'(?:base imponible|subtotal|base|neto)[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
+        if base_matches:
+            for m in reversed(base_matches):
+                val = cls.parse_number(m)
+                if val > 0:
+                    base_imponible = val
+                    break
+
+        # Si no encontramos base ni total, buscar el número mayor en el texto como Total
+        if base_imponible == 0.0 and total_amount == 0.0:
+            numbers = []
+            for m in re.finditer(r'\b\d{1,3}(?:\.\d{3})*(?:,\d{2})\b|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:[.,]\d{2})\b', text):
+                val = cls.parse_number(m.group(0))
+                if val > 0:
+                    numbers.append(val)
+            if numbers:
+                total_amount = max(numbers)
+                base_imponible = round(total_amount / (1 + (iva_rate / 100.0)), 2)
+
+        return cls.recalculate_and_validate(base_imponible, iva_rate, irpf_rate, total_amount)
+
+    @classmethod
+    def recalculate_and_validate(cls, base_imponible: float, iva_rate: float, irpf_rate: float, total_amount: float) -> Tuple[float, float, float, float]:
+        """
+        Recalcula los importes para asegurar consistencia aritmética estricta.
+        """
+        iva_amount = 0.0
+        irpf_amount = 0.0
+
+        if base_imponible > 0.0 and total_amount == 0.0:
+            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
+            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+            total_amount = round(base_imponible + iva_amount - irpf_amount, 2)
+        elif total_amount > 0.0 and base_imponible > 0.0:
+            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
+            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+        elif total_amount > 0.0 and base_imponible == 0.0:
+            divisor = 1.0 + (iva_rate / 100.0) - (irpf_rate / 100.0)
+            base_imponible = round(total_amount / divisor, 2)
+            iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
+            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+
+        # Reglas aritméticas estrictas
+        expected_total = round(base_imponible + iva_amount - irpf_amount, 2)
+        if abs(total_amount - expected_total) > 0.05:
+            total_amount = expected_total
+
+        return base_imponible, iva_amount, irpf_amount, total_amount

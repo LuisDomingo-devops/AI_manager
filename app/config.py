@@ -99,7 +99,7 @@ class Settings(BaseSettings):
 
     def get_client_role(self, client_id: str) -> str:
         if not self.ALFONSO_CLIENT_ROLES:
-            return "admin"
+            return "guest"
         try:
             roles = json.loads(self.ALFONSO_CLIENT_ROLES)
             return roles.get(client_id, "guest")

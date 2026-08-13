@@ -37,6 +37,10 @@ def test_settings_parsing():
     assert settings.get_client_role("client_3") == "admin"
     assert settings.get_client_role("client_4") == "limitado"
 
+    # Test fallback guest role when no roles configured
+    settings.ALFONSO_CLIENT_ROLES = ""
+    assert settings.get_client_role("any_client") == "guest"
+
 @pytest.mark.asyncio
 async def test_bridge_handshake_authentication(monkeypatch):
     bridge = AlfonsoBridge()
