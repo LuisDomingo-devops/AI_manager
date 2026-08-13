@@ -1,6 +1,6 @@
-from client.gui.dialogs.base import AlfonsoBaseDialog, AlfonsoWindowMinimizeButton, AlfonsoWindowCloseButton
-from client.gui.dialogs.ledger import AlfonsoLedgerDialog
-from client.gui.dialogs.compliance import AlfonsoSubscriptionDialog, AlfonsoComplianceDialog
-from client.gui.dialogs.onboarding import AlfonsoOnboardingWizard
+from client.gui.dialogs.base import AlfonsoBaseDialog, AlfonsoComplianceDialog, AlfonsoSubscriptionDialog, CalendarWidget, AeatAutofillWidget
 from client.gui.dialogs.invoice import AlfonsoInvoiceConfirmDialog
-from client.gui.dialogs.widgets import MailWidget, CalendarWidget
+from client.gui.dialogs.widgets import (MailWidget, AlfonsoOnboardingWizard, 
+                                        AlfonsoBankReconciliationDialog, AlfonsoBankConnectionsDialog, 
+                                        AlfonsoLedgerDialog, AlfonsoDocumentViewerDialog, AlfonsoArchiveBrowserDialog,
+                                        AlfonsoKPIDashboardDialog)

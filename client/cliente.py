@@ -13,7 +13,7 @@ Cambios respecto a la versión anterior:
 
 from __future__ import annotations
 
-print("Cargando cliente de voz Alfonso…\n")
+print("Cargando cliente de voz Alfonso...")
 
 import argparse
 import base64
@@ -33,7 +33,7 @@ from services.audio import AudioService, auto_select_device
 from core.api_client import AlfonsoAPI
 from core.processor import ResponseProcessor
 
-print("Importaciones completadas.\n")
+print("Importaciones completadas.")
 # ---------------------------------------------------------------------------
 # Calibración de umbral automática
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def calibrate_threshold(audio: AudioService, device: Optional[int], seconds: flo
         # Convertir a int16 para usar la misma escala que has_voice
         amp_i16 = int(np.abs(raw).mean() * 32767)
         threshold = max(amp_i16 * 3, 80)
-        print(f"OK → umbral={threshold}")
+        print(f"OK -> umbral={threshold}")
         return threshold
     except Exception as exc:
         print(f"ERROR ({exc}), usando umbral por defecto {SILENCE_THRESHOLD}")
@@ -71,7 +71,7 @@ def run(
     debug: bool,
 ) -> None:
     
-    print("Iniciando cliente de voz Alfonso…\n")
+    print("Iniciando cliente de voz Alfonso...")
 
     # Cargar o crear Session ID persistente en ui/logs/session_config.json
     import os, json
@@ -109,28 +109,28 @@ def run(
     print(f"Dispositivo de entrada seleccionado: [{effective_device}] {device_name}\n")
     if effective_device is not None:
         try:
-            print("Probando grabación para calibración de umbral…", end=" ", flush=True)
+            print("Probando grabacion para calibracion de umbral...", end=" ", flush=True)
             device_name = sd.query_devices(effective_device)["name"]
         except Exception:
-            print("ERROR al acceder al dispositivo, usando nombre genérico.")
+            print("ERROR al acceder al dispositivo, usando nombre generico.")
             pass
 
-    print(f"\n{'═'*60}")
-    print(f"  Alfonso — Cliente de Voz")
+    print(f"\n{'='*60}")
+    print(f"  Alfonso - Cliente de Voz")
     print(f"  Servidor      : {server_url}")
     print(f"  Wake word     : '{keyword}'")
     print(f"  Dispositivo   : [{effective_device}] {device_name}")
-    print(f"  Samplerate    : {audio._native_rate}Hz → 16000Hz (Whisper)")
-    print(f"  Sesión        : {session_id[:8]}…")
-    print(f"{'═'*60}\n")
+    print(f"  Samplerate    : {audio._native_rate}Hz -> 16000Hz (Whisper)")
+    print(f"  Sesion        : {session_id[:8]}...")
+    print(f"{'='*60}\n")
 
-    print("Conectando con el servidor…", end=" ", flush=True)
+    print("Conectando con el servidor...", end=" ", flush=True)
     if not api.ping():
         print("ERROR")
         print(f"  No se puede conectar a {server_url}")
         print("  Arranca el servidor: uvicorn app.main:app --reload")
         sys.exit(1)
-    print("OK ✓\n")
+    print("OK\n")
 
     # Calibración de umbral si no se pasó explícitamente
     if threshold is None:
@@ -308,11 +308,11 @@ if __name__ == "__main__":
     args = parse_args()
     print(f"Argumentos recibidos: {args}\n")
     if args.list_devices:
-        print("Listando dispositivos de audio disponibles…\n")
+        print("Listando dispositivos de audio disponibles...\n")
         svc = AudioService(auto_detect=False)
         print("\nDispositivos de entrada:")
         for d in svc.list_input_devices():
-            auto = " ← integrado detectado" if d["index"] == auto_select_device() else ""
+            auto = " <- integrado detectado" if d["index"] == auto_select_device() else ""
             print(f"  [{d['index']:>2}] {d['name']:<50} {d['default_samplerate']:>6}Hz{auto}")
         print("\nDispositivos de salida:")
         for d in svc.list_output_devices():
@@ -320,13 +320,13 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.gui:
-        print("Lanzando interfaz gráfica…")
+        print("Lanzando interfaz grafica...")
         from gui.app import launch
         config = vars(args)
         config["url"] = config["url"].rstrip("/")
         launch(config)
     else:
-        print("Iniciando cliente de voz Alfonso…\n")
+        print("Iniciando cliente de voz Alfonso...\n")
         run(
             server_url    = args.url.rstrip("/"),
             keyword       = args.keyword,

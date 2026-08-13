@@ -13,7 +13,6 @@ Define un router principal y routers especializados (browser, computer, calendar
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/main.py: Registra el router raíz.
 - app/domain/planner_orchestrator.py: Procesa las consultas en el endpoint /chat.
-- app/domain/agents/dev/dev_agent.py: Se comunica con el sandbox de desarrollo.
 - app/domain/agents/marcos/marcos_agent.py: Asiste indirectamente en la generación de borradores inteligentes de correo.
 - app/adapters/calendar_db.py y app/adapters/mail_db.py: Interactúan con las bases de datos de calendario y correo.
 """

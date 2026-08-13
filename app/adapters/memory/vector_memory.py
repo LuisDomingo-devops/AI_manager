@@ -5,13 +5,12 @@ VECTOR MEMORY — Interfaz con la base de datos vectorial ChromaDB.
 Gestiona búsquedas semánticas y almacenamiento de documentos técnicos y legislativos en ChromaDB.
 
 ¿CUÁNDO LO HACE?
-Durante la delegación a agentes (MarcosAgent o DevAgent) para añadir contexto relevante al prompt.
+Durante la delegación a agentes (MarcosAgent) para añadir contexto relevante al prompt.
 
 ¿CÓMO LO HACE?
-Conectándose a una base de datos local persistente ChromaDB e indexando datos en colecciones (`dev_knowledge` y `legal_knowledge`).
+Conectándose a una base de datos local persistente ChromaDB e indexando datos en colecciones (`legal_knowledge`).
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/domain/agents/dev/dev_agent.py (consulta pautas de código en dev_knowledge)
 - app/domain/agents/marcos/marcos_agent.py (consulta leyes en legal_knowledge)
 """
 

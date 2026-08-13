@@ -33,56 +33,6 @@ async def parse_invoice(file_path: str) -> dict:
         data = TaxParserService.parse_invoice_text(text)
         invoice_db_id = TaxParserService.save_invoice_to_db(data, file_path=file_path)
         
-        # Mover la factura físicamente al Archivo Fiscal o Facturas Pendientes de Cobro
-        try:
-            import shutil
-            import os
-            from pathlib import Path
-            from datetime import datetime
-            from app.adapters.memory.memory import _get_connection
-            from app.utils.encryption import encryptor
-
-            src_path = Path(file_path)
-            if src_path.exists():
-                desktop_dir = Path(os.path.expanduser("~")) / "Desktop"
-                if not desktop_dir.exists():
-                    desktop_dir = Path(os.path.expanduser("~")) / "Escritorio"
-                
-                now_dt = datetime.now()
-                year_str = str(now_dt.year)
-                quarter_str = f"T{(now_dt.month - 1) // 3 + 1}"
-                if data.get("date"):
-                    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
-                        try:
-                            inv_dt = datetime.strptime(data["date"], fmt)
-                            year_str = str(inv_dt.year)
-                            quarter_str = f"T{(inv_dt.month - 1) // 3 + 1}"
-                            break
-                        except Exception:
-                            pass
-                
-                archive_base_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal"
-                is_expense = data.get("category", "").lower() in ("gasto", "expense")
-                if is_expense:
-                    dest_dir = archive_base_dir / year_str / quarter_str / "Gastos"
-                else:
-                    dest_dir = archive_base_dir / "facturas pendientes"
-                    
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                dest_file = dest_dir / f"Factura_{data.get('invoice_id', 'unknown')}{src_path.suffix}"
-                
-                shutil.copy2(str(src_path), str(dest_file))
-                
-                conn = _get_connection()
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE invoices SET file_path = ? WHERE id = ?", (encryptor.encrypt(str(dest_file)), invoice_db_id))
-                    conn.commit()
-                finally:
-                    conn.close()
-        except Exception as e:
-            tool_logger.warning(f"No se pudo archivar físicamente la factura: {str(e)}")
-
         return {
             "status": "ok",
             "message": "Factura procesada y guardada correctamente.",

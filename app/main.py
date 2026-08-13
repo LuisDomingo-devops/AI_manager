@@ -38,6 +38,11 @@ import asyncio
 from app.domain.agents.security.security_agent import security_agent
 from app.config import settings
 
+# EventBus e Integración
+from app.core.events import event_bus
+from app.domain.services.ledger_service import LedgerService
+from app.domain.services.excel_sync import ExcelSyncService
+
 # ---------------------------------------------------------------------------
 # Instancias globales
 # ---------------------------------------------------------------------------
@@ -58,6 +63,21 @@ from app.domain.services.background_monitor import start_background_mail_monitor
 async def lifespan(app: FastAPI):
     global _bg_security_task, _ollama_process
     app_logger.info("Logs en %s", LOG_DIR)
+
+    # Configurar listeners del EventBus
+    async def handle_invoice_created(data: dict):
+        try:
+            LedgerService.record_invoice_asiento(data)
+        except Exception as e:
+            app_logger.warning("No se pudo generar el asiento contable: %s", str(e))
+        
+        try:
+            ExcelSyncService.sync_invoices_to_excel()
+        except Exception as e:
+            app_logger.warning("No se pudo sincronizar con Excel: %s", str(e))
+
+    event_bus.subscribe("InvoiceCreated", handle_invoice_created)
+    event_bus.start()
     app_logger.info("Arrancando Alfonso — audio delegado al cliente local")
 
     import sys
@@ -151,6 +171,8 @@ async def lifespan(app: FastAPI):
     app_logger.info("Alfonso listo")
 
     yield
+
+    await event_bus.stop()
 
     if not is_testing:
         await alfonso_bridge.stop()

@@ -12,7 +12,6 @@ Instanciando un objeto httpx.AsyncClient global y manejando timeouts para preven
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/adapters/llm_client.py (utiliza este cliente para comunicarse con Ollama)
-- app/domain/agents/dev/dev_agent.py (utiliza este cliente para realizar llamadas API directas)
 """
 
 import httpx

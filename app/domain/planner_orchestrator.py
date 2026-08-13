@@ -204,7 +204,7 @@ class ConversationContextService:
 
 
 class SpecializedAgentRouter:
-    """Responsabilidad: Enrutamiento directo a subagentes de dominio específico (Marcos, DevAgent, CyberSecurityAgent)."""
+    """Responsabilidad: Enrutamiento directo a subagentes de dominio específico (Marcos, CyberSecurityAgent)."""
     def __init__(self, memory: MemoryPort):
         self.memory = memory
 

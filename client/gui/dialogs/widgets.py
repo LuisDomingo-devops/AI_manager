@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
+from client.gui.dialogs.base import AlfonsoBaseDialog
 
 class MailWidget(AlfonsoBaseDialog):
     """Interfaz gráfica nativa para el cliente de Correo Electrónico (ALFONSO MAIL)."""

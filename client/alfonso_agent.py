@@ -966,9 +966,21 @@ class AlfonsoAgent:
                         except Exception:
                             pass
 
+                    # Cargar bridge token persistente si existe
+                    bridge_token = ""
+                    try:
+                        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        token_file = os.path.join(parent_dir, "data", ".bridge_token")
+                        if os.path.exists(token_file):
+                            with open(token_file, "r", encoding="utf-8") as tf:
+                                bridge_token = tf.read_text().strip() if hasattr(tf, "read_text") else tf.read().strip()
+                    except Exception:
+                        pass
+
                     handshake = {
                         "type": "handshake",
                         "client_id": client_id,
+                        "token": bridge_token,
                         "hostname": hostname,
                         "ip_local": ip_local,
                         "system": platform.system(),
