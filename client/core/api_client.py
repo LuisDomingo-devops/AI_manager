@@ -12,6 +12,9 @@ class AlfonsoAPI:
     def __init__(self, base_url: str, api_key: str = "default_key"):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        # Sesión persistente con cabecera de autenticación por API Key
+        self.session = requests.Session()
+        self.session.headers.update({"X-API-Key": self.api_key})
 
     def ping(self) -> bool:
         max_retries = 30
@@ -19,7 +22,7 @@ class AlfonsoAPI:
         print(f"[INFO] Verificando conexión con el backend ({self.base_url})...")
         for i in range(max_retries):
             try:
-                r = requests.get(f"{self.base_url}/health", timeout=5)
+                r = self.session.get(f"{self.base_url}/health", timeout=5)
                 if r.status_code == 200:
                     return True
             except Exception:
@@ -49,7 +52,7 @@ class AlfonsoAPI:
             pass
 
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/chat",
                 json={
                     "message": message,
@@ -67,10 +70,9 @@ class AlfonsoAPI:
         
     def stt(self, audio_bytes):
         """Envía audio al endpoint /stt del servidor para transcribir."""
-        import requests
         files = {'file': ('audio.wav', audio_bytes, 'audio/wav')}
         try:
-            response = requests.post(f"{self.base_url}/stt", files=files)
+            response = self.session.post(f"{self.base_url}/stt", files=files)
             return response.json()
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -83,7 +85,7 @@ class AlfonsoAPI:
                 params["start_date"] = start_date
             if end_date:
                 params["end_date"] = end_date
-            r = requests.get(f"{self.base_url}/calendar/events", params=params, timeout=10)
+            r = self.session.get(f"{self.base_url}/calendar/events", params=params, timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -99,7 +101,7 @@ class AlfonsoAPI:
                 params["importance"] = importance
             if read_status is not None:
                 params["read_status"] = read_status
-            r = requests.get(f"{self.base_url}/mail/emails", params=params, timeout=10)
+            r = self.session.get(f"{self.base_url}/mail/emails", params=params, timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -109,7 +111,7 @@ class AlfonsoAPI:
     def get_email(self, email_id: int) -> dict:
         """Obtiene el contenido completo de un correo por su ID."""
         try:
-            r = requests.get(f"{self.base_url}/mail/emails/{email_id}", timeout=10)
+            r = self.session.get(f"{self.base_url}/mail/emails/{email_id}", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -118,7 +120,7 @@ class AlfonsoAPI:
     def mark_email_as_read(self, email_id: int) -> dict:
         """Marca un correo como leído."""
         try:
-            r = requests.post(f"{self.base_url}/mail/emails/{email_id}/read", timeout=10)
+            r = self.session.post(f"{self.base_url}/mail/emails/{email_id}/read", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -127,7 +129,7 @@ class AlfonsoAPI:
     def seed_emails(self) -> dict:
         """Inyecta correos de prueba simulados."""
         try:
-            r = requests.post(f"{self.base_url}/mail/emails/seed", timeout=10)
+            r = self.session.post(f"{self.base_url}/mail/emails/seed", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -136,7 +138,7 @@ class AlfonsoAPI:
     def send_email(self, recipient: str, subject: str, body: str) -> dict:
         """Envía un nuevo correo electrónico."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/mail/send",
                 json={"recipient": recipient, "subject": subject, "body": body},
                 timeout=10
@@ -149,7 +151,7 @@ class AlfonsoAPI:
     def save_draft(self, recipient: str, subject: str, body: str) -> dict:
         """Guarda un borrador de correo."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/mail/drafts",
                 json={"recipient": recipient, "subject": subject, "body": body},
                 timeout=10
@@ -162,7 +164,7 @@ class AlfonsoAPI:
     def delete_email(self, email_id: int) -> dict:
         """Elimina un correo electrónico."""
         try:
-            r = requests.delete(f"{self.base_url}/mail/emails/{email_id}", timeout=10)
+            r = self.session.delete(f"{self.base_url}/mail/emails/{email_id}", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -171,7 +173,7 @@ class AlfonsoAPI:
     def reply_email(self, email_id: int, body: str, reply_all: bool = False) -> dict:
         """Envía una respuesta a un correo electrónico."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/mail/emails/{email_id}/reply",
                 json={"body": body, "reply_all": reply_all},
                 timeout=10
@@ -184,7 +186,7 @@ class AlfonsoAPI:
     def forward_email(self, email_id: int, recipient: str, comment: str = None) -> dict:
         """Reenvía un correo electrónico."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/mail/emails/{email_id}/forward",
                 json={"recipient": recipient, "comment": comment},
                 timeout=10
@@ -197,7 +199,7 @@ class AlfonsoAPI:
     def get_reply_draft(self, email_id: int) -> dict:
         """Obtiene un borrador de respuesta inteligente (asistente experto si es legal)."""
         try:
-            r = requests.get(f"{self.base_url}/mail/emails/{email_id}/draft", timeout=15)
+            r = self.session.get(f"{self.base_url}/mail/emails/{email_id}/draft", timeout=15)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -206,7 +208,7 @@ class AlfonsoAPI:
     def get_dev_files(self) -> list:
         """Obtiene la lista de archivos del sandbox de desarrollo."""
         try:
-            r = requests.get(f"{self.base_url}/dev/files", timeout=10)
+            r = self.session.get(f"{self.base_url}/dev/files", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -216,7 +218,7 @@ class AlfonsoAPI:
     def get_dev_file(self, filename: str) -> dict:
         """Obtiene el contenido de un archivo del sandbox."""
         try:
-            r = requests.get(f"{self.base_url}/dev/files/{filename}", timeout=10)
+            r = self.session.get(f"{self.base_url}/dev/files/{filename}", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -225,7 +227,7 @@ class AlfonsoAPI:
     def save_dev_file(self, filename: str, content: str) -> dict:
         """Guarda o actualiza un archivo en el sandbox."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/dev/files",
                 json={"filename": filename, "content": content},
                 timeout=10
@@ -238,7 +240,7 @@ class AlfonsoAPI:
     def delete_dev_file(self, filename: str) -> dict:
         """Elimina un archivo del sandbox."""
         try:
-            r = requests.delete(f"{self.base_url}/dev/files/{filename}", timeout=10)
+            r = self.session.delete(f"{self.base_url}/dev/files/{filename}", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -247,7 +249,7 @@ class AlfonsoAPI:
     def execute_dev_command(self, command: str) -> dict:
         """Ejecuta un comando en el sandbox."""
         try:
-            r = requests.post(
+            r = self.session.post(
                 f"{self.base_url}/dev/execute",
                 json={"command": command},
                 timeout=20
@@ -260,7 +262,7 @@ class AlfonsoAPI:
     def get_conversations(self) -> dict:
         """Obtiene la lista de conversaciones y proyectos persistentes de la base de datos."""
         try:
-            r = requests.get(f"{self.base_url}/conversations", timeout=10)
+            r = self.session.get(f"{self.base_url}/conversations", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -269,7 +271,7 @@ class AlfonsoAPI:
     def get_memory_detail(self, session_id: str) -> dict:
         """Obtiene el historial completo de una conversación por su session_id."""
         try:
-            r = requests.get(f"{self.base_url}/memory/{session_id}", timeout=10)
+            r = self.session.get(f"{self.base_url}/memory/{session_id}", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -281,7 +283,7 @@ class AlfonsoAPI:
             params = {}
             if year:
                 params["year"] = year
-            r = requests.get(f"{self.base_url}/tax/aggregates", params=params, timeout=10)
+            r = self.session.get(f"{self.base_url}/tax/aggregates", params=params, timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -290,7 +292,7 @@ class AlfonsoAPI:
     def get_compliance_declaration(self) -> dict:
         """Obtiene la declaración responsable de conformidad con el RD 1007/2023 de Verifactu."""
         try:
-            r = requests.get(f"{self.base_url}/compliance-declaration", timeout=10)
+            r = self.session.get(f"{self.base_url}/compliance-declaration", timeout=10)
             r.raise_for_status()
             return r.json()
         except Exception as e:
