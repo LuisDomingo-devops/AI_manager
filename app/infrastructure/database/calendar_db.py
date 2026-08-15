@@ -123,6 +123,25 @@ def list_events(start_date: Optional[str] = None, end_date: Optional[str] = None
             d["location"] = encryptor.decrypt(d["location"]) if d["location"] else None
             d["attendees"] = encryptor.decrypt(d["attendees"]) if d["attendees"] else None
             results.append(d)
+            
+        # Inyectar dinámicamente el calendario fiscal
+        from app.domain.services.tax_engine import TaxEngine
+        from datetime import datetime
+        
+        s_date = start_date or datetime.now().strftime("%Y-%m-%d")
+        if not end_date:
+            from datetime import timedelta
+            e_date = (datetime.strptime(s_date, "%Y-%m-%d") + timedelta(days=90)).strftime("%Y-%m-%d")
+        else:
+            e_date = end_date
+            
+        try:
+            fiscal_deadlines = TaxEngine.get_fiscal_deadlines(s_date, e_date)
+            results.extend(fiscal_deadlines)
+            results.sort(key=lambda x: x.get("start_time", ""))
+        except Exception:
+            pass
+            
         return results
 
 

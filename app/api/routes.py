@@ -43,16 +43,33 @@ from app.config import settings
 
 # ── API Key Security ────────────────────────────────────────────────────────
 API_KEY_NAME = "X-API-Key"
+SESSION_TOKEN_NAME = "X-Session-Token"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+session_token_header = APIKeyHeader(name=SESSION_TOKEN_NAME, auto_error=False)
 
-async def verify_api_key(api_key: str = Depends(api_key_header)):
-    # La API Key siempre está garantizada en settings gracias a la inicialización segura en config.py
-    if not api_key or not secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API Key or API Key missing"
-        )
-    return api_key
+async def verify_api_key(
+    api_key: str = Depends(api_key_header),
+    session_token: str = Depends(session_token_header)
+):
+    # 1. Comprobar si hay un token de sesión dinámico y es válido
+    if session_token:
+        from app.infrastructure.security.session_manager import SessionManager
+        client_id = SessionManager.validate_session_token(session_token)
+        if client_id:
+            return client_id
+
+    # 2. Fallback a la API Key estática (admite inicialización de sesión)
+    if api_key and secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
+        from app.adapters.memory.memory import tenant_context
+        # Si no se ha seteado contexto del tenant, dejar default
+        if tenant_context.get() == "default":
+            tenant_context.set("default")
+        return "default"
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid Session Token or API Key"
+    )
 
 # ── Routers ─────────────────────────────────────────────────────────────────
 router = APIRouter(prefix="")
@@ -74,6 +91,33 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     client_info: Optional[dict] = None
+
+
+class LoginRequest(BaseModel):
+    client_id: str
+
+
+# ── Router de Autenticación de Sesiones ──────────────────────────────────────
+router_auth = APIRouter(prefix="/auth", tags=["auth"])
+
+@router_auth.post("/login")
+async def login(payload: LoginRequest, api_key: str = Depends(api_key_header)):
+    if not api_key or not secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+        
+    from app.infrastructure.security.session_manager import SessionManager
+    token = SessionManager.create_session(client_id=payload.client_id)
+    return {"status": "ok", "session_token": token, "client_id": payload.client_id}
+
+@router_auth.post("/logout")
+async def logout(session_token: str = Depends(session_token_header)):
+    if not session_token:
+        raise HTTPException(status_code=400, detail="Session token header missing")
+    from app.infrastructure.security.session_manager import SessionManager
+    success = SessionManager.revoke_session_token(session_token)
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid or already revoked session token")
+    return {"status": "ok", "message": "Sesión cerrada correctamente."}
 
 
 # ---------------------------------------------------------------------------
@@ -1082,29 +1126,45 @@ async def check_boe_endpoint(date: Optional[str] = Query(None, description="Fech
 # Endpoint de la Declaración Responsable de Conformidad (Real Decreto 1007/2023)
 @router.get("/compliance-declaration")
 async def get_compliance_declaration():
+    from app.config import settings
     return {
         "status": "ok",
         "compliance": {
-            "developer": "Alfonso S.L.",
-            "software_name": "Alfonso Autónomo SIF",
-            "version": "2.0.0",
-            "regulation": "Real Decreto 1007/2023 y Orden HAC/1177/2024",
-            "certified_date": "2026-08-07",
+            "developer": settings.SIF_DEVELOPER,
+            "software_name": settings.SIF_SOFTWARE_NAME,
+            "version": settings.SIF_VERSION,
+            "regulation": settings.SIF_REGULATION,
+            "certified_date": settings.SIF_CERTIFIED_DATE,
             "statement": (
-                "Alfonso S.L. declara bajo su responsabilidad que el sistema informático de facturación "
-                "'Alfonso Autónomo SIF' versión 2.0.0 cumple con todos los requisitos establecidos en el "
+                f"{settings.SIF_DEVELOPER} declara bajo su responsabilidad que el sistema informático de facturación "
+                f"'{settings.SIF_SOFTWARE_NAME}' versión {settings.SIF_VERSION} cumple con todos los requisitos establecidos en el "
                 "artículo 29.2.j) de la Ley 58/2003, de 17 de diciembre, General Tributaria, y en su reglamento "
                 "de desarrollo aprobado por el Real Decreto 1007/2023, de 5 de diciembre, así como en las "
                 "especificaciones técnicas de la Orden HAC/1177/2024. Garantizando la integridad, conservación, "
                 "accesibilidad, legibilidad, trazabilidad e inalterabilidad de los registros de facturación sin "
                 "interpolaciones, omisiones ni alteraciones de las que no quede la debida anotación en el sistema."
             ),
-            "signature": "FIRMADO DIGITALMENTE POR REPRESENTANTE LEGAL DE ALFONSO S.L."
+            "signature": f"FIRMADO DIGITALMENTE POR REPRESENTANTE LEGAL DE {settings.SIF_DEVELOPER.upper()}"
         }
     }
 
 
+# Endpoint de Métricas de Consumo del LLM e Inferencia
+@router.get("/monitoring/metrics")
+async def get_monitoring_metrics(client_id: str = Depends(verify_api_key)):
+    from app.infrastructure.monitoring.metrics_service import MetricsService
+    from app.adapters.memory.memory import tenant_context
+    cid = tenant_context.get()
+    summary = MetricsService.get_llm_metrics_summary(client_id=cid)
+    return {
+        "status": "ok",
+        "client_id": cid,
+        "metrics": summary
+    }
+
+
 # Incluimos los sub-routers en el router principal
+router.include_router(router_auth)
 router.include_router(router_browser)
 router.include_router(router_computer)
 router.include_router(router_calendar)

@@ -8,6 +8,23 @@ import keyring
 KEY_PATH = Path(__file__).resolve().parents[2] / "data" / ".key"
 
 def get_or_create_key() -> bytes:
+    # 0. Intentar obtener la clave desde la configuración (archivo .env / settings)
+    try:
+        from app.config import settings
+        if settings.DATABASE_ENCRYPTION_KEY:
+            key_str = settings.DATABASE_ENCRYPTION_KEY.strip()
+            # Si tiene longitud base64 de 32 bytes decodificada (44 caracteres)
+            try:
+                decoded = base64.b64decode(key_str.encode('utf-8'))
+                if len(decoded) == 32:
+                    return decoded
+            except Exception:
+                pass
+            # Fallback si no es base64 de 32 bytes directo: derivar con SHA-256
+            return hashlib.sha256(key_str.encode('utf-8')).digest()
+    except Exception:
+        pass
+
     # 1. Intentar obtener la clave desde el Keyring del sistema
     try:
         stored_key_b64 = keyring.get_password("alfonso_autonomo", "db_encryption_key")
@@ -29,8 +46,18 @@ def get_or_create_key() -> bytes:
         except Exception:
             pass
 
-    # 3. Generar nueva clave
+    # 3. Generar nueva clave y advertir en los logs
     new_key = os.urandom(32)
+    try:
+        from app.utils.logger import app_logger
+        new_key_b64 = base64.b64encode(new_key).decode('utf-8')
+        app_logger.warning(
+            "⚠️ ALERTA DE SEGURIDAD: Se ha generado una clave de cifrado temporal. "
+            "Para un despliegue portable y seguro en producción, añade la siguiente clave "
+            "a tu archivo .env como DATABASE_ENCRYPTION_KEY:\n%s", new_key_b64
+        )
+    except Exception:
+        pass
     
     # 4. Intentar guardar en el Keyring del sistema
     saved_in_keyring = False

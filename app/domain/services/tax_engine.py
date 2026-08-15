@@ -222,3 +222,138 @@ class TaxEngine:
             total_amount = expected_total
 
         return base_imponible, iva_amount, irpf_amount, total_amount
+
+    @classmethod
+    def get_fiscal_deadlines(cls, start_date: str, end_date: str) -> list:
+        """
+        Genera dinámicamente las obligaciones fiscales del autónomo español
+        en el rango YYYY-MM-DD.
+        """
+        try:
+            start_yr = int(start_date[:4])
+            end_yr = int(end_date[:4])
+        except Exception:
+            start_yr = datetime.now().year
+            end_yr = start_yr
+
+        deadlines = []
+        for yr in range(start_yr, end_yr + 1):
+            # Trimestrales Q1, Q2, Q3, Q4
+            quarters = [
+                {
+                    "quarter": 1,
+                    "deadline_303_130": f"{yr}-04-20 23:59",
+                    "deadline_111_115": f"{yr}-04-20 23:59",
+                },
+                {
+                    "quarter": 2,
+                    "deadline_303_130": f"{yr}-07-20 23:59",
+                    "deadline_111_115": f"{yr}-07-20 23:59",
+                },
+                {
+                    "quarter": 3,
+                    "deadline_303_130": f"{yr}-10-20 23:59",
+                    "deadline_111_115": f"{yr}-10-20 23:59",
+                },
+                {
+                    "quarter": 4,
+                    "deadline_303_130": f"{yr+1}-01-30 23:59",
+                    "deadline_111_115": f"{yr+1}-01-20 23:59",
+                }
+            ]
+
+            for q in quarters:
+                deadlines.append({
+                    "id": f"fiscal-303-q{q['quarter']}-{yr}",
+                    "title": f"AEAT: Presentar Modelo 303 (IVA) Q{q['quarter']}",
+                    "start_time": q["deadline_303_130"],
+                    "end_time": q["deadline_303_130"],
+                    "description": f"Autoliquidación del Impuesto sobre el Valor Añadido (IVA) correspondiente al Q{q['quarter']} de {yr}.",
+                    "location": "Sede Electrónica AEAT",
+                    "attendees": None
+                })
+                deadlines.append({
+                    "id": f"fiscal-130-q{q['quarter']}-{yr}",
+                    "title": f"AEAT: Presentar Modelo 130 (IRPF) Q{q['quarter']}",
+                    "start_time": q["deadline_303_130"],
+                    "end_time": q["deadline_303_130"],
+                    "description": f"Pago fraccionado del IRPF para autónomos en estimación directa correspondiente al Q{q['quarter']} de {yr}.",
+                    "location": "Sede Electrónica AEAT",
+                    "attendees": None
+                })
+                deadlines.append({
+                    "id": f"fiscal-111-q{q['quarter']}-{yr}",
+                    "title": f"AEAT: Presentar Modelo 111 Q{q['quarter']}",
+                    "start_time": q["deadline_111_115"],
+                    "end_time": q["deadline_111_115"],
+                    "description": f"Retenciones a cuenta de IRPF practicadas sobre trabajadores o profesionales durante el Q{q['quarter']} de {yr}.",
+                    "location": "Sede Electrónica AEAT",
+                    "attendees": None
+                })
+                deadlines.append({
+                    "id": f"fiscal-115-q{q['quarter']}-{yr}",
+                    "title": f"AEAT: Presentar Modelo 115 Q{q['quarter']}",
+                    "start_time": q["deadline_111_115"],
+                    "end_time": q["deadline_111_115"],
+                    "description": f"Retenciones practicadas sobre alquileres de locales urbanos correspondientes al Q{q['quarter']} de {yr}.",
+                    "location": "Sede Electrónica AEAT",
+                    "attendees": None
+                })
+
+            # Anuales
+            deadlines.append({
+                "id": f"fiscal-390-annual-{yr}",
+                "title": f"AEAT: Presentar Modelo 390 (IVA Anual)",
+                "start_time": f"{yr+1}-01-30 23:59",
+                "end_time": f"{yr+1}-01-30 23:59",
+                "description": f"Declaración resumen anual del IVA correspondiente a todo el ejercicio {yr}.",
+                "location": "Sede Electrónica AEAT",
+                "attendees": None
+            })
+            deadlines.append({
+                "id": f"fiscal-190-annual-{yr}",
+                "title": f"AEAT: Presentar Modelo 190 (Anual Retenciones)",
+                "start_time": f"{yr+1}-01-30 23:59",
+                "end_time": f"{yr+1}-01-30 23:59",
+                "description": f"Resumen anual del Modelo 111 correspondiente al ejercicio {yr}.",
+                "location": "Sede Electrónica AEAT",
+                "attendees": None
+            })
+            deadlines.append({
+                "id": f"fiscal-180-annual-{yr}",
+                "title": f"AEAT: Presentar Modelo 180 (Anual Alquileres)",
+                "start_time": f"{yr+1}-01-30 23:59",
+                "end_time": f"{yr+1}-01-30 23:59",
+                "description": f"Resumen anual del Modelo 115 correspondiente al ejercicio {yr}.",
+                "location": "Sede Electrónica AEAT",
+                "attendees": None
+            })
+
+            # Campaña Renta
+            deadlines.append({
+                "id": f"fiscal-100-income-{yr}",
+                "title": f"AEAT: Campaña de la Renta (Modelo 100)",
+                "start_time": f"{yr+1}-04-06 09:00",
+                "end_time": f"{yr+1}-06-30 23:59",
+                "description": f"Campaña de la declaración del Impuesto sobre la Renta de las Personas Físicas (IRPF) del ejercicio {yr}.",
+                "location": "Sede Electrónica AEAT",
+                "attendees": None
+            })
+
+        # Filtrar por rango
+        filtered = []
+        for d in deadlines:
+            d_date = d["start_time"][:10]
+            if start_date and end_date:
+                if start_date <= d_date <= end_date:
+                    filtered.append(d)
+            elif start_date:
+                if d_date >= start_date:
+                    filtered.append(d)
+            elif end_date:
+                if d_date <= end_date:
+                    filtered.append(d)
+            else:
+                filtered.append(d)
+
+        return filtered

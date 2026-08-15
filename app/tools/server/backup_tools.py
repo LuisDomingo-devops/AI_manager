@@ -21,6 +21,14 @@ async def export_tenant_backup(backup_dir: str = "data/backups") -> dict:
         backup_file = out_dir / f"backup_{cid}_{timestamp}.enc"
         backup_file.write_bytes(backup_data)
         
+        # Registrar en el Ledger de Auditoría
+        from app.domain.services.audit_ledger import AuditLedgerService
+        AuditLedgerService.log_audit_event(
+            event_type="EXPORT_BACKUP",
+            description=f"Exportación de backup contable cifrada y firmada en: {backup_file.name}.",
+            client_id=cid
+        )
+        
         tool_logger.info("Backup exportado correctamente: %s", backup_file)
         return {
             "status": "ok",
@@ -42,6 +50,15 @@ async def import_tenant_backup(file_path: str) -> dict:
             
         backup_bytes = backup_file.read_bytes()
         BackupService.restore_backup(backup_bytes)
+        
+        # Registrar en el Ledger de Auditoría
+        from app.domain.services.audit_ledger import AuditLedgerService
+        cid = tenant_context.get()
+        AuditLedgerService.log_audit_event(
+            event_type="IMPORT_BACKUP",
+            description=f"Restauración de backup contable verificada e importada desde: {backup_file.name}.",
+            client_id=cid
+        )
         
         tool_logger.info("Backup restaurado correctamente: %s", file_path)
         return {

@@ -76,7 +76,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             app_logger.warning("No se pudo sincronizar con Excel: %s", str(e))
 
+    async def handle_payment_registered(data: dict):
+        app_logger.info(
+            "Pago registrado recibido en EventBus: %s € para la factura %s",
+            data.get("amount"), data.get("invoice_id")
+        )
+        if alfonso_bridge.has_clients():
+            await alfonso_bridge.send_command(
+                "system.notify",
+                {
+                    "title": "💰 PAGO REGISTRADO",
+                    "message": f"Factura: {data.get('invoice_id')}\nImporte: {data.get('amount')} €"
+                }
+            )
+
     event_bus.subscribe("InvoiceCreated", handle_invoice_created)
+    event_bus.subscribe("PaymentRegistered", handle_payment_registered)
     event_bus.start()
     app_logger.info("Arrancando Alfonso — audio delegado al cliente local")
 

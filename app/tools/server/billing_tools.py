@@ -187,6 +187,17 @@ async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict
 
             cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
             conn.commit()
+            
+            # Registrar en el Ledger de Auditoría
+            from app.domain.services.audit_ledger import AuditLedgerService
+            from app.adapters.memory.memory import tenant_context
+            cid = tenant_context.get()
+            AuditLedgerService.log_audit_event(
+                event_type="DELETE_CLIENT",
+                description=f"Eliminación permanente del cliente con ID {client_id}.",
+                client_id=cid
+            )
+            
             return {"status": "ok", "message": f"Cliente con ID {client_id} eliminado con éxito."}
         finally:
             conn.close()
@@ -306,6 +317,17 @@ async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
 
             cursor.execute("DELETE FROM products WHERE sku = ?", (sku_upper,))
             conn.commit()
+            
+            # Registrar en el Ledger de Auditoría
+            from app.domain.services.audit_ledger import AuditLedgerService
+            from app.adapters.memory.memory import tenant_context
+            cid = tenant_context.get()
+            AuditLedgerService.log_audit_event(
+                event_type="DELETE_PRODUCT",
+                description=f"Eliminación permanente del producto con SKU '{sku_upper}'.",
+                client_id=cid
+            )
+            
             return {"status": "ok", "message": f"Producto con SKU '{sku}' eliminado del catálogo."}
         finally:
             conn.close()
@@ -360,8 +382,9 @@ async def create_quote(
         quote_id = _generate_unique_quote_id(is_draft, quote_id)
 
         # Razón social del emisor
-        emisor_name = "LUIS DOMINGO"
-        emisor_nif = "12345678Z"
+        from app.config import settings
+        emisor_name = settings.ALFONSO_USER_NAME or "LUIS DOMINGO"
+        emisor_nif = settings.ALFONSO_USER_NIF or "12345678Z"
         try:
             with _get_connection() as conn:
                 cursor = conn.cursor()
@@ -684,8 +707,9 @@ async def generate_invoice_pdf(
         invoice_id = _generate_unique_invoice_id(is_draft, invoice_id)
 
         # Obtener datos reales del perfil del usuario emisor
-        emisor_name = "LUIS DOMINGO"
-        emisor_nif = "12345678Z"
+        from app.config import settings
+        emisor_name = settings.ALFONSO_USER_NAME or "LUIS DOMINGO"
+        emisor_nif = settings.ALFONSO_USER_NIF or "12345678Z"
         try:
             with _get_connection() as conn:
                 cursor = conn.cursor()
@@ -1258,6 +1282,18 @@ async def register_payment(invoice_id: str, amount: float, payment_method: str =
             conn.commit()
         finally:
             conn.close()
+
+        # Publicar evento de pago registrado
+        try:
+            await event_bus.publish("PaymentRegistered", {
+                "payment_id": payment_id,
+                "invoice_id": invoice_id,
+                "amount": float(amount),
+                "date": date_str,
+                "payment_method": payment_method
+            })
+        except Exception as e:
+            tool_logger.warning("No se pudo publicar el evento PaymentRegistered: %s", str(e))
 
         return {
             "status": "ok",

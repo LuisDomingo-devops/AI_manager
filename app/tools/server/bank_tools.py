@@ -115,6 +115,17 @@ async def initiate_transfer(connection_id: int, recipient_name: str, recipient_i
 
     try:
         res = BankService.initiate_transfer(connection_id, recipient_name, recipient_iban, amount, concept)
+        
+        # Registrar en el Ledger de Auditoría
+        from app.domain.services.audit_ledger import AuditLedgerService
+        from app.adapters.memory.memory import tenant_context
+        cid = tenant_context.get()
+        AuditLedgerService.log_audit_event(
+            event_type="INITIATE_TRANSFER",
+            description=f"Transferencia iniciada de {amount:.2f} € a {recipient_name} (IBAN: {recipient_iban}, Concepto: {concept}).",
+            client_id=cid
+        )
+        
         return {
             "status": "ok",
             "message": f"Transferencia de {amount:.2f} € a {recipient_name} realizada con éxito.",

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     ANONYMIZE_LLM_CALLS: bool = True
 
+    DATABASE_ENCRYPTION_KEY: str = ""
+
     ALFONSO_API_KEY: str = ""
     ALFONSO_BRIDGE_TOKEN: str = ""
     VERIFACTU_ACTIVE: bool = True
@@ -40,11 +42,18 @@ class Settings(BaseSettings):
     ALFONSO_CLIENT_ROLES: str = ""   # Formato JSON: {"client_id1": "admin", "client_id2": "guest"} o client1:admin,client2:guest
 
     ALFONSO_USER_NAME: str = "Luis Domingo"
-    ALFONSO_USER_EMAIL: str = "luis@example.com"
+    ALFONSO_USER_EMAIL: str = ""
     ALFONSO_USER_PHONE: str = "+34 600 000 000"
-    ALFONSO_USER_NIF: str = "12345678Z"
+    ALFONSO_USER_NIF: str = ""
 
     CHAT_PROMPT_PATH: str = "app/prompts/chat_system.txt"
+
+    # ── Datos de Certificación SIF (Veri*Factu) ────────────────────────
+    SIF_DEVELOPER: str = "Alfonso S.L."
+    SIF_SOFTWARE_NAME: str = "Alfonso Autónomo SIF"
+    SIF_VERSION: str = "2.0.0"
+    SIF_REGULATION: str = "Real Decreto 1007/2023 y Orden HAC/1177/2024"
+    SIF_CERTIFIED_DATE: str = "2026-08-07"
 
     # ── Parámetros de inferencia ──────────────────────────────────────
     LLM_NUM_CTX_TOOL: int = 1024

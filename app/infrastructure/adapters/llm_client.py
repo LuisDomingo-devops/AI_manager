@@ -253,7 +253,7 @@ from app.domain.ports.llm_port import LLMPort
 
 class OllamaClient(LLMPort):
 
-    async def _call_gemini_api(self, messages: list[dict[str, str]], system_prompt: str | None = None, temperature: float = 0.7) -> str:
+    async def _call_gemini_api(self, messages: list[dict[str, str]], system_prompt: str | None = None, temperature: float = 0.7) -> tuple[str, int, int]:
         """Llamada directa mediante HTTP a la API oficial de Gemini 1.5 Flash."""
         system_instr_parts = []
         contents = []
@@ -267,7 +267,6 @@ class OllamaClient(LLMPort):
             if role == "system":
                 system_instr_parts.append({"text": content})
             else:
-                # Mapear rol: assistant -> model
                 gemini_role = "model" if role == "assistant" else "user"
                 contents.append({
                     "role": gemini_role,
@@ -292,34 +291,27 @@ class OllamaClient(LLMPort):
             raise RuntimeError(f"Gemini API Error {response.status_code}: {response.text}")
         
         res_data = response.json()
+        usage = res_data.get("usageMetadata", {})
+        prompt_tokens = usage.get("promptTokenCount", 0)
+        completion_tokens = usage.get("candidatesTokenCount", 0)
+        
         try:
-            return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return text, prompt_tokens, completion_tokens
         except (KeyError, IndexError) as e:
             raise ValueError(f"Respuesta inesperada de Gemini API: {res_data}")
 
-    async def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
-        """Envia un listado completo de messages al modelo de lenguaje."""
-        anonymized_messages = []
-        mapping = {}
-        anonymizer = None
-
-        if settings.ANONYMIZE_LLM_CALLS:
-            from app.utils.anonymizer import DataAnonymizer
-            anonymizer = DataAnonymizer()
-            for msg in messages:
-                role = msg.get("role")
-                content = msg.get("content", "") or ""
-                anon_content, msg_map = anonymizer.anonymize(content)
-                mapping.update(msg_map)
-                anonymized_messages.append({"role": role, "content": anon_content})
-        else:
-            anonymized_messages = messages
+        import time
+        start_time = time.perf_counter()
+        p_tok, c_tok = 0, 0
+        model_name = settings.MODEL_NAME
 
         # Si hay GEMINI_API_KEY configurada, usar Gemini
         if settings.GEMINI_API_KEY:
             llm_logger.info("Utilizando la API de Gemini para chat (en la nube)")
             temp = kwargs.get("options", {}).get("temperature", 0.7)
-            content = await self._call_gemini_api(anonymized_messages, temperature=temp)
+            content, p_tok, c_tok = await self._call_gemini_api(anonymized_messages, temperature=temp)
+            model_name = settings.GEMINI_MODEL_NAME
         else:
             payload = {
                 "model": settings.MODEL_NAME,
@@ -338,6 +330,25 @@ class OllamaClient(LLMPort):
                 raise RuntimeError(response.text)
             data = response.json()
             content = data.get("message", {}).get("content", "").strip()
+            p_tok = data.get("prompt_eval_count", 0)
+            c_tok = data.get("eval_count", 0)
+
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+
+        # Log metrics
+        try:
+            from app.infrastructure.monitoring.metrics_service import MetricsService
+            from app.adapters.memory.memory import tenant_context
+            cid = tenant_context.get()
+            MetricsService.log_llm_metrics(
+                client_id=cid,
+                model_name=model_name,
+                prompt_tokens=p_tok,
+                completion_tokens=c_tok,
+                latency_ms=latency_ms
+            )
+        except Exception as ex:
+            llm_logger.warning("Error al registrar métricas de LLM en chat: %s", ex)
 
         if anonymizer:
             content = anonymizer.detokenize(content, mapping)
@@ -412,10 +423,16 @@ class OllamaClient(LLMPort):
 
         logger.info("MODEL=%s MODE=%s", settings.MODEL_NAME, mode)
 
+        import time
+        start_time = time.perf_counter()
+        p_tok, c_tok = 0, 0
+        model_name = settings.MODEL_NAME
+
         try:
             if settings.GEMINI_API_KEY:
                 logger.info("Utilizando la API de Gemini para generar (en la nube)")
-                content = await self._call_gemini_api(messages, temperature=options_payload["temperature"])
+                content, p_tok, c_tok = await self._call_gemini_api(messages, temperature=options_payload["temperature"])
+                model_name = settings.GEMINI_MODEL_NAME
             else:
                 response = await client.post(
                     f"{settings.OLLAMA_BASE_URL}/api/chat",
@@ -426,6 +443,8 @@ class OllamaClient(LLMPort):
                     raise RuntimeError(response.text)
 
                 data = response.json()
+                p_tok = data.get("prompt_eval_count", 0)
+                c_tok = data.get("eval_count", 0)
                 
                 # Verificar si Ollama devolvió llamadas de herramientas nativas
                 tool_calls = data.get("message", {}).get("tool_calls", [])
@@ -437,6 +456,24 @@ class OllamaClient(LLMPort):
                     res_str = json.dumps({"tool": t_name, "args": t_args})
                     if anonymizer:
                         res_str = anonymizer.detokenize(res_str, mapping)
+                        
+                    # Log metrics
+                    latency_ms = int((time.perf_counter() - start_time) * 1000)
+                    try:
+                        from app.infrastructure.monitoring.metrics_service import MetricsService
+                        from app.adapters.memory.memory import tenant_context
+                        cid = tenant_context.get()
+                        MetricsService.log_llm_metrics(
+                            client_id=cid,
+                            model_name=model_name,
+                            prompt_tokens=p_tok,
+                            completion_tokens=c_tok,
+                            latency_ms=latency_ms,
+                            request_id=request_id
+                        )
+                    except Exception as ex:
+                        logger.warning("Error al registrar métricas de LLM en generate (tools): %s", ex)
+                        
                     return res_str
 
                 content = data.get("message", {}).get("content", "").strip()
@@ -454,6 +491,23 @@ class OllamaClient(LLMPort):
 
             if anonymizer:
                 content = anonymizer.detokenize(content, mapping)
+
+            # Log metrics
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            try:
+                from app.infrastructure.monitoring.metrics_service import MetricsService
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+                MetricsService.log_llm_metrics(
+                    client_id=cid,
+                    model_name=model_name,
+                    prompt_tokens=p_tok,
+                    completion_tokens=c_tok,
+                    latency_ms=latency_ms,
+                    request_id=request_id
+                )
+            except Exception as ex:
+                logger.warning("Error al registrar métricas de LLM en generate (fin): %s", ex)
 
             return content
 

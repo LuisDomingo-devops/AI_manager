@@ -77,3 +77,17 @@ async def test_calendar_tools():
     # Verificar que ya no está
     res_list_empty = await calendar_list_events(start_date="2026-07-05", end_date="2026-07-05")
     assert res_list_empty["count"] == 0
+
+def test_fiscal_calendar_deadlines():
+    # Listar en un rango donde cae el fin del Q2 de 2026 (20 de Julio de 2026)
+    events = list_events(start_date="2026-07-20", end_date="2026-07-20")
+    
+    # Deben haberse inyectado los modelos trimestrales de la AEAT correspondientes al Q2 (IVA 303, IRPF 130, 111, 115)
+    fiscal_events = [e for e in events if str(e.get("id")).startswith("fiscal-")]
+    assert len(fiscal_events) == 4
+    
+    titles = [e["title"] for e in fiscal_events]
+    assert any("Modelo 303" in t for t in titles)
+    assert any("Modelo 130" in t for t in titles)
+    assert any("Modelo 111" in t for t in titles)
+    assert any("Modelo 115" in t for t in titles)
