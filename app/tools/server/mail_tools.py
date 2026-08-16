@@ -35,7 +35,7 @@ from app.utils.logger import tool_logger
 from app.adapters.alfonso_bridge import bridge
 from app.domain.actions import Action
 from app.adapters.calendar_db import create_event, list_events
-from app.adapters.memory import vector_memory
+from app.adapters.memory.vector_memory import vector_memory
 
 # Instanciar cliente LLM para clasificaciones y resúmenes internos
 _llm = OllamaClient()

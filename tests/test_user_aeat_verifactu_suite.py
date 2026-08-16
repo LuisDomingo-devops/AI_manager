@@ -220,8 +220,8 @@ async def test_aeat_requirements_legal_agent():
     # 2. Consultar a Alfonso/Marcos a través de PlannerOrchestrator
     orchestrator = PlannerOrchestrator()
     
-    # Mockear OllamaClient.generate para controlar la respuesta del LLM legal
-    with patch("app.adapters.llm_client.OllamaClient.generate", new_callable=AsyncMock) as mock_llm:
+    # Mockear el cliente LLM del agente Marcos para controlar la respuesta legal sin invocar Ollama
+    with patch("app.domain.agents.marcos.marcos_agent.marcos_agent.llm.generate", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "Borrador de respuesta formal al requerimiento de IVA 2025..."
         
         user_query = "Tengo un requerimiento de la AEAT sobre el IVA de 2025 que acabo de recibir. ¿Qué debemos responder?"

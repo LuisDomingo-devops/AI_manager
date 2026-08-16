@@ -1,46 +1,57 @@
-FROM python:3.12-slim
+# ==============================================================================
+# ALFONSO AUTÓNOMO — Dockerfile de Producción Multi-Stage
+# ==============================================================================
 
-# Instalar dependencias del sistema indispensables
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    procps \
+# --- Etapa 1: Builder ---
+FROM python:3.12-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Descargar e instalar Caddy
-RUN curl -L "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/local/bin/caddy && \
-    chmod +x /usr/local/bin/caddy
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Crear el usuario no-root exigido por Hugging Face (UID 1000)
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user
-ENV PATH=/home/user/.local/bin:$PATH
+# --- Etapa 2: Runtime Seguro ---
+FROM python:3.12-slim AS runner
 
-WORKDIR $HOME/app
+WORKDIR /app
 
-# Instalar Ollama en el espacio de usuario
-RUN curl -L https://ollama.com/download/ollama-linux-amd64.tgz -o ollama.tgz && \
-    tar -xzf ollama.tgz && \
-    rm ollama.tgz
-ENV PATH=$HOME/app:$PATH
+# Instalar librerías de sistema mínimas necesarias
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxml2 \
+    libxslt1.1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar el código del proyecto
-COPY --chown=user:user . .
+# Crear usuario sin privilegios para ejecución segura
+RUN useradd -m -u 10001 appuser
 
-# Crear entorno virtual e instalar dependencias de Python
-RUN python3 -m venv venv && \
-    venv/bin/pip install --no-cache-dir --upgrade pip && \
-    venv/bin/pip install --no-cache-dir -r requirements.txt
+# Copiar paquetes instalados desde la etapa builder
+COPY --from=builder /root/.local /home/appuser/.local
+ENV PATH=/home/appuser/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Permisos de ejecución para el script de arranque
-RUN chmod +x start.sh
+# Copiar código de la aplicación
+COPY --chown=appuser:appuser . /app
 
-# Puerto requerido por Hugging Face
-EXPOSE 7860
+# Crear directorios de datos y logs con permisos correctos
+RUN mkdir -p /app/data /app/logs && chown -R appuser:appuser /app/data /app/logs
 
-# Variables de entorno por defecto
-ENV MODEL_NAME=qwen2.5:3b
-ENV OLLAMA_BASE_URL=http://localhost:11434
+USER appuser
 
-CMD ["./start.sh"]
+# Exponer puerto de la API FastAPI
+EXPOSE 8000
+
+# Healthcheck de disponibilidad
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/status || exit 1
+
+# Comando de arranque del servidor ASGI
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

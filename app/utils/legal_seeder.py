@@ -24,7 +24,7 @@ from pathlib import Path
 # Añadir directorio raíz al path para poder importar módulos
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from app.adapters.memory import vector_memory
+from app.adapters.memory.vector_memory import vector_memory
 from app.utils.logger import app_logger
 
 LAWS = {

@@ -38,8 +38,8 @@ class LazyAdapterProxy:
         concrete = getattr(module, self._object_name)
         return getattr(concrete, name)
 
-memory = LazyAdapterProxy("app.adapters.memory", "memory")
-vector_memory = LazyAdapterProxy("app.adapters.memory", "vector_memory")
+memory = LazyAdapterProxy("app.adapters.memory.memory", "memory")
+vector_memory = LazyAdapterProxy("app.adapters.memory.vector_memory", "vector_memory")
 bridge = LazyAdapterProxy("app.adapters.alfonso_bridge", "bridge")
 
 def extract_json_robust(raw: str) -> dict | None:
@@ -101,7 +101,7 @@ def _check_and_store_fact(user_message: str, session_id: str, client_id: str | N
                 cleaned_fact = user_message[len(p):].strip()
                 break
         if vector_memory_port is None:
-            from app.adapters.memory import vector_memory as vector_memory_port
+            from app.adapters.memory.vector_memory import vector_memory as vector_memory_port
         vector_memory_port.add_fact(session_id, cleaned_fact, client_id=client_id)
         return True
     return False
@@ -306,7 +306,14 @@ class ToolExecutionEngine:
             is_testing = "pytest" in sys.modules
             role = "admin" if is_testing else "guest"
             if client_id:
-                client_meta = self.bridge._client_info_dict.get(client_id)
+                client_meta = None
+                if self.bridge and hasattr(self.bridge, "_client_info_dict"):
+                    client_meta = self.bridge._client_info_dict.get(client_id)
+                if not client_meta:
+                    from app.adapters.alfonso_bridge import bridge as default_bridge
+                    if hasattr(default_bridge, "_client_info_dict"):
+                        client_meta = default_bridge._client_info_dict.get(client_id)
+
                 if client_meta:
                     role = client_meta.get("role", "guest")
                 else:
@@ -320,6 +327,23 @@ class ToolExecutionEngine:
                     "execution": "server",
                     "message": f"Acceso denegado: el rol '{role}' no tiene permisos para ejecutar la herramienta de servidor '{tool_name}'",
                 }
+
+            if role in ("advisor", "asesor"):
+                advisor_allowed = {
+                    "get_libro_diario", "get_libro_mayor", "get_balance_situacion", "get_pgc_accounts",
+                    "get_profit_and_loss_report", "export_advisor_pack", "export_advisor_pack_tool",
+                    "get_tax_estimate", "get_clients", "get_products", "get_quotes",
+                    "get_pending_payments_report", "get_invoice_payment_summary",
+                    "get_b2b_invoice_status_history_tool", "export_einvoice_tool",
+                    "list_directory", "view_file", "no_op"
+                }
+                if tool_name not in advisor_allowed:
+                    logger.warning("Acceso denegado: el cliente %s con rol %s intentó ejecutar %s", client_id, role, tool_name)
+                    return {
+                        "status": "rbac_error",
+                        "execution": "server",
+                        "message": f"Acceso denegado: el rol 'advisor' solo dispone de permisos de consulta y auditoría contable/fiscal. No puede ejecutar '{tool_name}'."
+                    }
 
             logger.info("Ejecutando tool de servidor: %s", tool_name)
             tool = get_tool(tool_name, request_id)
@@ -455,8 +479,8 @@ class PlannerOrchestrator:
     def bridge(self):
         if self._bridge is not None:
             return self._bridge
-        global bridge
-        return bridge
+        from app.adapters.alfonso_bridge import bridge as default_bridge
+        return default_bridge
 
     @property
     def calendar(self):

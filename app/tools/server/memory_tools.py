@@ -15,7 +15,7 @@ Llamando a las funciones expuestas por `app/adapters/memory/vector_memory.py`.
 - app/adapters/memory/vector_memory.py (contiene el motor de búsqueda ChromaDB)
 """
 
-from app.adapters.memory import vector_memory
+from app.adapters.memory.vector_memory import vector_memory
 from app.utils.logger import tool_logger
 
 async def save_user_preference(fact: str, session_id: str = "global") -> dict:

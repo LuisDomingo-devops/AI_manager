@@ -119,7 +119,7 @@ def parse_system_operation_directly(msg: str, session_id: str | None = None) -> 
         return {"tool": "window_list", "args": {}}
     
     if re.search(r"\b(proyectos\s+tenemos\s+abiertos|lista\s+de\s+proyectos|proyectos\s+activos|proyectos\s+guardados)\b", msg_clean):
-        from app.adapters.memory import memory
+        from app.adapters.memory.memory import memory
         conversations = memory.list_persistent_conversations()
         if not conversations:
             response_text = "Actualmente no tienes ningún proyecto registrado o abierto."
@@ -143,7 +143,7 @@ def parse_system_operation_directly(msg: str, session_id: str | None = None) -> 
         }
 
     if re.search(r"\b(conversaciones|canales|hilos|chats)\b.*\b(este proyecto|proyecto activo|proyecto cargado)\b", msg_clean):
-        from app.adapters.memory import memory
+        from app.adapters.memory.memory import memory
         curr_session_id = session_id or "default"
         meta = memory.get_metadata(curr_session_id)
         if not meta or meta.get("project_name") == "default":
@@ -171,7 +171,7 @@ def parse_system_operation_directly(msg: str, session_id: str | None = None) -> 
         if project_query.lower().startswith('l '):
             project_query = project_query[2:]
             
-        from app.adapters.memory import memory
+        from app.adapters.memory.memory import memory
         projects = memory.list_persistent_conversations()
         
         def clean_accents(s: str) -> str:

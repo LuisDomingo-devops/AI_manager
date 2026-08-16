@@ -77,7 +77,7 @@ def _get_tools_directory() -> Path:
     return (
         Path(__file__)
         .resolve()
-        .parents[1]
+        .parents[2]
         /
         "tools"
     )

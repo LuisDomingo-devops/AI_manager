@@ -7,8 +7,70 @@ from app.utils.encryption import encryptor
 class LedgerService:
     """
     Servicio de Contabilidad por Partida Doble (PGC) para Pymes.
-    Gestiona la creación de Asientos contables (Libro Diario) y balances en tiempo real.
+    Gestiona la creación de Asientos contables (Libro Diario), balances, Cuenta de Pérdidas y Ganancias y Cierre de Ejercicio.
     """
+
+    @classmethod
+    def validate_double_entry(cls, apuntes: List[Dict[str, Any]]) -> bool:
+        """
+        Valida el principio contable fundamental de partida doble:
+        La suma total de los importes al Debe debe ser exactamente igual a la del Haber.
+        """
+        total_debe = round(sum(float(ap.get("debe", 0.0)) for ap in apuntes), 2)
+        total_haber = round(sum(float(ap.get("haber", 0.0)) for ap in apuntes), 2)
+        if total_debe != total_haber:
+            raise ValueError(
+                f"Asiento contable descuadrado (Partida Doble rota): "
+                f"Total Debe ({total_debe:.2f} €) != Total Haber ({total_haber:.2f} €)."
+            )
+        return True
+
+    @classmethod
+    def extract_year_from_date(cls, date_str: str) -> int:
+        """Extrae el año entero a partir de cadenas de fecha comunes."""
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(date_str.strip(), fmt).year
+            except Exception:
+                pass
+        return datetime.now().year
+
+    @classmethod
+    def is_fiscal_year_closed(cls, year: int) -> bool:
+        """
+        Comprueba si un ejercicio contable/fiscal está marcado como cerrado en la base de datos.
+        """
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT is_closed FROM fiscal_year_status WHERE year = ?", (year,))
+            row = cursor.fetchone()
+            return bool(row["is_closed"]) if row else False
+
+    @classmethod
+    def _insert_journal_and_ledger(cls, date_str: str, concept: str, apuntes: List[Dict[str, Any]]) -> int:
+        """Inserta de forma atómica y cifrada un asiento en el Libro Diario y sus apuntes en el Mayor."""
+        cls.validate_double_entry(apuntes)
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO journal_entries (entry_date, concept) VALUES (?, ?)",
+                (date_str, encryptor.encrypt(concept))
+            )
+            journal_id = cursor.lastrowid
+            db_apuntes = []
+            for ap in apuntes:
+                db_apuntes.append((
+                    journal_id,
+                    ap["account_code"],
+                    encryptor.encrypt(str(float(ap.get("debe", 0.0)))),
+                    encryptor.encrypt(str(float(ap.get("haber", 0.0))))
+                ))
+            cursor.executemany(
+                "INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)",
+                db_apuntes
+            )
+            conn.commit()
+            return journal_id
 
     @classmethod
     def record_invoice_asiento(cls, invoice_data: Dict[str, Any]) -> int:
@@ -26,49 +88,34 @@ class LedgerService:
         category = invoice_data.get("category", "ingreso").lower()
         invoice_id = invoice_data.get("invoice_id", "FAC-MOCK")
         date_str = invoice_data.get("date", datetime.now().strftime("%d/%m/%Y"))
+        year = cls.extract_year_from_date(date_str)
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
+
         base = float(invoice_data.get("base_imponible", 0.0))
         iva = float(invoice_data.get("iva_amount", 0.0))
+        irpf = float(invoice_data.get("irpf_amount", 0.0))
         total = float(invoice_data.get("total_amount", 0.0))
 
         concept = f"Factura {invoice_id}"
+        apuntes = []
+        
+        if category in ("ingreso", "income"):
+            apuntes.append({"account_code": "43000000", "debe": total, "haber": 0.0})
+            if irpf > 0:
+                apuntes.append({"account_code": "47300000", "debe": irpf, "haber": 0.0})
+            apuntes.append({"account_code": "70500000", "debe": 0.0, "haber": base})
+            if iva > 0:
+                apuntes.append({"account_code": "47700021", "debe": 0.0, "haber": iva})
+        else:
+            apuntes.append({"account_code": "62900000", "debe": base, "haber": 0.0})
+            if iva > 0:
+                apuntes.append({"account_code": "47200021", "debe": iva, "haber": 0.0})
+            if irpf > 0:
+                apuntes.append({"account_code": "47510000", "debe": 0.0, "haber": irpf})
+            apuntes.append({"account_code": "40000000", "debe": 0.0, "haber": total})
 
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 1. Crear Asiento General (journal_entry)
-            cursor.execute(
-                "INSERT INTO journal_entries (entry_date, concept) VALUES (?, ?)",
-                (date_str, encryptor.encrypt(concept))
-            )
-            journal_id = cursor.lastrowid
-
-            # 2. Crear Apuntes Contables (ledger_entries)
-            apuntes = []
-            
-            if category in ("ingreso", "income"):
-                # CLIENTES (430) al DEBE
-                apuntes.append((journal_id, "43000000", encryptor.encrypt(str(total)), encryptor.encrypt("0.0")))
-                # INGRESOS (705) al HABER
-                apuntes.append((journal_id, "70500000", encryptor.encrypt("0.0"), encryptor.encrypt(str(base))))
-                # IVA REPERCUTIDO (477) al HABER
-                if iva > 0:
-                    apuntes.append((journal_id, "47700021", encryptor.encrypt("0.0"), encryptor.encrypt(str(iva))))
-            else:
-                # GASTOS (629) al DEBE
-                apuntes.append((journal_id, "62900000", encryptor.encrypt(str(base)), encryptor.encrypt("0.0")))
-                # IVA SOPORTADO (472) al DEBE
-                if iva > 0:
-                    apuntes.append((journal_id, "47200021", encryptor.encrypt(str(iva)), encryptor.encrypt("0.0")))
-                # PROVEEDORES (400) al HABER
-                apuntes.append((journal_id, "40000000", encryptor.encrypt("0.0"), encryptor.encrypt(str(total))))
-
-            # Insertar apuntes
-            cursor.executemany(
-                "INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)",
-                apuntes
-            )
-            conn.commit()
-            return journal_id
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
 
     @classmethod
     def get_libro_diario(cls, year: int) -> List[Dict[str, Any]]:
@@ -225,28 +272,10 @@ class LedgerService:
         - debe: importe al debe
         - haber: importe al haber
         """
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO journal_entries (entry_date, concept) VALUES (?, ?)",
-                (date_str, encryptor.encrypt(concept))
-            )
-            journal_id = cursor.lastrowid
-            
-            db_apuntes = []
-            for ap in apuntes:
-                db_apuntes.append((
-                    journal_id,
-                    ap["account_code"],
-                    encryptor.encrypt(str(float(ap.get("debe", 0.0)))),
-                    encryptor.encrypt(str(float(ap.get("haber", 0.0))))
-                ))
-            cursor.executemany(
-                "INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)",
-                db_apuntes
-            )
-            conn.commit()
-            return journal_id
+        year = cls.extract_year_from_date(date_str)
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
 
     @classmethod
     def get_libro_mayor(cls, account_code: str, year: int) -> List[Dict[str, Any]]:
@@ -384,19 +413,28 @@ class LedgerService:
             rows = cursor.fetchall()
             
             for r in rows:
-                cat = r["category"].lower()
+                def _dec(val, is_num=False, default=0.0):
+                    if val is None:
+                        return default if is_num else ""
+                    try:
+                        dec = encryptor.decrypt(val)
+                        return float(dec) if is_num else str(dec)
+                    except Exception:
+                        return float(val) if is_num else str(val)
+
+                cat = _dec(r["category"]).lower()
                 data = {
-                    "num_factura": r["invoice_id"],
-                    "fecha": r["date"],
-                    "proveedor": r["issuer_name"],
-                    "nif_proveedor": r["issuer_nif"],
-                    "cliente": r["receiver_name"],
-                    "nif_cliente": r["receiver_nif"],
-                    "base": r["base_imponible"],
-                    "tipo_iva": r["iva_rate"],
-                    "cuota_iva": r["iva_amount"],
-                    "retencion": r["irpf_amount"],
-                    "total": r["total_amount"],
+                    "num_factura": _dec(r["invoice_id"]),
+                    "fecha": _dec(r["date"]),
+                    "proveedor": _dec(r["issuer_name"]),
+                    "nif_proveedor": _dec(r["issuer_nif"]),
+                    "cliente": _dec(r["receiver_name"]),
+                    "nif_cliente": _dec(r["receiver_nif"]),
+                    "base": _dec(r["base_imponible"], is_num=True),
+                    "tipo_iva": _dec(r["iva_rate"], is_num=True),
+                    "cuota_iva": _dec(r["iva_amount"], is_num=True),
+                    "retencion": _dec(r["irpf_amount"], is_num=True),
+                    "total": _dec(r["total_amount"], is_num=True),
                     "trimestre": r["quarter"]
                 }
                 if cat in ("ingreso", "income", "emitida"):
@@ -404,3 +442,324 @@ class LedgerService:
                 else:
                     recibidas.append(data)
         return {"emitidas": emitidas, "recibidas": recibidas}
+
+    get_libros_iva = get_iva_register_books
+
+    @classmethod
+    def record_rectificativa_invoice_asiento(cls, rectificativa_data: Dict[str, Any]) -> int:
+        """
+        Registra el asiento contable para una factura rectificativa / abono bajo el PGC.
+        Minoración de ingresos e IVA devengado:
+            Debe: 70500000 (Prestación de Servicios) - Base Rectificada
+            Debe: 47700021 (Hacienda Pública, IVA Repercutido) - Cuota IVA Rectificada
+            Haber: 43000000 (Clientes) - Total Rectificado
+        """
+        rect_id = rectificativa_data.get("invoice_id", "R-MOCK")
+        orig_id = rectificativa_data.get("original_invoice_id", "")
+        date_str = rectificativa_data.get("date", datetime.now().strftime("%d/%m/%Y"))
+        year = cls.extract_year_from_date(date_str)
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
+
+        base = abs(float(rectificativa_data.get("base_imponible", 0.0)))
+        iva = abs(float(rectificativa_data.get("iva_amount", 0.0)))
+        irpf = abs(float(rectificativa_data.get("irpf_amount", 0.0)))
+        total = abs(float(rectificativa_data.get("total_amount", 0.0)))
+
+        concept = f"Factura Rectificativa {rect_id} (Ref: {orig_id})"
+        apuntes = [
+            {"account_code": "70500000", "debe": base, "haber": 0.0}
+        ]
+        if iva > 0:
+            apuntes.append({"account_code": "47700021", "debe": iva, "haber": 0.0})
+        apuntes.append({"account_code": "43000000", "debe": 0.0, "haber": total})
+        if irpf > 0:
+            apuntes.append({"account_code": "47300000", "debe": 0.0, "haber": irpf})
+
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
+
+    @classmethod
+    def get_profit_and_loss_statement(cls, year: int, quarter: int = None) -> Dict[str, Any]:
+        """
+        Genera la Cuenta de Pérdidas y Ganancias (PyG / P&L) según el PGC español:
+        - Grupo 7: Ingresos de explotación (Ventas 700, Prestación servicios 705, etc.)
+        - Grupo 6: Gastos de explotación (Compras 600, Suministros/Servicios 629, etc.)
+        - Resultado de Explotación (EBITDA / Beneficio Bruto) = Ingresos Grupo 7 - Gastos Grupo 6
+        - Impuesto estimado (20% en IRPF estimación directa o 25% IS)
+        - Resultado Neto del Ejercicio
+        """
+        ingresos_cuentas = {}
+        gastos_cuentas = {}
+        total_ingresos = 0.0
+        total_gastos = 0.0
+
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT l.account_code, a.name as account_name, a.type as account_type,
+                       l.debe, l.haber, j.entry_date
+                FROM ledger_entries l
+                JOIN pgc_accounts a ON l.account_code = a.code
+                JOIN journal_entries j ON l.journal_entry_id = j.id
+            """)
+            rows = cursor.fetchall()
+
+            for r in rows:
+                entry_date_raw = r["entry_date"]
+                entry_year = None
+                entry_quarter = None
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+                    try:
+                        dt = datetime.strptime(entry_date_raw, fmt)
+                        entry_year = dt.year
+                        entry_quarter = (dt.month - 1) // 3 + 1
+                        break
+                    except Exception:
+                        pass
+                if entry_year is None:
+                    if str(year) in entry_date_raw:
+                        entry_year = year
+                
+                if entry_year != year:
+                    continue
+                if quarter is not None and entry_quarter is not None and entry_quarter != quarter:
+                    continue
+
+                code = r["account_code"]
+                name = r["account_name"]
+                atype = r["account_type"]
+                debe = float(encryptor.decrypt(r["debe"]))
+                haber = float(encryptor.decrypt(r["haber"]))
+
+                # Ingresos (Grupo 7 o tipo ingreso)
+                if code.startswith("7") or atype == "ingreso":
+                    saldo = haber - debe
+                    if code not in ingresos_cuentas:
+                        ingresos_cuentas[code] = {"name": name, "saldo": 0.0}
+                    ingresos_cuentas[code]["saldo"] += saldo
+                    total_ingresos += saldo
+                # Gastos (Grupo 6 o tipo gasto)
+                elif code.startswith("6") or atype == "gasto":
+                    saldo = debe - haber
+                    if code not in gastos_cuentas:
+                        gastos_cuentas[code] = {"name": name, "saldo": 0.0}
+                    gastos_cuentas[code]["saldo"] += saldo
+                    total_gastos += saldo
+
+        resultado_explotacion = round(total_ingresos - total_gastos, 2)
+        impuesto_estimado = round(resultado_explotacion * 0.20, 2) if resultado_explotacion > 0 else 0.0
+        resultado_neto = round(resultado_explotacion - impuesto_estimado, 2)
+
+        return {
+            "año": year,
+            "trimestre": quarter,
+            "total_ingresos": round(total_ingresos, 2),
+            "total_gastos": round(total_gastos, 2),
+            "resultado_explotacion": resultado_explotacion,
+            "impuesto_estimado": impuesto_estimado,
+            "resultado_neto": resultado_neto,
+            "desglose_ingresos": ingresos_cuentas,
+            "desglose_gastos": gastos_cuentas
+        }
+
+    @classmethod
+    def close_fiscal_year(cls, year: int) -> Dict[str, Any]:
+        """
+        Ejecuta el cierre oficial de ejercicio fiscal conforme al PGC:
+        1. Asiento de Regularización a 31/12/{year}:
+           Traspasa los saldos de ingresos (Grupo 7) y gastos (Grupo 6) a la cuenta 12900000 (Resultado del ejercicio).
+        2. Asiento de Cierre a 31/12/{year}:
+           Salda todas las cuentas de balance (Grupos 1-5 y 12900000) dejando todos los saldos a cero.
+        3. Bloqueo del ejercicio en fiscal_year_status.
+        4. Asiento de Apertura a 01/01/{year + 1}:
+           Abre el ejercicio siguiente reestableciendo los saldos de balance.
+        """
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} ya está cerrado. No se puede volver a cerrar.")
+
+        date_close = f"31/12/{year}"
+        date_open = f"01/01/{year + 1}"
+
+        # 1. Calcular saldos acumulados de todas las cuentas del ejercicio
+        cuentas_saldos = {}
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT l.account_code, a.name as account_name, a.type as account_type, l.debe, l.haber, j.entry_date
+                FROM ledger_entries l
+                JOIN pgc_accounts a ON l.account_code = a.code
+                JOIN journal_entries j ON l.journal_entry_id = j.id
+            """)
+            rows = cursor.fetchall()
+            for r in rows:
+                entry_year = cls.extract_year_from_date(r["entry_date"])
+                if entry_year == year:
+                    code = r["account_code"]
+                    atype = r["account_type"]
+                    debe = float(encryptor.decrypt(r["debe"]))
+                    haber = float(encryptor.decrypt(r["haber"]))
+                    if code not in cuentas_saldos:
+                        cuentas_saldos[code] = {"name": r["account_name"], "type": atype, "debe": 0.0, "haber": 0.0}
+                    cuentas_saldos[code]["debe"] += debe
+                    cuentas_saldos[code]["haber"] += haber
+
+        # --- PASO 1: REGULARIZACIÓN (Grupos 6 y 7 -> 12900000) ---
+        apuntes_reg = []
+        total_ingresos = 0.0
+        total_gastos = 0.0
+
+        for code, data in cuentas_saldos.items():
+            if code.startswith("7") or data["type"] == "ingreso":
+                saldo_haber = data["haber"] - data["debe"]
+                if saldo_haber != 0:
+                    apuntes_reg.append({
+                        "account_code": code,
+                        "debe": round(abs(saldo_haber), 2),
+                        "haber": 0.0
+                    })
+                    total_ingresos += saldo_haber
+            elif code.startswith("6") or data["type"] == "gasto":
+                saldo_debe = data["debe"] - data["haber"]
+                if saldo_debe != 0:
+                    apuntes_reg.append({
+                        "account_code": code,
+                        "debe": 0.0,
+                        "haber": round(abs(saldo_debe), 2)
+                    })
+                    total_gastos += saldo_debe
+
+        resultado_ejercicio = round(total_ingresos - total_gastos, 2)
+        if resultado_ejercicio > 0:
+            apuntes_reg.append({
+                "account_code": "12900000",
+                "debe": 0.0,
+                "haber": abs(resultado_ejercicio)
+            })
+        elif resultado_ejercicio < 0:
+            apuntes_reg.append({
+                "account_code": "12900000",
+                "debe": abs(resultado_ejercicio),
+                "haber": 0.0
+            })
+
+        asiento_reg_id = None
+        if apuntes_reg:
+            asiento_reg_id = cls._insert_journal_and_ledger(
+                date_str=date_close,
+                concept=f"Asiento de Regularización de Ingresos y Gastos - Ejercicio {year}",
+                apuntes=apuntes_reg
+            )
+
+        # --- PASO 2: ASIENTO DE CIERRE (Cuentas de Balance) ---
+        balance_saldos = {}
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT l.account_code, a.name as account_name, a.type as account_type, l.debe, l.haber, j.entry_date
+                FROM ledger_entries l
+                JOIN pgc_accounts a ON l.account_code = a.code
+                JOIN journal_entries j ON l.journal_entry_id = j.id
+            """)
+            rows = cursor.fetchall()
+            for r in rows:
+                entry_year = cls.extract_year_from_date(r["entry_date"])
+                if entry_year == year:
+                    code = r["account_code"]
+                    if not code.startswith("6") and not code.startswith("7"):
+                        debe = float(encryptor.decrypt(r["debe"]))
+                        haber = float(encryptor.decrypt(r["haber"]))
+                        if code not in balance_saldos:
+                            balance_saldos[code] = {"debe": 0.0, "haber": 0.0}
+                        balance_saldos[code]["debe"] += debe
+                        balance_saldos[code]["haber"] += haber
+
+        apuntes_cierre = []
+        apuntes_apertura = []
+
+        for code, bdata in balance_saldos.items():
+            diff = round(bdata["debe"] - bdata["haber"], 2)
+            if diff > 0:
+                apuntes_cierre.append({"account_code": code, "debe": 0.0, "haber": diff})
+                apuntes_apertura.append({"account_code": code, "debe": diff, "haber": 0.0})
+            elif diff < 0:
+                apuntes_cierre.append({"account_code": code, "debe": abs(diff), "haber": 0.0})
+                apuntes_apertura.append({"account_code": code, "debe": 0.0, "haber": abs(diff)})
+
+        asiento_cierre_id = None
+        asiento_apertura_id = None
+
+        if apuntes_cierre:
+            asiento_cierre_id = cls._insert_journal_and_ledger(
+                date_str=date_close,
+                concept=f"Asiento de Cierre del Ejercicio {year}",
+                apuntes=apuntes_cierre
+            )
+
+        # --- PASO 3: MARCAR EJERCICIO COMO CERRADO ---
+        now_str = datetime.now().isoformat()
+        with _get_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO fiscal_year_status (year, is_closed, closed_at)
+                VALUES (?, 1, ?)
+            """, (year, now_str))
+            conn.commit()
+
+        # --- PASO 4: ASIENTO DE APERTURA N+1 ---
+        if apuntes_apertura:
+            asiento_apertura_id = cls._insert_journal_and_ledger(
+                date_str=date_open,
+                concept=f"Asiento de Apertura del Ejercicio {year + 1}",
+                apuntes=apuntes_apertura
+            )
+
+        return {
+            "status": "ok",
+            "year": year,
+            "next_year": year + 1,
+            "resultado_ejercicio": resultado_ejercicio,
+            "regularizacion_asiento_id": asiento_reg_id,
+            "cierre_asiento_id": asiento_cierre_id,
+            "apertura_asiento_id": asiento_apertura_id,
+            "closed_at": now_str,
+            "message": f"Ejercicio fiscal {year} cerrado con éxito. Asientos de regularización, cierre y apertura del {year + 1} generados."
+        }
+
+    @classmethod
+    def reopen_fiscal_year(cls, year: int) -> Dict[str, Any]:
+        """
+        Reabre un ejercicio fiscal previamente cerrado permitiendo ajustes contables.
+        """
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            conn.execute(
+                "UPDATE fiscal_year_status SET is_closed = 0 WHERE year = ?",
+                (year,)
+            )
+            conn.commit()
+        return {
+            "status": "ok",
+            "year": year,
+            "message": f"Ejercicio fiscal {year} reabierto correctamente."
+        }
+
+    @classmethod
+    def export_advisor_pack(cls, year: int) -> Dict[str, Any]:
+        """
+        Consolida el paquete fiscal y contable completo del ejercicio para la gestoría/asesor externo:
+        - Libro Diario oficial
+        - Balance de Situación (Activos vs Pasivos/Patrimonio)
+        - Cuenta de Pérdidas y Ganancias (PyG)
+        - Libros Registro de IVA (Facturas Expedidas y Recibidas)
+        - Estado del ejercicio (Cerrado/Abierto)
+        """
+        return {
+            "year": year,
+            "generated_at": datetime.now().isoformat(),
+            "is_closed": cls.is_fiscal_year_closed(year),
+            "libro_diario": cls.get_libro_diario(year),
+            "balance_situacion": cls.get_balance_situacion(year),
+            "cuenta_perdidas_y_ganancias": cls.get_profit_and_loss_statement(year),
+            "libros_registro_iva": cls.get_libros_iva(year)
+        }
+
+

@@ -64,6 +64,17 @@ async def lifespan(app: FastAPI):
     global _bg_security_task, _ollama_process
     app_logger.info("Logs en %s", LOG_DIR)
 
+    # Ejecutar migraciones automáticas de base de datos al inicio
+    try:
+        from app.adapters.memory.memory import _get_connection
+        from app.infrastructure.database.migrations import MigrationRunner
+        with _get_connection() as conn:
+            applied = MigrationRunner.run_pending_migrations(conn)
+            if applied:
+                app_logger.info("Migraciones de base de datos aplicadas al arrancar: %s", applied)
+    except Exception as e:
+        app_logger.warning("Error al comprobar migraciones al arrancar: %s", e)
+
     # Configurar listeners del EventBus
     async def handle_invoice_created(data: dict):
         try:
@@ -185,7 +196,27 @@ async def lifespan(app: FastAPI):
 
     app_logger.info("Alfonso listo")
 
+    # Registro de evento SIF oficial (Orden HAC/1177/2024 Art. 12)
+    try:
+        from app.domain.services.verifactu_service import VerifactuService
+        VerifactuService.log_sif_event(
+            event_type="STARTUP_SYSTEM",
+            description=f"Arranque del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
+        )
+    except Exception as sif_err:
+        app_logger.warning("No se pudo registrar evento de arranque en SIF event log: %s", str(sif_err))
+
     yield
+
+    # Registro de evento SIF oficial de parada
+    try:
+        from app.domain.services.verifactu_service import VerifactuService
+        VerifactuService.log_sif_event(
+            event_type="SHUTDOWN_SYSTEM",
+            description=f"Parada del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
+        )
+    except Exception as sif_err:
+        app_logger.warning("No se pudo registrar evento de parada en SIF event log: %s", str(sif_err))
 
     await event_bus.stop()
 

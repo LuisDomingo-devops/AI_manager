@@ -19,7 +19,7 @@ Realiza búsquedas semánticas en la base de datos ChromaDB mediante vector_memo
 
 import os
 from pathlib import Path
-from app.adapters.memory import vector_memory
+from app.adapters.memory.vector_memory import vector_memory
 from app.adapters.llm_client import OllamaClient
 from app.utils.logger import orchestrator_logger
 

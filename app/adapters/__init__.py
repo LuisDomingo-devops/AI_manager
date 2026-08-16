@@ -13,10 +13,15 @@ MAPPING = {
     "app.adapters.metrics": "app.infrastructure.monitoring.metrics",
     "app.adapters.tool_base": "app.infrastructure.adapters.tool_base",
     "app.adapters.tool_registry": "app.infrastructure.adapters.tool_registry",
-    "app.adapters.memory": "app.infrastructure.database.memory",
-    "app.adapters.memory.memory": "app.infrastructure.database.memory.memory",
-    "app.adapters.memory.vector_memory": "app.infrastructure.database.memory.vector_memory",
 }
+
+class RedirectingLoader:
+    def __init__(self, target_module):
+        self.target_module = target_module
+    def create_module(self, spec):
+        return self.target_module
+    def exec_module(self, module):
+        pass
 
 class RedirectingFinder:
     def find_spec(self, fullname, path, target=None):
@@ -30,8 +35,11 @@ class RedirectingFinder:
                     # Propagar error de importación
                     raise ImportError(f"Error al importar redirect de {fullname} -> {new_name}: {str(e)}")
             # Crear alias
-            sys.modules[fullname] = sys.modules[new_name]
-            return sys.modules[new_name].__spec__
+            target_module = sys.modules[new_name]
+            sys.modules[fullname] = target_module
+            
+            from importlib.machinery import ModuleSpec
+            return ModuleSpec(fullname, RedirectingLoader(target_module))
         return None
 
 sys.meta_path.insert(0, RedirectingFinder())

@@ -23,6 +23,16 @@ class InvoiceRepository:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
+
+            # Verificar si el ejercicio fiscal está cerrado
+            year = int(invoice_db_data.get("year", 2026))
+            try:
+                cursor.execute("SELECT is_closed FROM fiscal_year_status WHERE year = ?", (year,))
+                fy_row = cursor.fetchone()
+                if fy_row and fy_row["is_closed"]:
+                    raise ValueError(f"No se pueden emitir ni modificar facturas en el ejercicio fiscal cerrado {year}.")
+            except sqlite3.OperationalError:
+                pass
             
             # If inserting and no existing_id_db is provided, check for duplicates
             if not existing_id_db and blind_index:
@@ -149,20 +159,33 @@ class InvoiceRepository:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept FROM invoices")
+            cursor.execute("""
+                SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                       base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount, status, concept, file_path
+                FROM invoices
+            """)
             rows = cursor.fetchall()
             for r in rows:
                 try:
                     dec_id = encryptor.decrypt(r["invoice_id"])
-                    if dec_id == invoice_id:
+                    if dec_id.upper() == invoice_id.upper():
                         return {
                             "db_id": r["id"],
                             "invoice_id": dec_id,
-                            "receiver_name": encryptor.decrypt(r["receiver_name"]),
-                            "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
-                            "total_amount": float(encryptor.decrypt(r["total_amount"])),
+                            "date": encryptor.decrypt(r["date"]) if r["date"] else "",
+                            "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
+                            "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
+                            "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
+                            "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
+                            "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
+                            "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 21.0,
+                            "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
+                            "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
+                            "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
+                            "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
                             "status": r["status"],
-                            "concept": encryptor.decrypt(r["concept"]) if r["concept"] else ""
+                            "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                            "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else ""
                         }
                 except Exception:
                     pass

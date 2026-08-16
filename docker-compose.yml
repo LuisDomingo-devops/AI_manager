@@ -1,23 +1,25 @@
 version: '3.8'
 
 services:
-  alfonso:
-    build: .
-    ports:
-      - "7860:7860"
-    environment:
-      - OLLAMA_BASE_URL=http://localhost:11434
-      - MODEL_NAME=qwen2.5:1.5b
-      - LLM_IS_REASONING=false
-      - LLM_NUM_CTX_CHAT=2048
-      - LLM_NUM_CTX_TOOL=1024
-    volumes:
-      - ollama_storage:/home/user/.ollama
-      - alfonso_data:/home/user/app/data
-      - alfonso_logs:/home/user/app/logs
+  alfonso-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alfonso_autonomo_core
     restart: unless-stopped
-
-volumes:
-  ollama_storage:
-  alfonso_data:
-  alfonso_logs:
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ALFONSO_ENV=production
+      - BRIDGE_HOST=0.0.0.0
+      - BRIDGE_PORT=8765
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

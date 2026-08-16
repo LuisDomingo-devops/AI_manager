@@ -3,21 +3,14 @@ import json
 import sys
 from app.domain.services.bank_service import BankService
 
-@pytest.fixture
-def clean_db(tmp_path, monkeypatch):
-    """
-    Usa una base de datos de test limpia redirigiendo DB_PATH en memory.py
-    """
-    memory_module = sys.modules["app.adapters.memory.memory"]
-    db_path = tmp_path / "test_multibank.db"
-    monkeypatch.setattr(memory_module, "DB_PATH", db_path)
-    memory_module._db_initialized = False
-    
-    # Crear tablas
-    with memory_module._get_connection() as conn:
-        pass
-        
-    return db_path
+@pytest.fixture(autouse=True)
+def clean_db():
+    from app.adapters.memory.memory import _get_connection
+    with _get_connection() as conn:
+        conn.execute("DELETE FROM bank_movements")
+        conn.execute("DELETE FROM bank_connections")
+        conn.commit()
+    yield
 
 def test_add_and_list_connections(clean_db):
     # Inicialmente no hay conexiones

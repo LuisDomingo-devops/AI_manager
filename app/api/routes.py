@@ -52,14 +52,14 @@ async def verify_api_key(
     session_token: str = Depends(session_token_header)
 ):
     # 1. Comprobar si hay un token de sesión dinámico y es válido
-    if session_token:
+    if session_token and isinstance(session_token, str):
         from app.infrastructure.security.session_manager import SessionManager
         client_id = SessionManager.validate_session_token(session_token)
         if client_id:
             return client_id
 
     # 2. Fallback a la API Key estática (admite inicialización de sesión)
-    if api_key and secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
+    if api_key and isinstance(api_key, str) and secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
         from app.adapters.memory.memory import tenant_context
         # Si no se ha seteado contexto del tenant, dejar default
         if tenant_context.get() == "default":
@@ -391,14 +391,14 @@ class MetadataPatch(BaseModel):
 
 @router.get("/conversations", dependencies=[Depends(verify_api_key)])
 async def get_conversations():
-    from app.adapters.memory import memory
+    from app.adapters.memory.memory import memory
     convs = memory.list_persistent_conversations()
     return {"conversations": convs, "count": len(convs)}
 
 
 @router.patch("/conversations/{session_id}", dependencies=[Depends(verify_api_key)])
 async def patch_conversation(session_id: str, payload: MetadataPatch):
-    from app.adapters.memory import memory
+    from app.adapters.memory.memory import memory
     existing = memory.get_metadata(session_id)
     if not existing:
         # Si no existe metadato aún, creamos uno base
@@ -418,7 +418,7 @@ async def patch_conversation(session_id: str, payload: MetadataPatch):
 
 @router.get("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
 async def get_memory(session_id: str):
-    from app.adapters.memory import memory
+    from app.adapters.memory.memory import memory
     history = memory.get_history(session_id)
     metadata = memory.get_metadata(session_id)
     return {
@@ -431,7 +431,7 @@ async def get_memory(session_id: str):
 
 @router.delete("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
 async def clear_memory(session_id: str):
-    from app.adapters.memory import memory
+    from app.adapters.memory.memory import memory
     memory.clear(session_id)
     # También limpiar metadatos al borrar memoria
     with sqlite3.connect(str(DB_PATH), check_same_thread=False) as conn:
@@ -442,7 +442,7 @@ async def clear_memory(session_id: str):
 
 @router.get("/memory", dependencies=[Depends(verify_api_key)])
 async def list_sessions():
-    from app.adapters.memory import memory
+    from app.adapters.memory.memory import memory
     sessions = memory.list_sessions()
     return {"sessions": sessions, "count": len(sessions)}
 
@@ -481,7 +481,7 @@ async def post_event(event: EventCreate):
         if event.attendees:
             fact += f" con {event.attendees}"
             
-        from app.adapters.memory import vector_memory
+        from app.adapters.memory.vector_memory import vector_memory
         vector_memory.add_fact("global", fact)
         
         from app.adapters.alfonso_bridge import bridge

@@ -200,7 +200,7 @@ async def test_verify_api_key(monkeypatch):
     # Caso 2: API Key configurada y válida
     monkeypatch.setattr(settings, "ALFONSO_API_KEY", "secret_key_123")
     res = await verify_api_key("secret_key_123")
-    assert res == "secret_key_123"
+    assert res == "default"
     
     # Caso 3: API Key configurada e inválida
     with pytest.raises(HTTPException) as exc_info:

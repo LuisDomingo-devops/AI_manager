@@ -17,7 +17,7 @@ Mediante llamadas directas a las funciones asíncronas y síncronas de app/adapt
 
 from typing import Optional
 from app.adapters.calendar_db import create_event, list_events, delete_event, update_event
-from app.adapters.memory import vector_memory
+from app.adapters.memory.vector_memory import vector_memory
 from app.adapters.alfonso_bridge import bridge
 from app.domain.actions import Action
 from app.utils.logger import tool_logger

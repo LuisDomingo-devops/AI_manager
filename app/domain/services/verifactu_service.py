@@ -87,16 +87,25 @@ class VerifactuService:
             t.start()
 
     @classmethod
-    def get_or_create_private_key(cls) -> rsa.RSAPrivateKey:
+    def get_or_create_private_key(cls, client_id: Optional[str] = None) -> rsa.RSAPrivateKey:
         """
         Obtiene la clave privada RSA de Verifactu local o la crea si no existe.
+        Soporta aislamiento de claves por tenant (client_id).
         Representa la firma digital (FNMT/DNIe) en el modelo local-first.
         """
         from app.utils.encryption import encryptor
-        cls._private_key_path.parent.mkdir(parents=True, exist_ok=True)
-        if cls._private_key_path.exists():
+        from app.adapters.memory.memory import tenant_context
+        
+        cid = (client_id or tenant_context.get() or "default").strip().lower()
+        if cid == "default":
+            key_path = cls._private_key_path
+        else:
+            key_path = cls._private_key_path.parent / f"{cid}_verifactu_private_key.pem"
+
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        if key_path.exists():
             try:
-                with open(cls._private_key_path, "r", encoding="utf-8") as key_file:
+                with open(key_path, "r", encoding="utf-8") as key_file:
                     content = key_file.read().strip()
                 if content.startswith("gAAAA"):
                     decrypted_bytes = encryptor.decrypt(content).encode('utf-8')
@@ -104,11 +113,11 @@ class VerifactuService:
                     raise ValueError("Plaintext key")
             except Exception:
                 # Caso fallback o migración si es texto plano
-                with open(cls._private_key_path, "rb") as raw_file:
+                with open(key_path, "rb") as raw_file:
                     raw_pem = raw_file.read()
                 try:
                     encrypted_pem = encryptor.encrypt(raw_pem.decode('utf-8'))
-                    with open(cls._private_key_path, "w", encoding="utf-8") as key_file:
+                    with open(key_path, "w", encoding="utf-8") as key_file:
                         key_file.write(encrypted_pem)
                 except Exception:
                     pass
@@ -132,7 +141,7 @@ class VerifactuService:
             encryption_algorithm=serialization.NoEncryption()
         )
         encrypted_pem = encryptor.encrypt(pem.decode('utf-8'))
-        with open(cls._private_key_path, "w", encoding="utf-8") as key_file:
+        with open(key_path, "w", encoding="utf-8") as key_file:
             key_file.write(encrypted_pem)
             
         return private_key
@@ -151,7 +160,7 @@ class VerifactuService:
     def calculate_invoice_hash(cls, invoice_data: Dict[str, Any], prev_hash: Optional[str]) -> str:
         """
         Calcula el hash SHA-256 encadenando los datos de la factura con el hash anterior.
-        Sigue el patrón de orden concatenado estándar de la AEAT para registros Verifactu,
+        Sigue el patrón de orden concatenado estándar de la AEAT para registros Verifactu (Orden HAC/1177/2024),
         devolviendo el hash en formato hexadecimal y en mayúsculas.
         """
         issuer_nif = str(invoice_data.get("issuer_nif", "")).strip().upper()
@@ -165,10 +174,16 @@ class VerifactuService:
         iva_amount = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
         total_amount = f"{float(invoice_data.get('total_amount', 0.0)):.2f}"
         
+        tipo_factura = str(invoice_data.get("tipo_factura", "F1" if not invoice_number.startswith("R-") else "R1")).strip().upper()
+        gen_timestamp = str(invoice_data.get("gen_timestamp", "")).strip()
+        
         ph = (prev_hash or "").strip().upper()
 
-        # Cadena concatenada oficial Verifactu
-        concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{base_imponible}|{iva_amount}|{total_amount}|{ph}"
+        if gen_timestamp:
+            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{tipo_factura}|{iva_amount}|{total_amount}|{ph}|{gen_timestamp}"
+        else:
+            # Cadena concatenada oficial Verifactu
+            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{base_imponible}|{iva_amount}|{total_amount}|{ph}"
         
         return hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
 
@@ -177,6 +192,7 @@ class VerifactuService:
         """
         Registra una factura emitida bajo la regulación Verifactu.
         Calcula el hash de encadenamiento oficial y firma criptográficamente con XMLDSig estructurado.
+        Soporta facturas ordinarias (F1) y rectificativas (R1-R5).
         """
         with cls._lock:
             # Normalizar NIF del emisor y receptor
@@ -191,7 +207,7 @@ class VerifactuService:
             import signxml
             from signxml import XMLSigner
 
-            # Obtener claves y simular certificado para la firma XMLDSig
+            # Obtener claves y certificado para la firma XMLDSig por tenant
             private_key = cls.get_or_create_private_key()
             # Exportar clave pública simulando un certificado auto-firmado
             pem_key_bytes = private_key.private_bytes(
@@ -235,28 +251,51 @@ class VerifactuService:
             
             # Datos del receptor
             receptor = etree.SubElement(reg_alta, "Receptor")
-            etree.SubElement(receptor, "NombreRazonReceptor").text = "Cliente Final"
+            etree.SubElement(receptor, "NombreRazonReceptor").text = str(invoice_data.get("receiver_name", "Cliente Final"))
             etree.SubElement(receptor, "NIFReceptor").text = str(invoice_data.get("receiver_nif", ""))
             
             # DetalleFactura
             detalle = etree.SubElement(reg_alta, "DetalleFactura")
-            etree.SubElement(detalle, "TipoFactura").text = "F1"  # Factura Ordinaria
-            etree.SubElement(detalle, "ClaveRegimenEspecialOTrascendencia").text = "01"  # Régimen común
+            tipo_factura = str(invoice_data.get("tipo_factura", "R1" if str(invoice_data.get("invoice_number", "")).startswith("R-") else "F1"))
+            etree.SubElement(detalle, "TipoFactura").text = tipo_factura
+            
+            # Soporte de Facturas Rectificativas (RD 1619/2012 y Orden HAC/1177/2024)
+            if tipo_factura.startswith("R"):
+                tipo_rect = str(invoice_data.get("tipo_rectificativa", "I")) # I = diferencias, S = sustitución
+                etree.SubElement(detalle, "TipoRectificativa").text = tipo_rect
+                
+                facturas_rect = invoice_data.get("facturas_rectificadas", [])
+                if not facturas_rect and invoice_data.get("rectified_invoice_number"):
+                    facturas_rect = [{
+                        "invoice_number": invoice_data.get("rectified_invoice_number"),
+                        "date_of_issue": invoice_data.get("rectified_invoice_date", invoice_data.get("date_of_issue", ""))
+                    }]
+                
+                if facturas_rect:
+                    nodo_rectificadas = etree.SubElement(detalle, "FacturasRectificadas")
+                    for fr in facturas_rect:
+                        item_rect = etree.SubElement(nodo_rectificadas, "FacturaRectificada")
+                        etree.SubElement(item_rect, "NumSerieFacturaEmisor").text = str(fr.get("invoice_number", ""))
+                        etree.SubElement(item_rect, "FechaExpedicionFacturaEmisor").text = str(fr.get("date_of_issue", ""))
+
+            etree.SubElement(detalle, "ClaveRegimenEspecialOTrascendencia").text = str(invoice_data.get("clave_regimen", "01"))  # 01 = Régimen común
             etree.SubElement(detalle, "ImporteTotal").text = f"{float(invoice_data.get('total_amount', 0.0)):.2f}"
             
             # Desglose (con IVA)
             desglose = etree.SubElement(detalle, "Desglose")
             detalle_iva = etree.SubElement(desglose, "DetalleIVA")
-            etree.SubElement(detalle_iva, "BaseImponible").text = f"{float(invoice_data.get('base_imponible', 0.0)):.2f}"
-            etree.SubElement(detalle_iva, "CuotaIVA").text = f"{float(invoice_data.get('iva_amount', 0.0)):.2f}"
+            detalle_iva_base = float(invoice_data.get('base_imponible', 0.0))
+            detalle_iva_cuota = float(invoice_data.get('iva_amount', 0.0))
+            etree.SubElement(detalle_iva, "BaseImponible").text = f"{detalle_iva_base:.2f}"
+            etree.SubElement(detalle_iva, "CuotaIVA").text = f"{detalle_iva_cuota:.2f}"
             
             # Datos de Infraestructura del Software (Requerido por Verifactu)
             from app.config import settings
             sistema = etree.SubElement(reg_alta, "SistemaInformatico")
-            etree.SubElement(sistema, "Nombre").text = "Alfonso Autónomo SIF"
+            etree.SubElement(sistema, "Nombre").text = settings.SIF_SOFTWARE_NAME
             etree.SubElement(sistema, "NIFProductor").text = settings.ALFONSO_SIF_PRODUCER_NIF
             etree.SubElement(sistema, "NumInstalacion").text = "000001"
-            etree.SubElement(sistema, "Version").text = "2.0.0"
+            etree.SubElement(sistema, "Version").text = settings.SIF_VERSION
             
             # Encadenamiento criptográfico Verifactu oficial
             if prev_hash:
@@ -698,18 +737,34 @@ class VerifactuService:
             expected_prev_hash_upper = expected_prev_hash.upper() if expected_prev_hash else None
             
             if current_prev_hash != expected_prev_hash_upper:
+                err_msg = f"Cadena rota en factura {row['invoice_number']}. Hash anterior esperado: {expected_prev_hash_upper}, encontrado: {current_prev_hash}"
+                try:
+                    cls.log_sif_event(
+                        event_type="INTEGRITY_TAMPERING_DETECTED",
+                        description=f"Alerta de integridad SIF: {err_msg}"
+                    )
+                except Exception:
+                    pass
                 return {
                     "status": "corrupted",
                     "corrupted_invoice_number": row["invoice_number"],
-                    "error": f"Cadena rota en factura {row['invoice_number']}. Hash anterior esperado: {expected_prev_hash_upper}, encontrado: {current_prev_hash}"
+                    "error": err_msg
                 }
             
             calculated = cls.calculate_invoice_hash(invoice_data, expected_prev_hash)
             if row["current_hash"].upper() != calculated:
+                err_msg = f"Datos alterados en factura {row['invoice_number']}. Hash calculado: {calculated}, encontrado en BD: {row['current_hash']}"
+                try:
+                    cls.log_sif_event(
+                        event_type="INTEGRITY_TAMPERING_DETECTED",
+                        description=f"Alerta de integridad SIF: {err_msg}"
+                    )
+                except Exception:
+                    pass
                 return {
                     "status": "tampered",
                     "corrupted_invoice_number": row["invoice_number"],
-                    "error": f"Datos alterados en factura {row['invoice_number']}. Hash calculado: {calculated}, encontrado en BD: {row['current_hash']}"
+                    "error": err_msg
                 }
             expected_prev_hash = row["current_hash"]
 

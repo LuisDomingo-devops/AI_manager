@@ -56,6 +56,8 @@ def setup_test_db(monkeypatch):
     conn.commit()
     
     monkeypatch.setattr(mail_db, "get_connection", lambda: DummyConnection(conn))
+    import app.infrastructure.database.mail_db as real_mail_db
+    monkeypatch.setattr(real_mail_db, "get_connection", lambda: DummyConnection(conn))
     
     mail_db.create_email(
         sender="abogados@madrid.es",

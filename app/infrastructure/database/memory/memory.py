@@ -192,16 +192,43 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         )
     """)
     
+    # --- CIERRE DE EJERCICIO Y ESTADO FISCAL ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fiscal_year_status (
+            year        INTEGER PRIMARY KEY,
+            is_closed   INTEGER NOT NULL DEFAULT 0,
+            closed_at   TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # --- ESTADOS FACTURA B2B (LEY CREA Y CRECE 18/2022) ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS b2b_invoice_status_history (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id     TEXT NOT NULL,
+            status         TEXT NOT NULL,
+            status_date    TEXT NOT NULL,
+            reason         TEXT,
+            payment_method TEXT,
+            payment_date   TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     # Inicializar catálogo contable básico del PGC
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM pgc_accounts")
     if cursor.fetchone()[0] == 0:
         default_accounts = [
             ("10000000", "Capital Social", "patrimonio"),
+            ("12900000", "Resultado del ejercicio", "patrimonio"),
             ("21700000", "Equipos para procesos de información", "activo"),
             ("40000000", "Proveedores (Acreedores comerciales)", "pasivo"),
             ("43000000", "Clientes", "activo"),
             ("47200021", "Hacienda Pública, IVA soportado al 21%", "activo"),
+            ("47300000", "Hacienda Pública, retenciones y pagos a cuenta", "activo"),
+            ("47510000", "Hacienda Pública, acreedora por retenciones practicadas", "pasivo"),
             ("47700021", "Hacienda Pública, IVA repercutido al 21%", "pasivo"),
             ("57000000", "Caja, euros (efectivo)", "activo"),
             ("57200001", "Banco de la empresa (cuenta corriente)", "activo"),
@@ -211,6 +238,11 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             ("70500000", "Prestación de servicios de consultoría/desarrollo", "ingreso"),
         ]
         cursor.executemany("INSERT INTO pgc_accounts (code, name, type) VALUES (?, ?, ?)", default_accounts)
+    else:
+        conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('12900000', 'Resultado del ejercicio', 'patrimonio')")
+        conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47300000', 'Hacienda Pública, retenciones y pagos a cuenta', 'activo')")
+        conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47510000', 'Hacienda Pública, acreedora por retenciones practicadas', 'pasivo')")
+        conn.commit()
         
     # --- CONCILIACIÓN BANCARIA ---
     conn.execute("""
@@ -324,6 +356,14 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    
+    # --- EJECUCIÓN DE MIGRACIONES VERSIONADAS ---
+    try:
+        from app.infrastructure.database.migrations import MigrationRunner
+        MigrationRunner.run_pending_migrations(conn)
+    except Exception:
+        pass
+
     conn.commit()
 
 
