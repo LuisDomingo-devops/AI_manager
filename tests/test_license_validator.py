@@ -6,7 +6,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 
-from app.utils.license_validator import is_premium_license_valid, LICENSE_PATH
+from app.utils.license_validator import is_premium_license_valid, check_license_status, LICENSE_PATH
 
 @pytest.fixture(autouse=True)
 def clean_license_file():
@@ -46,13 +46,12 @@ def test_corrupted_license_signature():
     assert is_premium_license_valid() is False
 
 def test_invalid_license_type():
-    # Criptográficamente correcta pero tipo incorrecto (ej: basic en vez de premium)
-    # Generar claves RSA de prueba
+    # Criptográficamente correcta pero tipo no reconocido en los tiers
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
     
     payload = {
-        "license_type": "basic",
+        "license_type": "tipo_invalido_pirata",
         "holder": "Luis Domingo",
         "expires_at": "2029-12-31"
     }
@@ -75,4 +74,6 @@ def test_invalid_license_type():
     )
     
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        assert is_premium_license_valid() is False
+        status = check_license_status(ignore_dev_bypass=True)
+        assert status.is_operational is False
+        assert status.status == "invalid_type"

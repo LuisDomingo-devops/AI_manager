@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QScrollArea, QSplitter, QGroupBox, QFormLayout, QMessageBox,
                              QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QFileDialog, QStackedWidget, QSpinBox, 
-                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle)
+                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
@@ -107,10 +107,11 @@ class AlfonsoInvoiceConfirmDialog(QDialog):
 
 class CalendarWidget(AlfonsoBaseDialog):
     """Interfaz gráfica nativa para el Calendario de Alfonso (ALFONSO OS)."""
-    def __init__(self, api_client, parent=None):
-        super().__init__(parent, "ALFONSO CALENDAR", modal=False)
+    def __init__(self, api_client, parent=None, embedded=False):
+        super().__init__(parent, "ALFONSO CALENDAR", modal=False, embedded=embedded)
         self.api = api_client
-        self.setMinimumSize(850, 580)
+        if not embedded:
+            self.setMinimumSize(850, 580)
 
         # Fechas operativas
         now = datetime.datetime.now()

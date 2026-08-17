@@ -58,9 +58,15 @@ class GoCardlessProvider(BaseBankProvider):
         res.raise_for_status()
         return res.json()["access"]
 
+    def _resolve_credentials(self, credentials_dict: Dict[str, Any]) -> tuple[str, str]:
+        import os
+        from app.config import settings
+        secret_id = credentials_dict.get("secret_id") or getattr(settings, "GOCARDLESS_SECRET_ID", None) or os.getenv("GOCARDLESS_SECRET_ID", "")
+        secret_key = credentials_dict.get("secret_key") or getattr(settings, "GOCARDLESS_SECRET_KEY", None) or os.getenv("GOCARDLESS_SECRET_KEY", "")
+        return str(secret_id).strip(), str(secret_key).strip()
+
     def get_auth_link(self, redirect_url: str, credentials_dict: Dict[str, Any]) -> str:
-        secret_id = credentials_dict.get("secret_id", "")
-        secret_key = credentials_dict.get("secret_key", "")
+        secret_id, secret_key = self._resolve_credentials(credentials_dict)
         institution_id = credentials_dict.get("institution_id", "SANDBOXFINANCE_SBOX1")
         bank_name = credentials_dict.get("bank_name", "Banco")
         
@@ -91,8 +97,7 @@ class GoCardlessProvider(BaseBankProvider):
             return f"http://localhost:8000/api/tax/bank/mock-auth?redirect={redirect_url}&bank={bank_name}&error={str(e)}"
 
     def confirm_auth(self, requisition_id: str, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
-        secret_id = credentials_dict.get("secret_id", "")
-        secret_key = credentials_dict.get("secret_key", "")
+        secret_id, secret_key = self._resolve_credentials(credentials_dict)
         if not secret_id or not secret_key or secret_id.startswith("mock_") or requisition_id.startswith("req_gocardless"):
             return {
                 "status": "success",
@@ -120,8 +125,7 @@ class GoCardlessProvider(BaseBankProvider):
             }
 
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
-        secret_id = credentials_dict.get("secret_id", "")
-        secret_key = credentials_dict.get("secret_key", "")
+        secret_id, secret_key = self._resolve_credentials(credentials_dict)
         
         if not secret_id or not secret_key or secret_id.startswith("mock_") or account_id.startswith("acc_gocardless"):
             return [

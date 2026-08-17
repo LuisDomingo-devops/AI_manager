@@ -13,11 +13,22 @@ Cambios respecto a la versión anterior:
 
 from __future__ import annotations
 
+import os
+import sys
+from pathlib import Path
+
+client_dir = os.path.dirname(os.path.abspath(__file__))
+if client_dir not in sys.path:
+    sys.path.insert(0, client_dir)
+
+root_dir = os.path.dirname(client_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 print("Cargando cliente de voz Alfonso...")
 
 import argparse
 import base64
-import sys
 import uuid
 from typing import Optional
 

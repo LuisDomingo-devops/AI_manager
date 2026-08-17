@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QScrollArea, QSplitter, QGroupBox, QFormLayout, QMessageBox,
                              QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QFileDialog, QStackedWidget, QSpinBox, 
-                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle)
+                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
@@ -21,11 +21,12 @@ from client.gui.dialogs.base import AlfonsoBaseDialog
 
 class MailWidget(AlfonsoBaseDialog):
     """Interfaz gráfica nativa para el cliente de Correo Electrónico (ALFONSO MAIL)."""
-    def __init__(self, api_client, parent=None):
-        super().__init__(parent, "ALFONSO MAIL", modal=False)
+    def __init__(self, api_client, parent=None, embedded=False):
+        super().__init__(parent, "ALFONSO MAIL", modal=False, embedded=embedded)
         self.api = api_client
-        self.setMinimumSize(1150, 700)
-        self.resize(1150, 700)
+        if not embedded:
+            self.setMinimumSize(1150, 700)
+            self.resize(1150, 700)
         
         self.current_category = None
         self.emails_list = []
@@ -362,10 +363,11 @@ class MailWidget(AlfonsoBaseDialog):
 
 class ConfigWidget(AlfonsoBaseDialog):
     """Panel de Configuración nativo para Alfonso OS."""
-    def __init__(self, parent_dashboard):
-        super().__init__(parent_dashboard, "ALFONSO CONFIGURATION", modal=False)
+    def __init__(self, parent_dashboard, embedded=False):
+        super().__init__(parent_dashboard, "ALFONSO CONFIGURATION", modal=False, embedded=embedded)
         self.dashboard = parent_dashboard
-        self.setMinimumSize(450, 480)
+        if not embedded:
+            self.setMinimumSize(450, 480)
 
         self.setup_ui()
         self.load_values()
@@ -705,10 +707,11 @@ class PlaywrightWorkerThread(QThread):
 
 class AeatAutofillWidget(AlfonsoBaseDialog):
     """Panel de control de Autorelleno del Modelo 303 en la AEAT."""
-    def __init__(self, parent_dashboard):
-        super().__init__(parent_dashboard, "ALFONSO AEAT AUTOFILL", modal=False)
+    def __init__(self, parent_dashboard, embedded=False):
+        super().__init__(parent_dashboard, "ALFONSO AEAT AUTOFILL", modal=False, embedded=embedded)
         self.dashboard = parent_dashboard
-        self.setMinimumSize(600, 560)
+        if not embedded:
+            self.setMinimumSize(600, 560)
         self.pw_thread = None
         
         self.income_base = 0.0
@@ -902,7 +905,14 @@ class AeatAutofillWidget(AlfonsoBaseDialog):
         self.btn_load_data.setText("CARGANDO...")
         self.btn_load_data.setEnabled(False)
         
-        res = self.dashboard.thread.api.get_tax_aggregates(year)
+        api = getattr(self.dashboard, 'api_client', None)
+        if not api and hasattr(self.dashboard, 'thread') and hasattr(self.dashboard.thread, 'api'):
+            api = self.dashboard.thread.api
+            
+        if api:
+            res = api.get_tax_aggregates(year)
+        else:
+            res = {"status": "error", "message": "API no disponible"}
         
         self.btn_load_data.setText("CARGAR DATOS")
         self.btn_load_data.setEnabled(True)
@@ -1297,7 +1307,13 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
 
     def load_dialog_chat_history(self, session_id, project, title):
         try:
-            res = self.dashboard.thread.api.get_memory_detail(session_id)
+            api = getattr(self.dashboard, 'api_client', None)
+            if not api and hasattr(self.dashboard, 'thread') and hasattr(self.dashboard.thread, 'api'):
+                api = self.dashboard.thread.api
+            if api:
+                res = api.get_memory_detail(session_id)
+            else:
+                res = {"status": "error"}
             messages = res.get("messages", [])
             
             chat_html = ""
@@ -1430,10 +1446,11 @@ class AlfonsoOnboardingWizard(AlfonsoBaseDialog):
 
 class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
     """Diálogo de Conciliación Bancaria con soporte Multibanco y Multi-cuenta."""
-    def __init__(self, parent=None, api_client=None):
+    def __init__(self, parent=None, api_client=None, embedded=False):
         self.api = api_client
-        super().__init__(parent, "CONCILIACIÓN BANCARIA AUTOMÁTICA Y MANUAL")
-        self.setMinimumSize(750, 550)
+        super().__init__(parent, "CONCILIACIÓN BANCARIA AUTOMÁTICA Y MANUAL", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(750, 550)
         self.setup_recon_ui()
 
     def setup_recon_ui(self):
@@ -2116,9 +2133,10 @@ class AlfonsoManualEntryDialog(AlfonsoBaseDialog):
 
 class AlfonsoLedgerDialog(AlfonsoBaseDialog):
     """Diálogo para visualizar el Libro Diario Contable PGC y Libro Mayor."""
-    def __init__(self, parent=None, api_client=None):
-        super().__init__(parent, "LIBRO DIARIO CONTABLE (PLAN GENERAL CONTABLE)")
-        self.setMinimumSize(950, 600)
+    def __init__(self, parent=None, api_client=None, embedded=False):
+        super().__init__(parent, "LIBRO DIARIO CONTABLE (PLAN GENERAL CONTABLE)", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(950, 600)
         self.current_category = None
         self.setup_ledger_ui()
 
@@ -2339,19 +2357,20 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
                     }
                 """)
 
-    def filter_selected(self):
-        sender_btn = self.sender()
-        filter_val = sender_btn.property("filter_val")
+    def set_filter(self, filter_val):
         self.current_category = filter_val
-
         for val, btn in self.filter_buttons.items():
             if val == filter_val:
                 btn.setProperty("active", "true")
             else:
                 btn.setProperty("active", "false")
             btn.setStyle(btn.style())
-
         self.load_ledger_data()
+
+    def filter_selected(self):
+        sender_btn = self.sender()
+        filter_val = sender_btn.property("filter_val")
+        self.set_filter(filter_val)
 
     def open_manual_entry(self):
         dialog = AlfonsoManualEntryDialog(self)
@@ -2717,9 +2736,10 @@ class AlfonsoDocumentViewerDialog(AlfonsoBaseDialog):
 
 class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
     """Explorador de Archivos Fiscales con estilo macOS Finder."""
-    def __init__(self, parent=None):
-        super().__init__(parent, "ARCHIVO FISCAL - EXPLORADOR DE DOCUMENTOS")
-        self.setMinimumSize(1150, 750)
+    def __init__(self, parent=None, embedded=False):
+        super().__init__(parent, "ARCHIVO FISCAL - EXPLORADOR DE DOCUMENTOS", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(1150, 750)
         self.archive_dir = os.path.abspath("data/archivo fiscal")
         os.makedirs(self.archive_dir, exist_ok=True)
         self.current_dir = self.archive_dir

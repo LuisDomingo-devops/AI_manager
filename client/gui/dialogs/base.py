@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QScrollArea, QSplitter, QGroupBox, QFormLayout, QMessageBox,
                              QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QFileDialog, QStackedWidget, QSpinBox, 
-                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle)
+                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
@@ -23,39 +23,55 @@ class AlfonsoBaseDialog(QDialog):
     Clase base para todos los diálogos/ventanas de Alfonso.
     Asegura consistencia visual (estilo CRT retro / cyberpunk) y facilita cambios globales de apariencia.
     """
-    def __init__(self, parent=None, title="SISTEMA ALFONSO", modal=False):
+    def __init__(self, parent=None, title="SISTEMA ALFONSO", modal=False, embedded=False):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(modal)
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.embedded = embedded
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
+        else:
+            self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setup_base_ui(title)
-        self.apply_base_stylesheet()
+        if embedded:
+            if hasattr(self, 'title_bar'): self.title_bar.hide()
+            if hasattr(self, 'btn_minimize'): self.btn_minimize.hide()
+            if hasattr(self, 'btn_close'): self.btn_close.hide()
+            self.setStyleSheet("""
+                #OuterFrame {
+                    background-color: transparent;
+                    border: none;
+                }
+            """)
+        else:
+            self.apply_base_stylesheet()
         self.drag_position = None
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if not getattr(self, 'embedded', False) and event.button() == Qt.MouseButton.LeftButton:
             self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.MouseButton.LeftButton and hasattr(self, 'drag_position') and self.drag_position is not None:
+        if not getattr(self, 'embedded', False) and event.buttons() == Qt.MouseButton.LeftButton and hasattr(self, 'drag_position') and self.drag_position is not None:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
 
     def mouseReleaseEvent(self, event):
-        self.drag_position = None
+        if not getattr(self, 'embedded', False):
+            self.drag_position = None
 
     def setup_base_ui(self, title):
         self.base_layout = QVBoxLayout(self)
-        self.base_layout.setContentsMargins(1, 1, 1, 1)
+        self.base_layout.setContentsMargins(0, 0, 0, 0)
         self.base_layout.setSpacing(0)
 
         self.outer_frame = QFrame(self)
         self.outer_frame.setObjectName("OuterFrame")
         self.outer_layout = QVBoxLayout(self.outer_frame)
-        self.outer_layout.setContentsMargins(15, 15, 15, 15)
-        self.outer_layout.setSpacing(15)
+        self.outer_layout.setContentsMargins(12, 12, 12, 12)
+        self.outer_layout.setSpacing(10)
 
         self.title_bar = QFrame(self.outer_frame)
         self.title_bar.setObjectName("TitleBar")
@@ -84,8 +100,8 @@ class AlfonsoBaseDialog(QDialog):
 
         self.content_widget = QWidget(self.outer_frame)
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(0, 5, 0, 5)
-        self.content_layout.setSpacing(10)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(8)
         self.outer_layout.addWidget(self.content_widget)
 
         self.base_layout.addWidget(self.outer_frame)
@@ -267,9 +283,10 @@ class AlfonsoBaseDialog(QDialog):
 
 class AlfonsoComplianceDialog(AlfonsoBaseDialog):
     """Diálogo para consultar la Declaración Responsable de Conformidad (Real Decreto 1007/2023)."""
-    def __init__(self, parent=None):
-        super().__init__(parent, "DECLARACIÓN RESPONSABLE DE CONFORMIDAD SIF")
-        self.setMinimumSize(550, 450)
+    def __init__(self, parent=None, embedded=False):
+        super().__init__(parent, "DECLARACIÓN RESPONSABLE DE CONFORMIDAD SIF", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(550, 450)
         self.setup_ui()
 
     def setup_ui(self):
@@ -283,7 +300,9 @@ class AlfonsoComplianceDialog(AlfonsoBaseDialog):
         self.content_layout.addWidget(self.txt_declaration)
 
         # Cargar los datos desde el backend
-        api = self.parent().thread.api if self.parent() and hasattr(self.parent(), 'thread') else None
+        api = getattr(self.parent(), 'api_client', None)
+        if not api and self.parent() and hasattr(self.parent(), 'thread') and hasattr(self.parent().thread, 'api'):
+            api = self.parent().thread.api
         if api:
             try:
                 res = api.get_compliance_declaration()
@@ -403,10 +422,11 @@ class AlfonsoInvoiceConfirmDialog(QDialog):
 
 class CalendarWidget(AlfonsoBaseDialog):
     """Interfaz gráfica nativa para el Calendario de Alfonso (ALFONSO OS)."""
-    def __init__(self, api_client, parent=None):
-        super().__init__(parent, "ALFONSO CALENDAR", modal=False)
+    def __init__(self, api_client, parent=None, embedded=False):
+        super().__init__(parent, "ALFONSO CALENDAR", modal=False, embedded=embedded)
         self.api = api_client
-        self.setMinimumSize(850, 580)
+        if not embedded:
+            self.setMinimumSize(850, 580)
 
         # Fechas operativas
         now = datetime.datetime.now()
@@ -491,6 +511,8 @@ class CalendarWidget(AlfonsoBaseDialog):
 
         self.btn_close = QPushButton("MINIMIZAR CALENDARIO")
         self.btn_close.clicked.connect(self.close)
+        if getattr(self, 'embedded', False):
+            self.btn_close.hide()
         right_panel.addWidget(self.btn_close)
 
         content_layout.addLayout(right_panel, 2)
@@ -801,11 +823,12 @@ class EmailListItemWidget(QWidget):
 
 class MailWidget(AlfonsoBaseDialog):
     """Interfaz gráfica nativa para el cliente de Correo Electrónico (ALFONSO MAIL)."""
-    def __init__(self, api_client, parent=None):
-        super().__init__(parent, "ALFONSO MAIL", modal=False)
+    def __init__(self, api_client, parent=None, embedded=False):
+        super().__init__(parent, "ALFONSO MAIL", modal=False, embedded=embedded)
         self.api = api_client
-        self.setMinimumSize(1150, 700)
-        self.resize(1150, 700)
+        if not embedded:
+            self.setMinimumSize(1150, 700)
+            self.resize(1150, 700)
         
         self.current_category = None
         self.emails_list = []
@@ -1142,10 +1165,11 @@ class MailWidget(AlfonsoBaseDialog):
 
 class ConfigWidget(AlfonsoBaseDialog):
     """Panel de Configuración nativo para Alfonso OS."""
-    def __init__(self, parent_dashboard):
-        super().__init__(parent_dashboard, "ALFONSO CONFIGURATION", modal=False)
+    def __init__(self, parent_dashboard, embedded=False):
+        super().__init__(parent_dashboard, "ALFONSO CONFIGURATION", modal=False, embedded=embedded)
         self.dashboard = parent_dashboard
-        self.setMinimumSize(450, 480)
+        if not embedded:
+            self.setMinimumSize(450, 480)
 
         self.setup_ui()
         self.load_values()
@@ -1485,10 +1509,11 @@ class PlaywrightWorkerThread(QThread):
 
 class AeatAutofillWidget(AlfonsoBaseDialog):
     """Panel de control de Autorelleno del Modelo 303 en la AEAT."""
-    def __init__(self, parent_dashboard):
-        super().__init__(parent_dashboard, "ALFONSO AEAT AUTOFILL", modal=False)
+    def __init__(self, parent_dashboard, embedded=False):
+        super().__init__(parent_dashboard, "ALFONSO AEAT AUTOFILL", modal=False, embedded=embedded)
         self.dashboard = parent_dashboard
-        self.setMinimumSize(600, 560)
+        if not embedded:
+            self.setMinimumSize(600, 560)
         self.pw_thread = None
         
         self.income_base = 0.0
@@ -1682,7 +1707,14 @@ class AeatAutofillWidget(AlfonsoBaseDialog):
         self.btn_load_data.setText("CARGANDO...")
         self.btn_load_data.setEnabled(False)
         
-        res = self.dashboard.thread.api.get_tax_aggregates(year)
+        api = getattr(self.dashboard, 'api_client', None)
+        if not api and hasattr(self.dashboard, 'thread') and hasattr(self.dashboard.thread, 'api'):
+            api = self.dashboard.thread.api
+            
+        if api:
+            res = api.get_tax_aggregates(year)
+        else:
+            res = {"status": "error", "message": "API no disponible"}
         
         self.btn_load_data.setText("CARGAR DATOS")
         self.btn_load_data.setEnabled(True)
@@ -2077,7 +2109,13 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
 
     def load_dialog_chat_history(self, session_id, project, title):
         try:
-            res = self.dashboard.thread.api.get_memory_detail(session_id)
+            api = getattr(self.dashboard, 'api_client', None)
+            if not api and hasattr(self.dashboard, 'thread') and hasattr(self.dashboard.thread, 'api'):
+                api = self.dashboard.thread.api
+            if api:
+                res = api.get_memory_detail(session_id)
+            else:
+                res = {"status": "error"}
             messages = res.get("messages", [])
             
             chat_html = ""
@@ -2210,10 +2248,11 @@ class AlfonsoOnboardingWizard(AlfonsoBaseDialog):
 
 class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
     """Diálogo de Conciliación Bancaria con soporte Multibanco y Multi-cuenta."""
-    def __init__(self, parent=None, api_client=None):
+    def __init__(self, parent=None, api_client=None, embedded=False):
         self.api = api_client
-        super().__init__(parent, "CONCILIACIÓN BANCARIA AUTOMÁTICA Y MANUAL")
-        self.setMinimumSize(750, 550)
+        super().__init__(parent, "CONCILIACIÓN BANCARIA AUTOMÁTICA Y MANUAL", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(750, 550)
         self.setup_recon_ui()
 
     def setup_recon_ui(self):
@@ -2615,9 +2654,10 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
 
 class AlfonsoSubscriptionDialog(AlfonsoBaseDialog):
     """Diálogo para ver y gestionar planes de suscripción de transferencias."""
-    def __init__(self, parent=None):
-        super().__init__(parent, "PLAN PREMIUM Y TRANSFERENCIAS")
-        self.setMinimumSize(450, 350)
+    def __init__(self, parent=None, embedded=False):
+        super().__init__(parent, "PLAN PREMIUM Y TRANSFERENCIAS", embedded=embedded)
+        if not embedded:
+            self.setMinimumSize(450, 350)
         self.setup_ui()
 
     def setup_ui(self):

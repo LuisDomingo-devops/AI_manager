@@ -332,6 +332,7 @@ class ToolExecutionEngine:
                 advisor_allowed = {
                     "get_libro_diario", "get_libro_mayor", "get_balance_situacion", "get_pgc_accounts",
                     "get_profit_and_loss_report", "export_advisor_pack", "export_advisor_pack_tool",
+                    "send_to_advisor", "request_document",
                     "get_tax_estimate", "get_clients", "get_products", "get_quotes",
                     "get_pending_payments_report", "get_invoice_payment_summary",
                     "get_b2b_invoice_status_history_tool", "export_einvoice_tool",
@@ -344,6 +345,17 @@ class ToolExecutionEngine:
                         "execution": "server",
                         "message": f"Acceso denegado: el rol 'advisor' solo dispone de permisos de consulta y auditoría contable/fiscal. No puede ejecutar '{tool_name}'."
                     }
+
+            # Verificación de nivel de membresía (Feature Gating: Basic, Pro, Advisor)
+            from app.utils.license_validator import is_tool_allowed_for_tier
+            is_tier_allowed, tier_msg = is_tool_allowed_for_tier(tool_name)
+            if not is_tier_allowed:
+                logger.warning("Bloqueo por membresía: la herramienta %s no está permitida para el nivel activo", tool_name)
+                return {
+                    "status": "tier_upgrade_required",
+                    "execution": "server",
+                    "message": tier_msg
+                }
 
             logger.info("Ejecutando tool de servidor: %s", tool_name)
             tool = get_tool(tool_name, request_id)
