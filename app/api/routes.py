@@ -1123,30 +1123,13 @@ async def check_boe_endpoint(date: Optional[str] = Query(None, description="Fech
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Endpoint de la Declaración Responsable de Conformidad (Real Decreto 1007/2023)
+# Endpoint de la Declaración Responsable de Conformidad (Real Decreto 1007/2023 y Orden HAC/1177/2024 Art. 13)
 @router.get("/compliance-declaration")
 async def get_compliance_declaration():
-    from app.config import settings
-    return {
-        "status": "ok",
-        "compliance": {
-            "developer": settings.SIF_DEVELOPER,
-            "software_name": settings.SIF_SOFTWARE_NAME,
-            "version": settings.SIF_VERSION,
-            "regulation": settings.SIF_REGULATION,
-            "certified_date": settings.SIF_CERTIFIED_DATE,
-            "statement": (
-                f"{settings.SIF_DEVELOPER} declara bajo su responsabilidad que el sistema informático de facturación "
-                f"'{settings.SIF_SOFTWARE_NAME}' versión {settings.SIF_VERSION} cumple con todos los requisitos establecidos en el "
-                "artículo 29.2.j) de la Ley 58/2003, de 17 de diciembre, General Tributaria, y en su reglamento "
-                "de desarrollo aprobado por el Real Decreto 1007/2023, de 5 de diciembre, así como en las "
-                "especificaciones técnicas de la Orden HAC/1177/2024. Garantizando la integridad, conservación, "
-                "accesibilidad, legibilidad, trazabilidad e inalterabilidad de los registros de facturación sin "
-                "interpolaciones, omisiones ni alteraciones de las que no quede la debida anotación en el sistema."
-            ),
-            "signature": f"FIRMADO DIGITALMENTE POR REPRESENTANTE LEGAL DE {settings.SIF_DEVELOPER.upper()}"
-        }
-    }
+    from app.domain.services.verifactu_service import VerifactuService
+    from app.adapters.memory.memory import tenant_context
+    cid = tenant_context.get()
+    return VerifactuService.get_compliance_declaration_dossier(client_id=cid)
 
 
 # Endpoint de Métricas de Consumo del LLM e Inferencia

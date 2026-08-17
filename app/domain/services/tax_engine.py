@@ -137,24 +137,56 @@ class TaxEngine:
         return now.strftime("%Y-%m-%d"), now.year, (now.month - 1) // 3 + 1
 
     @classmethod
+    def resolve_rates_with_confidence(cls, text: str) -> Dict[str, Any]:
+        """
+        Busca tasas de IVA e IRPF y evalúa la confianza de la extracción.
+        No asume un tipo de IVA al 21% por defecto si no está explícito en el documento,
+        marcando requires_manual_confirmation para evitar sanciones del art. 191 LGT por deducciones indebidas.
+        """
+        text_lower = text.lower()
+        iva_rate = None
+        is_iva_inferred = False
+        confidence = 1.0
+
+        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.)[^0-9%]*?(\d+(?:[.,]\d+)?)\s*%', text_lower)
+        if iva_rate_match:
+            try:
+                iva_rate = float(iva_rate_match.group(1).replace(",", "."))
+            except Exception:
+                iva_rate = 21.0
+        else:
+            # Buscar menciones de exención o régimen especial
+            if any(term in text_lower for term in ["exento", "exenta", "art. 20", "artículo 20", "inversión del sujeto pasivo", "0%"]):
+                iva_rate = 0.0
+            else:
+                rules = cls.load_rules()
+                iva_rate = rules.get("iva_general_rate", 21.0)
+                is_iva_inferred = True
+                confidence = 0.60
+
+        irpf_rate = 0.0
+        irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+(?:[.,]\d+)?)\s*%', text_lower)
+        if irpf_rate_match:
+            try:
+                irpf_rate = abs(float(irpf_rate_match.group(1).replace(",", ".")))
+            except Exception:
+                irpf_rate = 0.0
+
+        return {
+            "iva_rate": iva_rate,
+            "irpf_rate": irpf_rate,
+            "is_iva_inferred": is_iva_inferred,
+            "confidence_score": confidence,
+            "requires_manual_confirmation": is_iva_inferred
+        }
+
+    @classmethod
     def resolve_rates(cls, text: str) -> Tuple[float, float]:
         """
-        Busca tasas de IVA e IRPF. Si no las encuentra, usa las tasas por defecto de tax_rules.json.
+        Busca tasas de IVA e IRPF delegando en resolve_rates_with_confidence.
         """
-        rules = cls.load_rules()
-        iva_rate = rules.get("iva_general_rate", 21.0)
-        irpf_rate = 0.0  # IRPF suele ser 0% por defecto (venta/gasto genérico) o 15% para profesionales.
-        
-        text_lower = text.lower()
-        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.)[^0-9%]*?(\d+)\s*%', text_lower)
-        if iva_rate_match:
-            iva_rate = float(iva_rate_match.group(1))
-
-        irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+)\s*%', text_lower)
-        if irpf_rate_match:
-            irpf_rate = abs(float(irpf_rate_match.group(1)))
-
-        return iva_rate, irpf_rate
+        res = cls.resolve_rates_with_confidence(text)
+        return res["iva_rate"], res["irpf_rate"]
 
     @classmethod
     def extract_financials(cls, text: str, text_lower: str, iva_rate: float, irpf_rate: float) -> Tuple[float, float, float, float]:

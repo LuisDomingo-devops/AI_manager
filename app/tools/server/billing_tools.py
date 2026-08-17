@@ -67,15 +67,24 @@ async def update_project_status(project_id: int, status: str) -> dict:
         tool_logger.exception("Error al actualizar el estado del proyecto")
         return {"status": "error", "message": str(e)}
 
-async def get_clients() -> dict:
+async def get_clients(include_deleted: bool = False) -> dict:
     """
-    Retorna la lista completa de clientes registrados en la base de datos para autocompletado y facturación.
+    Retorna la lista de clientes registrados en la base de datos para autocompletado y facturación.
+    Por defecto filtra solo clientes activos (Soft Delete).
     """
     try:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, nif, email, address FROM clients")
+            query = "SELECT id, name, nif, email, address FROM clients"
+            try:
+                if not include_deleted:
+                    cursor.execute("SELECT id, name, nif, email, address FROM clients WHERE is_active = 1")
+                else:
+                    cursor.execute("SELECT id, name, nif, email, address FROM clients")
+            except sqlite3.OperationalError:
+                cursor.execute(query)
+
             rows = cursor.fetchall()
             clients = []
             for r in rows:
@@ -169,23 +178,30 @@ async def update_client(client_id: int, name: str = None, nif: str = None, email
 
 async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict:
     """
-    Elimina un cliente existente por su ID. Requiere confirmación explícita del usuario.
+    Elimina (Soft Delete) un cliente existente por su ID. Preserva la integridad referencial histórica contable.
     """
     if not confirmed_by_user:
         return {
             "status": "pending_confirmation",
-            "message": f"¿Confirmas que deseas eliminar permanentemente al cliente con ID {client_id} de tu base de datos?"
+            "message": f"¿Confirmas que deseas desactivar al cliente con ID {client_id} de tu base de datos?"
         }
 
     try:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM clients WHERE id = ?", (client_id,))
-            if not cursor.fetchone():
+            cursor.execute("SELECT * FROM clients WHERE id = ?", (client_id,))
+            row = cursor.fetchone()
+            if not row:
+                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
+            if "is_active" in row.keys() and row["is_active"] == 0:
                 return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
 
-            cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+            # Soft delete seguro para proteger integridad contable
+            try:
+                cursor.execute("UPDATE clients SET is_active = 0, deleted_at = datetime('now') WHERE id = ?", (client_id,))
+            except sqlite3.OperationalError:
+                cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
             conn.commit()
             
             # Registrar en el Ledger de Auditoría
@@ -194,11 +210,11 @@ async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict
             cid = tenant_context.get()
             AuditLedgerService.log_audit_event(
                 event_type="DELETE_CLIENT",
-                description=f"Eliminación permanente del cliente con ID {client_id}.",
+                description=f"Desactivación (Soft Delete) del cliente con ID {client_id}.",
                 client_id=cid
             )
             
-            return {"status": "ok", "message": f"Cliente con ID {client_id} eliminado con éxito."}
+            return {"status": "ok", "message": f"Cliente con ID {client_id} desactivado con éxito."}
         finally:
             conn.close()
     except Exception as e:
@@ -227,15 +243,23 @@ async def create_product(sku: str, name: str, price: float, description: str = "
         tool_logger.exception("Error al registrar producto")
         return {"status": "error", "message": str(e)}
 
-async def get_products() -> dict:
+async def get_products(include_deleted: bool = False) -> dict:
     """
-    Retorna la lista de todos los productos y servicios del catálogo.
+    Retorna la lista de productos y servicios del catálogo activos.
     """
     try:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, sku, name, description, price, iva_rate FROM products")
+            query = "SELECT id, sku, name, description, price, iva_rate FROM products"
+            try:
+                if not include_deleted:
+                    cursor.execute("SELECT id, sku, name, description, price, iva_rate FROM products WHERE is_active = 1")
+                else:
+                    cursor.execute("SELECT id, sku, name, description, price, iva_rate FROM products")
+            except sqlite3.OperationalError:
+                cursor.execute(query)
+
             rows = cursor.fetchall()
             products = []
             for r in rows:
@@ -298,12 +322,12 @@ async def update_product(sku: str, name: str = None, price: float = None, descri
 
 async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
     """
-    Elimina un producto o servicio del catálogo por su SKU. Requiere confirmación explícita del usuario.
+    Elimina (Soft Delete) un producto o servicio del catálogo por su SKU.
     """
     if not confirmed_by_user:
         return {
             "status": "pending_confirmation",
-            "message": f"¿Confirmas que deseas eliminar permanentemente el producto/servicio con SKU '{sku}' del catálogo?"
+            "message": f"¿Confirmas que deseas desactivar el producto/servicio con SKU '{sku}' del catálogo?"
         }
 
     try:
@@ -311,11 +335,17 @@ async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
         try:
             cursor = conn.cursor()
             sku_upper = sku.strip().upper()
-            cursor.execute("SELECT id FROM products WHERE sku = ?", (sku_upper,))
-            if not cursor.fetchone():
+            cursor.execute("SELECT * FROM products WHERE sku = ?", (sku_upper,))
+            row = cursor.fetchone()
+            if not row:
+                return {"status": "error", "message": f"No se encontró ningún producto con SKU '{sku}'."}
+            if "is_active" in row.keys() and row["is_active"] == 0:
                 return {"status": "error", "message": f"No se encontró ningún producto con SKU '{sku}'."}
 
-            cursor.execute("DELETE FROM products WHERE sku = ?", (sku_upper,))
+            try:
+                cursor.execute("UPDATE products SET is_active = 0, deleted_at = datetime('now') WHERE sku = ?", (sku_upper,))
+            except sqlite3.OperationalError:
+                cursor.execute("DELETE FROM products WHERE sku = ?", (sku_upper,))
             conn.commit()
             
             # Registrar en el Ledger de Auditoría
@@ -324,7 +354,7 @@ async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
             cid = tenant_context.get()
             AuditLedgerService.log_audit_event(
                 event_type="DELETE_PRODUCT",
-                description=f"Eliminación permanente del producto con SKU '{sku_upper}'.",
+                description=f"Desactivación (Soft Delete) del producto con SKU '{sku_upper}'.",
                 client_id=cid
             )
             

@@ -227,7 +227,9 @@ class TaxParserService:
 
         # 4. Buscar Importes y Tasas delegando en el Motor Fiscal (TaxEngine)
         text_lower = text.lower()
-        iva_rate, irpf_rate = TaxEngine.resolve_rates(text_lower)
+        rates_info = TaxEngine.resolve_rates_with_confidence(text)
+        iva_rate = rates_info["iva_rate"]
+        irpf_rate = rates_info["irpf_rate"]
         base_imponible, iva_amount, irpf_amount, total_amount = TaxEngine.extract_financials(text, text_lower, iva_rate, irpf_rate)
 
         invoice_id_match = re.search(r'\b(?:factura\s+de\s+)([A-Za-z0-9 ]+)|(?:factura(?:\s+(?:n[uú]mero|nº|num))?|n[uú]mero|nº|num)[\s#:]*([A-Za-z0-9\-]*\d[A-Za-z0-9\-]*)', text_lower)
@@ -252,7 +254,10 @@ class TaxParserService:
             "total_amount": total_amount,
             "category": category,
             "quarter": quarter,
-            "year": year
+            "year": year,
+            "confidence_score": rates_info["confidence_score"],
+            "requires_manual_confirmation": rates_info["requires_manual_confirmation"],
+            "is_iva_inferred": rates_info["is_iva_inferred"]
         }
 
     @classmethod

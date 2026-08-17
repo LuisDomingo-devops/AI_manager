@@ -15,22 +15,77 @@ class BankService:
     @classmethod
     def add_connection(cls, alias: str, provider: str, bank_name: str, iban: str, credentials_json: str = "") -> int:
         """
-        Añade una nueva cuenta bancaria conectada a la base de datos.
+        Añade una nueva cuenta bancaria conectada a la base de datos con expiración de consentimiento PSD2 a 180 días.
+        """
+        from datetime import timedelta
+        expires_at = (datetime.now() + timedelta(days=180)).isoformat()
+
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("""
+                    INSERT INTO bank_connections (alias, provider, bank_name, iban, credentials, status, consent_expires_at, consent_status)
+                    VALUES (?, ?, ?, ?, ?, 'active', ?, 'valid')
+                """, (
+                    alias,
+                    provider,
+                    bank_name,
+                    encryptor.encrypt(iban) if iban else None,
+                    encryptor.encrypt(credentials_json) if credentials_json else None,
+                    expires_at
+                ))
+            except Exception:
+                cursor.execute("""
+                    INSERT INTO bank_connections (alias, provider, bank_name, iban, credentials, status)
+                    VALUES (?, ?, ?, ?, ?, 'active')
+                """, (
+                    alias,
+                    provider,
+                    bank_name,
+                    encryptor.encrypt(iban) if iban else None,
+                    encryptor.encrypt(credentials_json) if credentials_json else None
+                ))
+            conn.commit()
+            return cursor.lastrowid
+
+    @classmethod
+    def check_consent_status(cls, connection_id: int) -> Dict[str, Any]:
+        """
+        Verifica el estado del consentimiento de acceso PSD2 / RTS (vigencia de 180 días).
         """
         with _get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO bank_connections (alias, provider, bank_name, iban, credentials, status)
-                VALUES (?, ?, ?, ?, ?, 'active')
-            """, (
-                alias,
-                provider,
-                bank_name,
-                encryptor.encrypt(iban) if iban else None,
-                encryptor.encrypt(credentials_json) if credentials_json else None
-            ))
-            conn.commit()
-            return cursor.lastrowid
+            cursor.execute("SELECT id, alias, provider, consent_expires_at, consent_status FROM bank_connections WHERE id = ?", (connection_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Conexión bancaria con ID {connection_id} no encontrada.")
+
+            expires_at_raw = row["consent_expires_at"] if "consent_expires_at" in row.keys() else None
+            status = "valid"
+            days_left = 180
+            if expires_at_raw:
+                try:
+                    exp_dt = datetime.fromisoformat(expires_at_raw)
+                    diff = (exp_dt - datetime.now()).days
+                    days_left = diff
+                    if diff <= 0:
+                        status = "expired"
+                    elif diff <= 15:
+                        status = "expiring_soon"
+                    else:
+                        status = "valid"
+                except Exception:
+                    pass
+
+            return {
+                "connection_id": connection_id,
+                "alias": row["alias"],
+                "provider": row["provider"],
+                "consent_status": status,
+                "consent_expires_at": expires_at_raw,
+                "days_left": days_left,
+                "requires_renewal": status in ("expired", "expiring_soon")
+            }
 
     @classmethod
     def list_connections(cls) -> List[Dict[str, Any]]:
@@ -39,7 +94,7 @@ class BankService:
         """
         with _get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, alias, provider, bank_name, iban, status, last_sync_at FROM bank_connections")
+            cursor.execute("SELECT * FROM bank_connections")
             rows = cursor.fetchall()
             connections = []
             for r in rows:
@@ -50,7 +105,9 @@ class BankService:
                     "bank_name": r["bank_name"],
                     "iban": encryptor.decrypt(r["iban"]) if r["iban"] else "",
                     "status": r["status"],
-                    "last_sync_at": r["last_sync_at"]
+                    "last_sync_at": r["last_sync_at"],
+                    "consent_status": r["consent_status"] if "consent_status" in r.keys() else "valid",
+                    "consent_expires_at": r["consent_expires_at"] if "consent_expires_at" in r.keys() else None
                 })
             return connections
 

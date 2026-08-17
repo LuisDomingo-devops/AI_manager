@@ -324,6 +324,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+from app.api.v1 import api_v1_router
+app.include_router(api_v1_router)
 app.include_router(router)
 
 # Montar la web directamente en la raíz para servir index.html y los assets de forma relativa si existe
