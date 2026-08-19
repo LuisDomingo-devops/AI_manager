@@ -22,6 +22,7 @@ from core.processor import ResponseProcessor
 from services.audio import AudioService
 from core.alfonso_agent_logic import AlfonsoAgentLogic
 from client.gui.widgets import DonutChartWidget, SparklineWidget
+from client.gui.sidebar_widget import AlfonsoSidebarWidget, SIDEBAR_CATEGORIES
 from client.gui.dialogs import (
     AlfonsoBaseDialog,
     AlfonsoComplianceDialog,
@@ -37,7 +38,19 @@ from client.gui.dialogs import (
     AlfonsoLedgerDialog,
     AlfonsoDocumentViewerDialog,
     AlfonsoArchiveBrowserDialog,
-    AlfonsoKPIDashboardDialog
+    AlfonsoKPIDashboardDialog,
+    AlfonsoInitiateTransferDialog,
+    AlfonsoManualEntryDialog,
+    ProjectNavigatorDialog,
+    AlertsWidget,
+    AlfonsoCashFlowWidget,
+    AlfonsoInvoiceEmitterWidget,
+    AlfonsoPayrollWidget,
+    AlfonsoVerifactuAuditWidget,
+    AlfonsoBoeWidget,
+    AlfonsoOfficialBooksWidget,
+    AlfonsoBackupWidget,
+    AlfonsoTenantAdvisorWidget
 )
 
 
@@ -1570,133 +1583,11 @@ class AlfonsoHUDDashboard(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ------------------ SIDEBAR IZQUIERDA (220px) ------------------
-        sidebar = QFrame()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(220)
-        sidebar.setStyleSheet("""
-            #Sidebar {
-                background-color: #0A0F1D;
-                border-right: 1px solid rgba(255, 255, 255, 0.05);
-            }
-        """)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(12, 18, 12, 18)
-        sidebar_layout.setSpacing(8)
-
-        # Menú de navegación principal
-        menu_items = [
-            ("Dashboard", True),
-            ("Facturas", False),
-            ("Gastos", False),
-            ("Bancos", False),
-            ("Impuestos", False),
-            ("Documentos", False),
-            ("Correo", False),
-            ("Calendario", False),
-            ("Asesor", False),
-            ("Configuración", False)
-        ]
-        
-        self.menu_buttons = {}
-        for item, active in menu_items:
-            btn = QPushButton(f"  {item}")
-            btn.setFixedHeight(34)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            if active:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: rgba(0, 240, 255, 0.15);
-                        border: 1px solid rgba(0, 240, 255, 0.3);
-                        border-radius: 6px;
-                        color: #FFFFFF;
-                        text-align: left;
-                        font-weight: bold;
-                        font-size: 12px;
-                        padding-left: 10px;
-                    }
-                """)
-            else:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background: transparent;
-                        border: none;
-                        color: #94A3B8;
-                        text-align: left;
-                        font-size: 12px;
-                        padding-left: 10px;
-                    }
-                    QPushButton:hover {
-                        color: #FFFFFF;
-                        background-color: rgba(255, 255, 255, 0.03);
-                        border-radius: 6px;
-                    }
-                """)
-            
-            btn.clicked.connect(lambda checked=False, name=item: self.switch_to_view(name))
-            sidebar_layout.addWidget(btn)
-            self.menu_buttons[item] = btn
-
-        sidebar_layout.addStretch()
-
-        # Bloque de Membresía y Licencia Dinámica
-        tier_title = "⚡ Plan Profesional"
-        tier_sub = "Facturación Verifactu + Bancos"
-        try:
-            from app.utils.license_validator import get_active_license_tier
-            t = get_active_license_tier()
-            if t == "advisor":
-                tier_title = "👑 Plan Gestoría / Advisor"
-                tier_sub = "Multi-inquilino + FacturaE B2B"
-            elif t == "pro":
-                tier_title = "⚡ Plan Profesional"
-                tier_sub = "Conciliación + Verifactu SIF"
-            else:
-                tier_title = "🌱 Plan Autónomo Basic"
-                tier_sub = "Verifactu + Modelos AEAT"
-        except Exception:
-            pass
-
-        plan_card = QFrame()
-        plan_card.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 184, 0, 0.05);
-                border: 1px solid rgba(255, 184, 0, 0.15);
-                border-radius: 8px;
-                padding: 8px;
-            }
-        """)
-        plan_layout = QVBoxLayout(plan_card)
-        plan_layout.setContentsMargins(6, 6, 6, 6)
-        
-        plan_title = QLabel(tier_title)
-        plan_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #FFB800;")
-        plan_sub = QLabel(tier_sub)
-        plan_sub.setStyleSheet("font-size: 9px; color: #94A3B8;")
-        
-        btn_plan = QPushButton("Ver plan →")
-        btn_plan.setFixedHeight(22)
-        btn_plan.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_plan.clicked.connect(self.show_subscription_dialog)
-        btn_plan.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: 1px solid rgba(255, 184, 0, 0.3);
-                border-radius: 4px;
-                color: #FFB800;
-                font-size: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 184, 0, 0.1);
-            }
-        """)
-        plan_layout.addWidget(plan_title)
-        plan_layout.addWidget(plan_sub)
-        plan_layout.addWidget(btn_plan)
-        sidebar_layout.addWidget(plan_card)
-
-        main_layout.addWidget(sidebar)
+        # ------------------ SIDEBAR IZQUIERDA CON CATEGORÍAS & SUBCATEGORÍAS ------------------
+        self.sidebar = AlfonsoSidebarWidget(self)
+        self.sidebar.category_selected.connect(self.on_sidebar_category_selected)
+        self.sidebar.plan_clicked.connect(self.show_subscription_dialog)
+        main_layout.addWidget(self.sidebar)
 
         # ------------------ CONTENIDO PRINCIPAL (DASHBOARD - INDEX 0) ------------------
         content_pane = QWidget()
@@ -2027,44 +1918,136 @@ class AlfonsoHUDDashboard(QMainWindow):
         # ------------------ CONTENIDO PRINCIPAL (QSTACKEDWIDGET) ------------------
         self.central_stack = QStackedWidget()
 
-        # 0. Vista Dashboard
-        self.central_stack.addWidget(content_pane) # Index 0: Dashboard
+        # 0: Dashboard > Resumen Ejecutivo
+        self.central_stack.addWidget(content_pane)
 
-        # 1. Vista Facturas Emitidas
+        # 1: Dashboard > Analítica & KPIs
+        self.view_kpis = AlfonsoKPIDashboardDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_kpis)
+
+        # 2: Dashboard > Previsión Cash Flow
+        self.view_cashflow = AlfonsoCashFlowWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_cashflow)
+
+        # 3: Facturación > Facturas Emitidas (7XX)
         self.view_invoices = AlfonsoLedgerDialog(self, self.api_client, embedded=True)
-        self.central_stack.addWidget(self.view_invoices) # Index 1: Facturas
+        self.central_stack.addWidget(self.view_invoices)
 
-        # 2. Vista Gastos y Compras
+        # 4: Facturación > Nueva Factura / FacturaE B2B
+        self.view_invoice_emitter = AlfonsoInvoiceEmitterWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_invoice_emitter)
+
+        # 5: Facturación > Veri*Factu & Huella Hash
+        self.view_verifactu_audit = AlfonsoVerifactuAuditWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_verifactu_audit)
+
+        # 6: Gastos > Libro de Gastos (6XX)
         self.view_expenses = AlfonsoLedgerDialog(self, self.api_client, embedded=True)
-        self.central_stack.addWidget(self.view_expenses) # Index 2: Gastos
+        self.central_stack.addWidget(self.view_expenses)
 
-        # 3. Vista Bancos y Tesorería
+        # 7: Gastos > Captura & Extracción OCR
+        self.view_ocr = AlfonsoDocumentViewerDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_ocr)
+
+        # 8: Gastos > Registro Manual de Gasto
+        self.view_manual_entry = AlfonsoManualEntryDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_manual_entry)
+
+        # 9: Bancos > Conciliación Bancaria PSD2
         self.view_banks = AlfonsoBankReconciliationDialog(self, self.api_client, embedded=True)
-        self.central_stack.addWidget(self.view_banks) # Index 3: Bancos
+        self.central_stack.addWidget(self.view_banks)
 
-        # 4. Vista Impuestos y AEAT
+        # 10: Bancos > Cuentas Conectadas Open Banking
+        self.view_bank_connections = AlfonsoBankConnectionsDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_bank_connections)
+
+        # 11: Bancos > Emisión de Transferencias SEPA
+        self.view_transfers = AlfonsoInitiateTransferDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_transfers)
+
+        # 12: Impuestos > Modelos Trimestrales (303, 130)
         self.view_taxes = AeatAutofillWidget(self, embedded=True)
-        self.central_stack.addWidget(self.view_taxes) # Index 4: Impuestos
+        self.central_stack.addWidget(self.view_taxes)
 
-        # 5. Vista Documentos y Archivo Fiscal
-        self.view_docs = AlfonsoArchiveBrowserDialog(self, embedded=True)
-        self.central_stack.addWidget(self.view_docs) # Index 5: Documentos
+        # 13: Impuestos > Sede Electrónica & Playwright
+        self.view_aeat_auto = AeatAutofillWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_aeat_auto)
 
-        # 6. Vista Correo Electrónico
-        self.view_mail = MailWidget(self.api_client, self, embedded=True)
-        self.central_stack.addWidget(self.view_mail) # Index 6: Correo
-
-        # 7. Vista Calendario y Citas Fiscales
+        # 14: Impuestos > Calendario Fiscal & Vencimientos
         self.view_calendar = CalendarWidget(self.api_client, self, embedded=True)
-        self.central_stack.addWidget(self.view_calendar) # Index 7: Calendario
+        self.central_stack.addWidget(self.view_calendar)
 
-        # 8. Vista Asesor y Expediente SIF
+        # 15: Impuestos > Monitor BOE & Leyes
+        self.view_boe = AlfonsoBoeWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_boe)
+
+        # 16: Laboral > Empleados & Contratos
+        self.view_employees = AlfonsoPayrollWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_employees)
+
+        # 17: Laboral > Generador de Nóminas PDF
+        self.view_payrolls = AlfonsoPayrollWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_payrolls)
+
+        # 18: Laboral > Seguridad Social & TGSS
+        self.view_tgss = AlfonsoPayrollWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_tgss)
+
+        # 19: Documentos > Archivo Fiscal Digital
+        self.view_docs = AlfonsoArchiveBrowserDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_docs)
+
+        # 20: Documentos > Visor Documental con IA
+        self.view_doc_viewer = AlfonsoDocumentViewerDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_doc_viewer)
+
+        # 21: Documentos > Libros Oficiales AEAT (Excel/CSV)
+        self.view_official_books = AlfonsoOfficialBooksWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_official_books)
+
+        # 22: Asistente > Chat IA & Voz Alfonso
+        self.view_ai_chat = AlfonsoComplianceDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_ai_chat)
+
+        # 23: Asistente > Alfonso Mail Inteligente
+        self.view_mail = MailWidget(self.api_client, self, embedded=True)
+        self.central_stack.addWidget(self.view_mail)
+
+        # 24: Asistente > Agenda & Citas Previas
+        self.view_agenda = CalendarWidget(self.api_client, self, embedded=True)
+        self.central_stack.addWidget(self.view_agenda)
+
+        # 25: Asistente > Navegador de Proyectos
+        self.view_projects = ProjectNavigatorDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_projects)
+
+        # 26: Cumplimiento > Declaración Responsable SIF (RD 1007/2023)
         self.view_advisor = AlfonsoComplianceDialog(self, embedded=True)
-        self.central_stack.addWidget(self.view_advisor) # Index 8: Asesor
+        self.central_stack.addWidget(self.view_advisor)
 
-        # 9. Vista Configuración
+        # 27: Cumplimiento > Auditoría de Inmutabilidad
+        self.view_audit_ledger = AlfonsoVerifactuAuditWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_audit_ledger)
+
+        # 28: Cumplimiento > Panel Asesor / Gestoría
+        self.view_tenant_advisor = AlfonsoTenantAdvisorWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_tenant_advisor)
+
+        # 29: Sistema > Perfil Fiscal del Autónomo
         self.view_config = ConfigWidget(self, embedded=True)
-        self.central_stack.addWidget(self.view_config) # Index 9: Configuración
+        self.central_stack.addWidget(self.view_config)
+
+        # 30: Sistema > IA, Voz & Dispositivos
+        self.view_voice_config = ConfigWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_voice_config)
+
+        # 31: Sistema > Copias de Seguridad & Restauración
+        self.view_backups = AlfonsoBackupWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_backups)
+
+        # 32: Sistema > Suscripción & Licencia
+        self.view_subscription = AlfonsoSubscriptionDialog(self, embedded=True)
+        self.central_stack.addWidget(self.view_subscription)
 
         main_layout.addWidget(self.central_stack, 1)
 
@@ -2407,108 +2390,144 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.thread.confirm_invoice_requested.connect(self.show_invoice_confirmation)
         self.thread.start()
 
+    def on_sidebar_category_selected(self, cat_id: str, subcat_id: str, title: str):
+        """Manejador ejecutado al pulsar cualquier subcategoría en el panel lateral."""
+        self.switch_to_view((cat_id, subcat_id))
+
     def switch_to_view(self, target):
-        """Cambia dinámicamente la vista del panel central (QStackedWidget) y actualiza el menú."""
+        """Cambia dinámicamente la vista del panel central (QStackedWidget) y actualiza el título y menú."""
         mapping = {
-            "Dashboard": 0,
-            "Facturas": 1,
-            "Gastos": 2,
-            "Bancos": 3,
-            "Impuestos": 4,
-            "Documentos": 5,
-            "Correo": 6,
-            "Calendario": 7,
-            "Asesor": 8,
-            "Configuración": 9
+            # Panel de Control
+            ("dashboard", "resumen_ejecutivo"): (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
+            ("dashboard", "kpis_analitica"): (1, "PANEL DE CONTROL > ANALÍTICA & KPIS", "dashboard", "kpis_analitica"),
+            ("dashboard", "prevision_cashflow"): (2, "PANEL DE CONTROL > PREVISIÓN DE TESORERÍA", "dashboard", "prevision_cashflow"),
+
+            # Facturación & Ventas
+            ("facturacion", "facturas_emitidas"): (3, "FACTURACIÓN & VENTAS > FACTURAS EMITIDAS (7XX)", "facturacion", "facturas_emitidas"),
+            ("facturacion", "nueva_factura_b2b"): (4, "FACTURACIÓN & VENTAS > NUEVA FACTURA / FACTURAE B2B", "facturacion", "nueva_factura_b2b"),
+            ("facturacion", "verifactu_sif"): (5, "FACTURACIÓN & VENTAS > VERI*FACTU & HUELLA HASH", "facturacion", "verifactu_sif"),
+
+            # Gastos & Compras
+            ("gastos", "libro_gastos"): (6, "GASTOS & COMPRAS > LIBRO DE GASTOS Y COMPRAS (6XX)", "gastos", "libro_gastos"),
+            ("gastos", "ocr_extraccion"): (7, "GASTOS & COMPRAS > CAPTURA & EXTRACCIÓN OCR", "gastos", "ocr_extraccion"),
+            ("gastos", "registro_manual"): (8, "GASTOS & COMPRAS > REGISTRO MANUAL DE GASTO", "gastos", "registro_manual"),
+
+            # Banca & Tesorería
+            ("bancos", "conciliacion_bancaria"): (9, "BANCA & TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
+            ("bancos", "conexiones_psd2"): (10, "BANCA & TESORERÍA > CUENTAS BANCARIAS VINCULADAS", "bancos", "conexiones_psd2"),
+            ("bancos", "transferencias_pagos"): (11, "BANCA & TESORERÍA > EMISIÓN DE TRANSFERENCIAS SEPA", "bancos", "transferencias_pagos"),
+
+            # Fiscalidad & AEAT
+            ("impuestos", "modelos_trimestrales"): (12, "FISCALIDAD & AEAT > MODELOS TRIMESTRALES (303, 130)", "impuestos", "modelos_trimestrales"),
+            ("impuestos", "automatizacion_aeat"): (13, "FISCALIDAD & AEAT > SEDE ELECTRÓNICA & PLAYWRIGHT", "impuestos", "automatizacion_aeat"),
+            ("impuestos", "calendario_fiscal"): (14, "FISCALIDAD & AEAT > CALENDARIO FISCAL & VENCIMIENTOS", "impuestos", "calendario_fiscal"),
+            ("impuestos", "novedades_boe"): (15, "FISCALIDAD & AEAT > MONITOR BOE & NOVEDADES FISCALES", "impuestos", "novedades_boe"),
+
+            # Laboral & Nóminas
+            ("laboral", "empleados_contratos"): (16, "LABORAL & NÓMINAS > GESTIÓN DE EMPLEADOS Y CONTRATOS", "laboral", "empleados_contratos"),
+            ("laboral", "generador_nominas"): (17, "LABORAL & NÓMINAS > GENERADOR OFICIAL DE NÓMINAS PDF", "laboral", "generador_nominas"),
+            ("laboral", "afiliacion_tgss"): (18, "LABORAL & NÓMINAS > SEGURIDAD SOCIAL & TGSS / RETA", "laboral", "afiliacion_tgss"),
+
+            # Documentos & Archivo
+            ("documentos", "archivo_fiscal"): (19, "DOCUMENTOS & ARCHIVO > ARCHIVO FISCAL DIGITAL", "documentos", "archivo_fiscal"),
+            ("documentos", "visor_documental"): (20, "DOCUMENTOS & ARCHIVO > VISOR DOCUMENTAL CON IA", "documentos", "visor_documental"),
+            ("documentos", "libros_oficiales_aeat"): (21, "DOCUMENTOS & ARCHIVO > LIBROS OFICIALES AEAT", "documentos", "libros_oficiales_aeat"),
+
+            # Asistente & Comunicación
+            ("comunicacion", "asistente_ia"): (22, "ASISTENTE & COMUNICACIÓN > CHAT IA & VOZ ALFONSO", "comunicacion", "asistente_ia"),
+            ("comunicacion", "correo_inteligente"): (23, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
+            ("comunicacion", "agenda_citas"): (24, "ASISTENTE & COMUNICACIÓN > AGENDA & CITAS PREVIAS", "comunicacion", "agenda_citas"),
+            ("comunicacion", "proyectos_sesiones"): (25, "ASISTENTE & COMUNICACIÓN > NAVEGADOR DE PROYECTOS", "comunicacion", "proyectos_sesiones"),
+
+            # Auditoría & Asesoría
+            ("cumplimiento", "declaracion_sif"): (26, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
+            ("cumplimiento", "auditoria_inmutabilidad"): (27, "AUDITORÍA & ASESORÍA > AUDITORÍA DE INMUTABILIDAD", "cumplimiento", "auditoria_inmutabilidad"),
+            ("cumplimiento", "panel_asesor"): (28, "AUDITORÍA & ASESORÍA > PANEL GESTORÍA & MULTI-INQUILINO", "cumplimiento", "panel_asesor"),
+
+            # Sistema & Configuración
+            ("sistema", "perfil_fiscal"): (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
+            ("sistema", "voz_modelos_ia"): (30, "SISTEMA & CONFIGURACIÓN > IA, VOZ & DISPOSITIVOS", "sistema", "voz_modelos_ia"),
+            ("sistema", "copias_seguridad"): (31, "SISTEMA & CONFIGURACIÓN > COPIAS DE SEGURIDAD & RESTAURACIÓN", "sistema", "copias_seguridad"),
+            ("sistema", "suscripcion_licencia"): (32, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
+
+            # Legacy string aliases
+            "Dashboard": (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
+            "Facturas": (3, "FACTURACIÓN & VENTAS > FACTURAS EMITIDAS (7XX)", "facturacion", "facturas_emitidas"),
+            "Gastos": (6, "GASTOS & COMPRAS > LIBRO DE GASTOS Y COMPRAS (6XX)", "gastos", "libro_gastos"),
+            "Bancos": (9, "BANCA & TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
+            "Impuestos": (12, "FISCALIDAD & AEAT > MODELOS TRIMESTRALES (303, 130)", "impuestos", "modelos_trimestrales"),
+            "Documentos": (19, "DOCUMENTOS & ARCHIVO > ARCHIVO FISCAL DIGITAL", "documentos", "archivo_fiscal"),
+            "Correo": (23, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
+            "Calendario": (14, "FISCALIDAD & AEAT > CALENDARIO FISCAL & VENCIMIENTOS", "impuestos", "calendario_fiscal"),
+            "Asesor": (26, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
+            "Configuración": (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal")
         }
-        if isinstance(target, str):
-            idx = mapping.get(target, 0)
-            view_name = target
-        else:
+
+        if isinstance(target, tuple):
+            info = mapping.get(target, (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"))
+            idx, title_text, cat_id, subcat_id = info
+        elif isinstance(target, str):
+            info = mapping.get(target, (0, f"● {target.upper()}", "dashboard", "resumen_ejecutivo"))
+            idx, title_text, cat_id, subcat_id = info
+        elif isinstance(target, int):
             idx = target
-            rev_map = {v: k for k, v in mapping.items()}
-            view_name = rev_map.get(idx, "Dashboard")
+            cat_id = "dashboard"
+            subcat_id = "resumen_ejecutivo"
+            title_text = "PANEL DE CONTROL"
+            for k, val in mapping.items():
+                if isinstance(k, tuple) and val[0] == idx:
+                    idx, title_text, cat_id, subcat_id = val
+                    break
+        else:
+            idx = 0
+            cat_id = "dashboard"
+            subcat_id = "resumen_ejecutivo"
+            title_text = "PANEL DE CONTROL > RESUMEN EJECUTIVO"
 
         if hasattr(self, 'central_stack'):
             self.central_stack.setCurrentIndex(idx)
 
-        titles = {
-            "Dashboard": "● DASHBOARD FISCAL & EMPRESARIAL",
-            "Facturas": "● FACTURAS EMITIDAS E INGRESOS (7XX)",
-            "Gastos": "● LIBRO DE GASTOS Y COMPRAS (6XX)",
-            "Bancos": "● BANCOS & CONCILIACIÓN PSD2",
-            "Impuestos": "● MODELOS FISCALES AEAT (303, 130)",
-            "Documentos": "● ARCHIVO FISCAL Y EXPEDIENTES",
-            "Correo": "● CORREO INTELIGENTE (ALFONSO MAIL)",
-            "Calendario": "● CALENDARIO FISCAL & VENCIMIENTOS",
-            "Asesor": "● DECLARACIÓN RESPONSABLE SIF (RD 1007/2023)",
-            "Configuración": "● CONFIGURACIÓN DEL SISTEMA Y PLAN"
-        }
         if hasattr(self, 'lbl_view_title'):
-            self.lbl_view_title.setText(titles.get(view_name, f"● {view_name.upper()}"))
+            self.lbl_view_title.setText(f"● {title_text}")
 
-        # Actualizar estilos en la barra lateral
-        if hasattr(self, 'menu_buttons'):
-            for item_name, btn in self.menu_buttons.items():
-                if item_name == view_name:
-                    btn.setStyleSheet("""
-                        QPushButton {
-                            background-color: rgba(0, 240, 255, 0.15);
-                            border: 1px solid rgba(0, 240, 255, 0.3);
-                            border-radius: 8px;
-                            color: #FFFFFF;
-                            text-align: left;
-                            font-weight: bold;
-                            font-size: 12px;
-                        }
-                    """)
-                else:
-                    btn.setStyleSheet("""
-                        QPushButton {
-                            background: transparent;
-                            border: none;
-                            color: #94A3B8;
-                            text-align: left;
-                            font-size: 12px;
-                        }
-                        QPushButton:hover {
-                            color: #FFFFFF;
-                            background-color: rgba(255, 255, 255, 0.03);
-                            border-radius: 8px;
-                        }
-                    """)
+        # Sincronizar selección en la barra lateral
+        if hasattr(self, 'sidebar') and hasattr(self.sidebar, 'set_active'):
+            self.sidebar.set_active(cat_id, subcat_id)
 
-        # Actualizar datos de la vista seleccionada
+        # Actualizar datos de la vista activa
         try:
             if idx == 0:
                 self.update_business_metrics()
-            elif idx == 1 and hasattr(self, 'view_invoices'):
+            elif idx == 1 and hasattr(self, 'view_kpis') and hasattr(self.view_kpis, 'load_kpi_data'):
+                self.view_kpis.load_kpi_data()
+            elif idx == 2 and hasattr(self, 'view_cashflow') and hasattr(self.view_cashflow, 'load_cash_flow_data'):
+                self.view_cashflow.load_cash_flow_data()
+            elif idx == 3 and hasattr(self, 'view_invoices'):
                 if hasattr(self.view_invoices, 'set_filter'):
                     self.view_invoices.set_filter("ingreso")
                 elif hasattr(self.view_invoices, 'load_ledger_data'):
                     self.view_invoices.load_ledger_data()
-            elif idx == 2 and hasattr(self, 'view_expenses'):
+            elif idx == 5 and hasattr(self, 'view_verifactu_audit') and hasattr(self.view_verifactu_audit, 'load_audit_data'):
+                self.view_verifactu_audit.load_audit_data()
+            elif idx == 6 and hasattr(self, 'view_expenses'):
                 if hasattr(self.view_expenses, 'set_filter'):
                     self.view_expenses.set_filter("gasto")
                 elif hasattr(self.view_expenses, 'load_ledger_data'):
                     self.view_expenses.load_ledger_data()
-            elif idx == 3 and hasattr(self, 'view_banks'):
-                if hasattr(self.view_banks, 'load_movements'):
-                    self.view_banks.load_movements()
-            elif idx == 4 and hasattr(self, 'view_taxes'):
-                if hasattr(self.view_taxes, 'calculate_taxes_live'):
-                    self.view_taxes.calculate_taxes_live()
-            elif idx == 5 and hasattr(self, 'view_docs'):
-                if hasattr(self.view_docs, 'refresh_file_list'):
-                    self.view_docs.refresh_file_list()
-            elif idx == 6 and hasattr(self, 'view_mail'):
-                if hasattr(self.view_mail, 'load_emails'):
-                    self.view_mail.load_emails()
-            elif idx == 7 and hasattr(self, 'view_calendar'):
-                if hasattr(self.view_calendar, 'load_events'):
-                    self.view_calendar.load_events()
+            elif idx == 9 and hasattr(self, 'view_banks') and hasattr(self.view_banks, 'load_movements'):
+                self.view_banks.load_movements()
+            elif idx in (12, 13) and hasattr(self, 'view_taxes') and hasattr(self.view_taxes, 'calculate_taxes_live'):
+                self.view_taxes.calculate_taxes_live()
+            elif idx == 14 and hasattr(self, 'view_calendar') and hasattr(self.view_calendar, 'load_events'):
+                self.view_calendar.load_events()
+            elif idx in (16, 17, 18) and hasattr(self, 'view_employees') and hasattr(self.view_employees, 'load_employees'):
+                self.view_employees.load_employees()
+            elif idx == 19 and hasattr(self, 'view_docs') and hasattr(self.view_docs, 'refresh_file_list'):
+                self.view_docs.refresh_file_list()
+            elif idx == 23 and hasattr(self, 'view_mail') and hasattr(self.view_mail, 'load_emails'):
+                self.view_mail.load_emails()
         except Exception as e:
-            print(f"Error actualizando vista {view_name}: {e}")
+            print(f"Error actualizando vista {title_text}: {e}")
 
     def show_dashboard(self):
         self.switch_to_view("Dashboard")

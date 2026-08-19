@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     BRIDGE_PORT: int = 8765
     BRIDGE_TIMEOUT: int = 30
 
-    TOOL_VALIDATION_MODE: str = "permissive"
+    TOOL_VALIDATION_MODE: str = "strict"
 
     # ── Memoria Vectorial (Fase 4) ──────────────────────────────────
     CHROMA_DB_PATH: str = "data/chroma"

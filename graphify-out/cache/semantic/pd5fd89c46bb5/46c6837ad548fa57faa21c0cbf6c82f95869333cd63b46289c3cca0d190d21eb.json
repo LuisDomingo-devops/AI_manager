@@ -1,0 +1,1 @@
+{"nodes": [{"id": "app_prompts_excel_system_excel_persona", "label": "Excel Agent System Prompt", "file_type": "concept", "source_file": "app/prompts/excel_system.txt", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

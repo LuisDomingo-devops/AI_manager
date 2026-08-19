@@ -7,7 +7,8 @@ from app.utils.encryption import encryptor
 class LedgerService:
     """
     Servicio de Contabilidad por Partida Doble (PGC) para Pymes.
-    Gestiona la creación de Asientos contables (Libro Diario), balances, Cuenta de Pérdidas y Ganancias y Cierre de Ejercicio.
+    Gestiona la creación de Asientos contables (Libro Diario), balances, 
+    Cuenta de Pérdidas y Ganancias y Cierre de Ejercicio.
     """
 
     @classmethod
@@ -153,9 +154,9 @@ class LedgerService:
                 
                 # Obtener apuntes de este asiento
                 cursor.execute("""
-                    SELECT l.account_code, a.name as account_name, l.debe, l.haber 
+                    SELECT l.account_code, COALESCE(a.name, 'Cuenta ' || l.account_code) as account_name, l.debe, l.haber 
                     FROM ledger_entries l
-                    JOIN pgc_accounts a ON l.account_code = a.code
+                    LEFT JOIN pgc_accounts a ON l.account_code = a.code
                     WHERE l.journal_entry_id = ?
                 """, (journal_id,))
                 apuntes = cursor.fetchall()
@@ -164,6 +165,7 @@ class LedgerService:
                 for ap in apuntes:
                     apuntes_list.append({
                         "cuenta": ap["account_code"],
+                        "account_code": ap["account_code"],
                         "nombre_cuenta": ap["account_name"],
                         "debe": float(encryptor.decrypt(ap["debe"])),
                         "haber": float(encryptor.decrypt(ap["haber"]))

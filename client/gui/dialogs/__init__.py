@@ -15,5 +15,19 @@ from client.gui.dialogs.widgets import (
     AlfonsoLedgerDialog,
     AlfonsoDocumentViewerDialog,
     AlfonsoArchiveBrowserDialog,
-    AlfonsoKPIDashboardDialog
+    AlfonsoKPIDashboardDialog,
+    AlfonsoInitiateTransferDialog,
+    AlfonsoManualEntryDialog,
+    ProjectNavigatorDialog,
+    AlertsWidget
+)
+from client.gui.dialogs.specialized_views import (
+    AlfonsoCashFlowWidget,
+    AlfonsoInvoiceEmitterWidget,
+    AlfonsoPayrollWidget,
+    AlfonsoVerifactuAuditWidget,
+    AlfonsoBoeWidget,
+    AlfonsoOfficialBooksWidget,
+    AlfonsoBackupWidget,
+    AlfonsoTenantAdvisorWidget
 )

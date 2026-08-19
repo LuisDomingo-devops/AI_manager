@@ -29,35 +29,91 @@ class VerifactuService:
         """Inicializa la tabla de facturas emitidas bajo regulación Verifactu."""
         import sqlite3
         with _get_connection() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS verifactu_invoices (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    invoice_number  TEXT NOT NULL UNIQUE,
-                    date_of_issue   TEXT NOT NULL,
-                    issuer_nif      TEXT NOT NULL,
-                    receiver_nif    TEXT NOT NULL,
-                    base_imponible  REAL NOT NULL,
-                    iva_amount      REAL NOT NULL,
-                    total_amount    REAL NOT NULL,
-                    prev_hash       TEXT,
-                    current_hash    TEXT NOT NULL,
-                    signature       TEXT,
-                    status          TEXT NOT NULL DEFAULT 'ALTA',
-                    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-            try:
-                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN status TEXT DEFAULT 'ALTA'")
-            except sqlite3.OperationalError:
-                pass
-            try:
-                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN delivery_status TEXT DEFAULT 'PENDIENTE'")
-            except sqlite3.OperationalError:
-                pass
-            try:
-                conn.execute("ALTER TABLE verifactu_invoices ADD COLUMN delivery_error TEXT")
-            except sqlite3.OperationalError:
-                pass
+            cursor = conn.cursor()
+            cols_info = cursor.execute("PRAGMA table_info(verifactu_invoices)").fetchall()
+            col_names = [c["name"] for c in cols_info] if cols_info else []
+
+            if cols_info and "invoice_hash" in col_names and "current_hash" not in col_names:
+                # Migración limpia de tabla legacy
+                conn.execute("""
+                    CREATE TABLE verifactu_invoices_migration (
+                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                        invoice_number  TEXT NOT NULL UNIQUE,
+                        date_of_issue   TEXT NOT NULL,
+                        issuer_nif      TEXT NOT NULL,
+                        receiver_nif    TEXT NOT NULL DEFAULT '',
+                        base_imponible  REAL NOT NULL DEFAULT 0.0,
+                        iva_amount      REAL NOT NULL DEFAULT 0.0,
+                        total_amount    REAL NOT NULL DEFAULT 0.0,
+                        prev_hash       TEXT,
+                        current_hash    TEXT NOT NULL,
+                        signature       TEXT,
+                        status          TEXT NOT NULL DEFAULT 'ALTA',
+                        delivery_status TEXT DEFAULT 'PENDIENTE',
+                        delivery_error  TEXT,
+                        csv             TEXT,
+                        aeat_error_code TEXT,
+                        aeat_error_desc TEXT,
+                        aeat_response_raw TEXT,
+                        retry_count     INTEGER DEFAULT 0,
+                        last_attempt_at TEXT,
+                        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO verifactu_invoices_migration (
+                        id, invoice_number, date_of_issue, issuer_nif, total_amount, prev_hash, current_hash, signature, status, created_at
+                    ) SELECT id, invoice_number, date_of_issue, issuer_nif, total_amount, previous_hash, invoice_hash, signed_xml, status, created_at FROM verifactu_invoices
+                """)
+                conn.execute("DROP TABLE verifactu_invoices")
+                conn.execute("ALTER TABLE verifactu_invoices_migration RENAME TO verifactu_invoices")
+            else:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS verifactu_invoices (
+                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                        invoice_number  TEXT NOT NULL UNIQUE,
+                        date_of_issue   TEXT NOT NULL,
+                        issuer_nif      TEXT NOT NULL,
+                        receiver_nif    TEXT NOT NULL,
+                        base_imponible  REAL NOT NULL,
+                        iva_amount      REAL NOT NULL,
+                        total_amount    REAL NOT NULL,
+                        prev_hash       TEXT,
+                        current_hash    TEXT NOT NULL,
+                        signature       TEXT,
+                        status          TEXT NOT NULL DEFAULT 'ALTA',
+                        delivery_status TEXT DEFAULT 'PENDIENTE',
+                        delivery_error  TEXT,
+                        csv             TEXT,
+                        aeat_error_code TEXT,
+                        aeat_error_desc TEXT,
+                        aeat_response_raw TEXT,
+                        retry_count     INTEGER DEFAULT 0,
+                        last_attempt_at TEXT,
+                        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+                    )
+                """)
+                for col, col_type in [
+                    ("receiver_nif", "TEXT DEFAULT ''"),
+                    ("base_imponible", "REAL DEFAULT 0.0"),
+                    ("iva_amount", "REAL DEFAULT 0.0"),
+                    ("prev_hash", "TEXT"),
+                    ("current_hash", "TEXT DEFAULT ''"),
+                    ("signature", "TEXT"),
+                    ("status", "TEXT DEFAULT 'ALTA'"),
+                    ("delivery_status", "TEXT DEFAULT 'PENDIENTE'"),
+                    ("delivery_error", "TEXT"),
+                    ("csv", "TEXT"),
+                    ("aeat_error_code", "TEXT"),
+                    ("aeat_error_desc", "TEXT"),
+                    ("aeat_response_raw", "TEXT"),
+                    ("retry_count", "INTEGER DEFAULT 0"),
+                    ("last_attempt_at", "TEXT")
+                ]:
+                    try:
+                        conn.execute(f"ALTER TABLE verifactu_invoices ADD COLUMN {col} {col_type}")
+                    except sqlite3.OperationalError:
+                        pass
                 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sif_event_log (
@@ -83,6 +139,8 @@ class VerifactuService:
                         cls.process_pending_deliveries()
                     except Exception:
                         pass
+            t = threading.Thread(target=run_worker, daemon=True)
+            t.start()
             t = threading.Thread(target=run_worker, daemon=True)
             t.start()
 
@@ -195,6 +253,17 @@ class VerifactuService:
         Soporta facturas ordinarias (F1) y rectificativas (R1-R5).
         """
         with cls._lock:
+            # 1. Validación fiscal determinista previa (evita que datos corruptos entren a la cadena)
+            from app.domain.services.fiscal_validator import validate_invoice_for_sif
+            validation = validate_invoice_for_sif(invoice_data)
+            if not validation.is_valid:
+                err_msg = f"Validación fiscal determinista fallida: {'; '.join(validation.errors)}"
+                app_logger.warning("Factura %s no superó la validación fiscal: %s", invoice_data.get("invoice_number"), validation.errors)
+                raise ValueError(err_msg)
+            
+            if validation.sanitized_data:
+                invoice_data.update(validation.sanitized_data)
+
             # Normalizar NIF del emisor y receptor
             invoice_data["issuer_nif"] = str(invoice_data.get("issuer_nif", "")).strip().upper()
             invoice_data["receiver_nif"] = str(invoice_data.get("receiver_nif", "")).strip().upper()
@@ -325,8 +394,8 @@ class VerifactuService:
                 conn.execute("""
                     INSERT INTO verifactu_invoices (
                         invoice_number, date_of_issue, issuer_nif, receiver_nif,
-                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ALTA')
+                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status, delivery_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ALTA', 'PENDIENTE')
                 """, (
                     invoice_data["invoice_number"],
                     invoice_data["date_of_issue"],
@@ -351,18 +420,21 @@ class VerifactuService:
             # Envío inmediato (real/simulado) al Sistema Informático de Facturación (SIF) de la AEAT
             aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
 
-            # Determinar estado de envío contable
-            status_map = {
-                "accepted": "ENVIADO",
-                "offline_simulated": "PENDIENTE"
-            }
-            delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
-            delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+            # Determinar estado de envío contable y persistir trazabilidad completa
+            delivery_status = aeat_response.get("delivery_status", "ERROR")
+            csv = aeat_response.get("csv")
+            aeat_err_code = aeat_response.get("error_code")
+            aeat_err_desc = aeat_response.get("error_desc") or aeat_response.get("error") or aeat_response.get("message")
+            raw_response = aeat_response.get("raw_response")
 
             with _get_connection() as conn:
                 conn.execute(
-                    "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
-                    (delivery_status, delivery_error, invoice_data["invoice_number"])
+                    """
+                    UPDATE verifactu_invoices 
+                    SET delivery_status = ?, delivery_error = ?, csv = ?, aeat_error_code = ?, aeat_error_desc = ?, aeat_response_raw = ?, last_attempt_at = datetime('now') 
+                    WHERE invoice_number = ?
+                    """,
+                    (delivery_status, aeat_err_desc, csv, aeat_err_code, aeat_err_desc, raw_response, invoice_data["invoice_number"])
                 )
                 conn.commit()
 
@@ -372,6 +444,8 @@ class VerifactuService:
                 "prev_hash": prev_hash,
                 "current_hash": current_hash,
                 "signature": real_sig_base64,
+                "csv": csv,
+                "delivery_status": delivery_status,
                 "aeat_delivery": aeat_response
             }
 
@@ -496,8 +570,8 @@ class VerifactuService:
                 conn.execute("""
                     INSERT INTO verifactu_invoices (
                         invoice_number, date_of_issue, issuer_nif, receiver_nif,
-                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ANULADA')
+                        base_imponible, iva_amount, total_amount, prev_hash, current_hash, signature, status, delivery_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ANULADA', 'PENDIENTE')
                 """, (
                     invoice_number_local,
                     row["date_of_issue"],
@@ -521,18 +595,20 @@ class VerifactuService:
 
             aeat_response = cls.send_to_aeat_sif(xml_firmado_str)
 
-            # Determinar estado de envío contable
-            status_map = {
-                "accepted": "ENVIADO",
-                "offline_simulated": "PENDIENTE"
-            }
-            delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
-            delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+            delivery_status = aeat_response.get("delivery_status", "ERROR")
+            csv = aeat_response.get("csv")
+            aeat_err_code = aeat_response.get("error_code")
+            aeat_err_desc = aeat_response.get("error_desc") or aeat_response.get("error") or aeat_response.get("message")
+            raw_response = aeat_response.get("raw_response")
 
             with _get_connection() as conn:
                 conn.execute(
-                    "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
-                    (delivery_status, delivery_error, invoice_number_local)
+                    """
+                    UPDATE verifactu_invoices 
+                    SET delivery_status = ?, delivery_error = ?, csv = ?, aeat_error_code = ?, aeat_error_desc = ?, aeat_response_raw = ?, last_attempt_at = datetime('now') 
+                    WHERE invoice_number = ?
+                    """,
+                    (delivery_status, aeat_err_desc, csv, aeat_err_code, aeat_err_desc, raw_response, invoice_number_local)
                 )
                 conn.commit()
 
@@ -542,22 +618,151 @@ class VerifactuService:
                 "prev_hash": prev_hash,
                 "current_hash": current_hash,
                 "signature": real_sig_base64,
+                "csv": csv,
+                "delivery_status": delivery_status,
                 "aeat_delivery": aeat_response
             }
+
+    @classmethod
+    def parse_aeat_soap_response(cls, response_xml: str, http_status_code: int) -> Dict[str, Any]:
+        """
+        Deserializa e interpreta la respuesta SOAP reglamentaria de la AEAT (VERI*FACTU / SIF).
+        Extrae EstadoEnvio, EstadoRegistro, Código/Descripción de Error y CSV oficial.
+        Distingue rigurosamente entre aceptación fiscal y rechazo, eliminando la falsa equivalencia con HTTP 200.
+        """
+        from lxml import etree
+
+        result = {
+            "http_code": http_status_code,
+            "code": http_status_code,
+            "status": "error",
+            "delivery_status": "ERROR",
+            "estado_envio": None,
+            "estado_registro": None,
+            "error_code": None,
+            "error_desc": None,
+            "error": None,
+            "csv": None,
+            "es_duplicado": False,
+            "message": None,
+            "raw_response": response_xml
+        }
+
+        if not response_xml or not response_xml.strip():
+            result["status"] = "incident" if http_status_code >= 500 else "rejected"
+            result["delivery_status"] = "INCIDENCIA_RED" if http_status_code >= 500 else "ERROR"
+            result["error"] = f"Respuesta vacía de la AEAT (HTTP {http_status_code})"
+            result["message"] = result["error"]
+            return result
+
+        try:
+            root = etree.fromstring(response_xml.encode("utf-8"))
+            
+            # 1. Comprobar si es un SOAP Fault
+            faults = root.xpath("//*[local-name()='Fault']")
+            if faults:
+                fault = faults[0]
+                fault_code_elem = fault.xpath(".//*[local-name()='faultcode']")
+                fault_string_elem = fault.xpath(".//*[local-name()='faultstring']")
+                f_code = fault_code_elem[0].text if fault_code_elem else "SOAP_FAULT"
+                f_str = fault_string_elem[0].text if fault_string_elem else "Error SOAP en servidor AEAT"
+                result["status"] = "incident" if http_status_code >= 500 else "rejected"
+                result["delivery_status"] = "INCIDENCIA_RED" if http_status_code >= 500 else "RECHAZADO"
+                result["error_code"] = f_code
+                result["error_desc"] = f_str
+                result["error"] = f_str
+                result["message"] = f"SOAP Fault ({f_code}): {f_str}"
+                return result
+
+            # 2. Extraer EstadoEnvio
+            estado_envio_elem = root.xpath("//*[local-name()='EstadoEnvio']")
+            if estado_envio_elem and estado_envio_elem[0].text:
+                result["estado_envio"] = estado_envio_elem[0].text.strip()
+
+            # 3. Extraer CSV global o por línea
+            csv_elem = root.xpath("//*[local-name()='CSV']")
+            if csv_elem and csv_elem[0].text:
+                result["csv"] = csv_elem[0].text.strip()
+
+            # 4. Extraer datos de la línea de respuesta
+            lineas = root.xpath("//*[local-name()='RespuestaLinea'] | //*[local-name()='RespuestaRegistro']")
+            if lineas:
+                linea = lineas[0]
+                estado_reg_elem = linea.xpath(".//*[local-name()='EstadoRegistro']")
+                cod_err_elem = linea.xpath(".//*[local-name()='CodigoErrorRegistro']")
+                desc_err_elem = linea.xpath(".//*[local-name()='DescripcionErrorRegistro']")
+                csv_linea_elem = linea.xpath(".//*[local-name()='CSV']")
+                duplicado_elem = linea.xpath(".//*[local-name()='RegistroDuplicado']")
+
+                if estado_reg_elem and estado_reg_elem[0].text:
+                    result["estado_registro"] = estado_reg_elem[0].text.strip()
+                if cod_err_elem and cod_err_elem[0].text:
+                    result["error_code"] = cod_err_elem[0].text.strip()
+                if desc_err_elem and desc_err_elem[0].text:
+                    result["error_desc"] = desc_err_elem[0].text.strip()
+                    result["error"] = result["error_desc"]
+                if csv_linea_elem and csv_linea_elem[0].text:
+                    result["csv"] = csv_linea_elem[0].text.strip()
+                if duplicado_elem and duplicado_elem[0].text:
+                    result["es_duplicado"] = duplicado_elem[0].text.strip().upper() == "S"
+
+            # 5. Mapear a estado formal del SIF
+            reg_status = result["estado_registro"] or result["estado_envio"]
+            if reg_status in ("Aceptado", "Correcto"):
+                result["status"] = "accepted"
+                result["delivery_status"] = "ACEPTADO"
+                result["message"] = f"Registro aceptado por la AEAT. CSV: {result['csv'] or 'Asignado'}"
+            elif reg_status in ("AceptadoConErrores", "ParcialmenteCorrecto"):
+                result["status"] = "accepted_with_errors"
+                result["delivery_status"] = "ACEPTADO_CON_ERRORES"
+                result["message"] = f"Registro aceptado con advertencias fiscales por la AEAT. Código: {result['error_code']}, Motivo: {result['error_desc']}"
+            elif reg_status in ("Rechazado", "Incorrecto"):
+                result["status"] = "rejected"
+                result["delivery_status"] = "RECHAZADO"
+                result["message"] = f"Registro RECHAZADO por la AEAT. Código: {result['error_code']}, Motivo: {result['error_desc']}"
+            else:
+                if http_status_code == 200:
+                    result["status"] = "unknown_soap_status"
+                    result["delivery_status"] = "RECHAZADO"
+                    result["message"] = f"Respuesta SOAP inesperada o sin estado de registro claro."
+                elif http_status_code >= 500:
+                    result["status"] = "incident"
+                    result["delivery_status"] = "INCIDENCIA_RED"
+                    result["error"] = response_xml[:200]
+                    result["message"] = f"Incidencia temporal en servidores de la AEAT (HTTP {http_status_code}): {response_xml[:200]}"
+                else:
+                    result["status"] = "rejected"
+                    result["delivery_status"] = "ERROR"
+                    result["error"] = response_xml[:200]
+                    result["message"] = f"Error en petición a la AEAT (HTTP {http_status_code}): {response_xml[:200]}"
+
+        except Exception as e:
+            app_logger.error(f"Error parseando respuesta SOAP de la AEAT: {e}")
+            result["status"] = "rejected" if http_status_code in (400, 500) else "incident"
+            result["delivery_status"] = "INCIDENCIA_RED" if http_status_code >= 500 else "ERROR"
+            result["error_desc"] = str(e)
+            result["error"] = response_xml if response_xml else str(e)
+            result["message"] = f"Error interpretando XML SOAP devuelto por la AEAT: {str(e)}"
+
+        return result
 
     @classmethod
     def send_to_aeat_sif(cls, xml_content: str) -> Dict[str, Any]:
         """
         Envía el XML firmado del registro al endpoint SOAP oficial de VERIFACTU de la AEAT.
         Si no hay certificados en el perfil fiscal de usuario, retorna un estado offline simulado.
+        Interpreta rigurosamente el sobre SOAP devuelto por la AEAT.
         """
         import httpx
         import tempfile
         from cryptography.hazmat.primitives.serialization import pkcs12
         from app.utils.encryption import encryptor
 
-        # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas)
-        AEAT_URL = "https://prewww10.aeat.es/wlpl/PORT-SSII/ws/fe/RegFactuSistemaFacturacionSOAP"
+        # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas TIKE-CONT)
+        AEAT_URL = os.environ.get(
+            "ALFONSO_AEAT_URL",
+            "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+        )
         
         cert_path = None
         key_path = None
@@ -634,17 +839,37 @@ class VerifactuService:
             if cert_path and key_path and os.path.exists(cert_path):
                 try:
                     with httpx.Client(cert=(cert_path, key_path), verify=True) as client:
-                        response = client.post(AEAT_URL, content=soap_envelope, headers=headers, timeout=10.0)
-                        if response.status_code == 200:
-                            return {"status": "accepted", "code": 200, "message": "Registro aceptado por la AEAT."}
-                        else:
-                            return {"status": "rejected", "code": response.status_code, "error": response.text}
+                        response = client.post(AEAT_URL, content=soap_envelope, headers=headers, timeout=15.0)
+                        return cls.parse_aeat_soap_response(response.text, response.status_code)
+                except httpx.ConnectError as e:
+                    return {
+                        "status": "incident",
+                        "delivery_status": "INCIDENCIA_RED",
+                        "code": 503,
+                        "error": str(e),
+                        "message": f"Incidencia de conexión de red con la AEAT: {str(e)}"
+                    }
+                except httpx.TimeoutException as e:
+                    return {
+                        "status": "incident",
+                        "delivery_status": "INCIDENCIA_RED",
+                        "code": 504,
+                        "error": str(e),
+                        "message": f"Timeout en la conexión con la AEAT: {str(e)}"
+                    }
                 except Exception as e:
-                    return {"status": "incident", "message": f"Incidencia de red o TLS en el envío a la AEAT: {str(e)}"}
+                    return {
+                        "status": "incident",
+                        "delivery_status": "INCIDENCIA_RED",
+                        "code": 500,
+                        "error": str(e),
+                        "message": f"Incidencia TLS o transporte en el envío a la AEAT: {str(e)}"
+                    }
             
             # Simulación de pruebas offline para evitar falsas aceptaciones
             return {
                 "status": "offline_simulated",
+                "delivery_status": "PENDIENTE",
                 "code": 202,
                 "message": "ATENCIÓN: Registro firmado y guardado localmente, pero PENDIENTE de envío a la AEAT por falta de certificado cualificado en el perfil."
             }
@@ -664,18 +889,25 @@ class VerifactuService:
     @classmethod
     def process_pending_deliveries(cls) -> None:
         """
-        Escanea y reintenta el envío de facturas que estén en estado PENDIENTE o ERROR.
+        Escanea y reintenta el envío de facturas que estén en estado PENDIENTE, INCIDENCIA_RED o ERROR.
+        Aplica control de reintentos y backoff para no sobrecargar los servicios de la AEAT.
         """
         with cls._lock:
             cls.init_verifactu_schema()
             with _get_connection() as conn:
                 rows = conn.execute(
-                    "SELECT invoice_number, status FROM verifactu_invoices WHERE delivery_status IN ('PENDIENTE', 'ERROR')"
+                    """
+                    SELECT invoice_number, status, retry_count 
+                    FROM verifactu_invoices 
+                    WHERE delivery_status IN ('PENDIENTE', 'INCIDENCIA_RED', 'ERROR') 
+                      AND (retry_count IS NULL OR retry_count < 10)
+                    """
                 ).fetchall()
             
             for row in rows:
                 invoice_num = row["invoice_number"]
                 is_anulacion = row["status"] == "ANULADA"
+                current_retries = (row["retry_count"] or 0) + 1
                 
                 # Cargar el XML firmado guardado localmente
                 xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
@@ -689,17 +921,20 @@ class VerifactuService:
                         
                         aeat_response = cls.send_to_aeat_sif(xml_content)
                         
-                        status_map = {
-                            "accepted": "ENVIADO",
-                            "offline_simulated": "PENDIENTE"
-                        }
-                        delivery_status = status_map.get(aeat_response.get("status"), "ERROR")
-                        delivery_error = aeat_response.get("error") or aeat_response.get("message") if delivery_status == "ERROR" else None
+                        delivery_status = aeat_response.get("delivery_status", "ERROR")
+                        csv = aeat_response.get("csv")
+                        aeat_err_code = aeat_response.get("error_code")
+                        aeat_err_desc = aeat_response.get("error_desc") or aeat_response.get("error") or aeat_response.get("message")
+                        raw_response = aeat_response.get("raw_response")
                         
                         with _get_connection() as conn:
                             conn.execute(
-                                "UPDATE verifactu_invoices SET delivery_status = ?, delivery_error = ? WHERE invoice_number = ?",
-                                (delivery_status, delivery_error, invoice_num)
+                                """
+                                UPDATE verifactu_invoices 
+                                SET delivery_status = ?, delivery_error = ?, csv = ?, aeat_error_code = ?, aeat_error_desc = ?, aeat_response_raw = ?, retry_count = ?, last_attempt_at = datetime('now') 
+                                WHERE invoice_number = ?
+                                """,
+                                (delivery_status, aeat_err_desc, csv, aeat_err_code, aeat_err_desc, raw_response, current_retries, invoice_num)
                             )
                             conn.commit()
                     except Exception as err:

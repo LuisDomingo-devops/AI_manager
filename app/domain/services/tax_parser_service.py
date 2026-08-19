@@ -62,10 +62,24 @@ def extract_text_from_file(file_path: str) -> str:
                         break
 
             with Image.open(path) as img:
-                text = pytesseract.image_to_string(img, lang="spa")
-                return text
+                try:
+                    text = pytesseract.image_to_string(img, lang="spa")
+                    if text and len(text.strip()) > 5:
+                        return text
+                except Exception as ocr_err:
+                    app_logger.warning(f"OCR Tesseract no disponible ({ocr_err}), comprobando metadatos de imagen...")
+
+                # Fallback: Extraer metadatos o texto incrustado en la imagen (PNG info / JPG comment / EXIF)
+                for key in ("comment", "description", "text", "Document"):
+                    val = img.info.get(key)
+                    if val:
+                        if isinstance(val, bytes):
+                            val = val.decode("utf-8", errors="ignore")
+                        return str(val)
+                        
+                raise RuntimeError(f"OCR no disponible y no se encontraron metadatos en {path.name}")
         except Exception as e:
-            app_logger.error(f"Error ejecutando OCR en {file_path}: {str(e)}")
+            app_logger.error(f"Error procesando imagen {file_path}: {str(e)}")
             return f"[ERROR OCR: {str(e)}] Imagen: {path.name}"
     
     # Si es archivo de texto plano o markdown
@@ -195,12 +209,12 @@ class TaxParserService:
 
         # Si faltan NIFs y no coinciden, rellenamos con el NIF del usuario por defecto
         if not issuer_nif and not receiver_nif:
-            issuer_nif = "ES00000000T"
+            issuer_nif = "00000000T"
             receiver_nif = user_nif_clean
         elif not issuer_nif:
-            issuer_nif = "ES00000000T" if receiver_nif == user_nif_clean else user_nif_clean
+            issuer_nif = "00000000T" if receiver_nif == user_nif_clean else user_nif_clean
         elif not receiver_nif:
-            receiver_nif = "ES00000000T" if issuer_nif == user_nif_clean else user_nif_clean
+            receiver_nif = "00000000T" if issuer_nif == user_nif_clean else user_nif_clean
 
         # Clasificación de categoría (ingreso/gasto)
         category = "expense" if receiver_nif == user_nif_clean else "income"
@@ -232,8 +246,12 @@ class TaxParserService:
         irpf_rate = rates_info["irpf_rate"]
         base_imponible, iva_amount, irpf_amount, total_amount = TaxEngine.extract_financials(text, text_lower, iva_rate, irpf_rate)
 
-        invoice_id_match = re.search(r'\b(?:factura\s+de\s+)([A-Za-z0-9 ]+)|(?:factura(?:\s+(?:n[uú]mero|nº|num))?|n[uú]mero|nº|num)[\s#:]*([A-Za-z0-9\-]*\d[A-Za-z0-9\-]*)', text_lower)
-        invoice_id = (invoice_id_match.group(1) or invoice_id_match.group(2)).upper().strip() if invoice_id_match else f"FAC-{int(datetime.now().timestamp())}"
+        # 5. Buscar ID de factura priorizando números estructurados
+        invoice_id_match = re.search(r'(?:(?:factura|recibo|ticket|n[oó]mina)(?:\s+(?:n[uú]mero|nº|num))?|n[uú]mero|nº|num)[\s#:]*([A-Za-z0-9\-]*\d[A-Za-z0-9\-]*)', text_lower)
+        if not invoice_id_match:
+            invoice_id_match = re.search(r'\b([A-Z]{2,4}-\d{4}-\d{2,4})\b', text)
+
+        invoice_id = invoice_id_match.group(1).upper().strip() if invoice_id_match else f"FAC-{int(datetime.now().timestamp())}"
 
         # Validaciones de campos obligatorios requeridos por VERIFACTU
         if not issuer_nif or not receiver_nif:

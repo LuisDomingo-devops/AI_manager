@@ -93,14 +93,34 @@ class TaxEngine:
 
     @classmethod
     def parse_number(cls, val_str: str) -> float:
-        """Limpia y parsea una cadena de texto en un número de coma flotante."""
-        val_str = val_str.replace("€", "").replace("$", "").strip()
-        if "," in val_str and "." in val_str:
-            # Formato europeo: 1.234,56 -> 1234.56
-            val_str = val_str.replace(".", "").replace(",", ".")
-        elif "," in val_str:
-            # Formato 1234,56 -> 1234.56
-            val_str = val_str.replace(",", ".")
+        """Limpia y parsea una cadena de texto en un número de coma flotante (soporta formatos ES y EN)."""
+        val_str = re.sub(r'[^\d.,]', '', val_str).strip()
+        if not val_str:
+            return 0.0
+
+        last_dot = val_str.rfind('.')
+        last_comma = val_str.rfind(',')
+
+        if last_dot != -1 and last_comma != -1:
+            if last_dot > last_comma:
+                # Formato anglosajón: 1,234.56 -> eliminar comas
+                val_str = val_str.replace(',', '')
+            else:
+                # Formato europeo: 1.234,56 -> eliminar puntos y cambiar coma por punto
+                val_str = val_str.replace('.', '').replace(',', '.')
+        elif last_comma != -1:
+            # Solo comas: si hay varias (1,000,000) o si tiene 2 decimales (1234,56)
+            parts = val_str.split(',')
+            if len(parts) == 2:
+                val_str = val_str.replace(',', '.')
+            else:
+                val_str = val_str.replace(',', '')
+        elif last_dot != -1:
+            # Solo puntos: si tiene 3 dígitos al final y más partes (1.000)
+            parts = val_str.split('.')
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3 and int(parts[0]) > 0):
+                val_str = val_str.replace('.', '')
+
         try:
             return float(val_str)
         except ValueError:
@@ -221,32 +241,41 @@ class TaxEngine:
                 val = cls.parse_number(m.group(0))
                 if val > 0:
                     numbers.append(val)
-            if numbers:
-                total_amount = max(numbers)
-                base_imponible = round(total_amount / (1 + (iva_rate / 100.0)), 2)
+        # Buscar importe explícito de retención IRPF si existe
+        explicit_irpf = 0.0
+        irpf_amt_matches = re.findall(r'(?:retenci[oó]n(?:[\s\w%()]+)?|irpf(?:[\s\w%()]+)?)[\s:]*[-]?([0-9.,]+)\s*(?:€|eur|\b)', text_lower)
+        if irpf_amt_matches:
+            for m in reversed(irpf_amt_matches):
+                val = cls.parse_number(m)
+                if val > 0:
+                    explicit_irpf = val
+                    break
 
-        return cls.recalculate_and_validate(base_imponible, iva_rate, irpf_rate, total_amount)
+        return cls.recalculate_and_validate(base_imponible, iva_rate, irpf_rate, total_amount, explicit_irpf=explicit_irpf)
 
     @classmethod
-    def recalculate_and_validate(cls, base_imponible: float, iva_rate: float, irpf_rate: float, total_amount: float) -> Tuple[float, float, float, float]:
+    def recalculate_and_validate(cls, base_imponible: float, iva_rate: float, irpf_rate: float, total_amount: float, explicit_irpf: float = 0.0) -> Tuple[float, float, float, float]:
         """
         Recalcula los importes para asegurar consistencia aritmética estricta.
         """
         iva_amount = 0.0
-        irpf_amount = 0.0
+        irpf_amount = explicit_irpf if explicit_irpf > 0 else 0.0
 
         if base_imponible > 0.0 and total_amount == 0.0:
             iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+            if irpf_amount == 0.0:
+                irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
             total_amount = round(base_imponible + iva_amount - irpf_amount, 2)
         elif total_amount > 0.0 and base_imponible > 0.0:
             iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+            if irpf_amount == 0.0:
+                irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
         elif total_amount > 0.0 and base_imponible == 0.0:
             divisor = 1.0 + (iva_rate / 100.0) - (irpf_rate / 100.0)
             base_imponible = round(total_amount / divisor, 2)
             iva_amount = round(base_imponible * (iva_rate / 100.0), 2)
-            irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
+            if irpf_amount == 0.0:
+                irpf_amount = round(base_imponible * (irpf_rate / 100.0), 2)
 
         # Reglas aritméticas estrictas
         expected_total = round(base_imponible + iva_amount - irpf_amount, 2)

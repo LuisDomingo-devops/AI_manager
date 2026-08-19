@@ -46,13 +46,23 @@ def get_or_create_key() -> bytes:
         except Exception:
             pass
 
-    # 3. Generar nueva clave y advertir en los logs
+    # 3. Verificación de seguridad para entorno de producción (Fail-Fast)
+    alfonso_env = os.getenv("ALFONSO_ENV", "").strip().lower()
+    if alfonso_env == "production":
+        raise RuntimeError(
+            "FATAL EN PRODUCCIÓN: No se ha configurado 'DATABASE_ENCRYPTION_KEY'. "
+            "En entorno de producción está terminantemente prohibido generar claves de cifrado temporales en memoria "
+            "debido al riesgo crítico de pérdida permanente de acceso a datos cifrados tras reinicio del servicio. "
+            "Por favor, configure la variable de entorno DATABASE_ENCRYPTION_KEY con una clave base64 válida de 32 bytes."
+        )
+
+    # 4. Generar nueva clave y advertir en los logs (solo permitido en desarrollo/local)
     new_key = os.urandom(32)
     try:
         from app.utils.logger import app_logger
         new_key_b64 = base64.b64encode(new_key).decode('utf-8')
         app_logger.warning(
-            "⚠️ ALERTA DE SEGURIDAD: Se ha generado una clave de cifrado temporal. "
+            "⚠️ ALERTA DE SEGURIDAD: Se ha generado una clave de cifrado temporal de desarrollo. "
             "Para un despliegue portable y seguro en producción, añade la siguiente clave "
             "a tu archivo .env como DATABASE_ENCRYPTION_KEY:\n%s", new_key_b64
         )

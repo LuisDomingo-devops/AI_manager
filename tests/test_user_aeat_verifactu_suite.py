@@ -99,7 +99,7 @@ def test_verifactu_real_certs_flow():
     with _get_connection() as conn:
         row = conn.execute("SELECT * FROM verifactu_invoices WHERE invoice_number = 'SUITE-FAC-001'").fetchone()
         assert row is not None
-        assert row["delivery_status"] in ("ENVIADO", "PENDIENTE", "ERROR", "INCIDENT")
+        assert row["delivery_status"] in ("ENVIADO", "PENDIENTE", "ERROR", "INCIDENT", "INCIDENCIA_RED", "ACEPTADO", "RECHAZADO")
         
     # Verificar que el XML generado contenga la firma XMLDSig envelopada
     xml_dir = PROJECT_ROOT / "data" / "xml_invoices"
