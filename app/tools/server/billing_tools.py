@@ -910,7 +910,10 @@ async def generate_invoice_pdf(
                     "receiver_nif": client_nif,
                     "receiver_name": client_name,
                     "base_imponible": amount,
+                    "iva_rate": iva_rate,
                     "iva_amount": iva_amount,
+                    "irpf_rate": irpf_rate,
+                    "irpf_amount": irpf_amount,
                     "total_amount": total_amount,
                     "tipo_factura": "F1"
                 }
@@ -1721,7 +1724,10 @@ async def create_rectificativa_invoice(
                     "receiver_nif": client_nif,
                     "receiver_name": client_name,
                     "base_imponible": rect_amount,
+                    "iva_rate": iva_rate,
                     "iva_amount": iva_amount,
+                    "irpf_rate": irpf_rate,
+                    "irpf_amount": irpf_amount,
                     "total_amount": total_amount,
                     "tipo_factura": rectificativa_type,
                     "tipo_rectificativa": "I",

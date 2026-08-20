@@ -222,6 +222,172 @@ class BankService:
             return cursor.lastrowid
 
     @classmethod
+    def parse_csv_statement(cls, filepath: str, connection_id: int = None) -> int:
+        """
+        Parser universal de extractos bancarios en CSV (Wise, Revolut, Stripe, Santander, BBVA, etc.).
+        Detecta delimitadores automáticamente y mapea columnas de fecha, importe, concepto y referencia.
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Archivo de extracto CSV no encontrado: {filepath}")
+
+        import csv
+        
+        # Leer líneas probando distintas codificaciones
+        content = ""
+        for enc in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
+            try:
+                with open(filepath, "r", encoding=enc) as f:
+                    content = f.read()
+                break
+            except Exception:
+                continue
+                
+        if not content:
+            return 0
+
+        lines = [line for line in content.splitlines() if line.strip()]
+        if not lines:
+            return 0
+
+        # Detectar delimitador
+        first_line = lines[0]
+        delimiter = ","
+        for candidate in (";", "\t", ","):
+            if candidate in first_line:
+                delimiter = candidate
+                break
+
+        reader = csv.DictReader(lines, delimiter=delimiter)
+        if not reader.fieldnames:
+            return 0
+
+        # Mapear nombres de columnas
+        headers_lower = {name.strip().lower(): name for name in reader.fieldnames if name}
+        
+        def find_col(candidates):
+            for c in candidates:
+                for h_lower, original in headers_lower.items():
+                    if c in h_lower:
+                        return original
+            return None
+
+        col_date = find_col(["date", "fecha", "timestamp", "booking date", "fecha valor", "created_at"])
+        col_amount = find_col(["amount", "importe", "monto", "net", "valor", "cantidad"])
+        col_concept = find_col(["description", "details", "concepto", "descripción", "merchant", "beneficiary", "narrative", "nombre"])
+        col_reference = find_col(["reference", "referencia", "id", "transferwise id", "transaction id", "payment reference"])
+        col_debit = find_col(["debe", "gasto", "outflow", "paid out"])
+        col_credit = find_col(["haber", "ingreso", "inflow", "paid in"])
+
+        count = 0
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Obtener movimientos existentes para desduplicar
+            cursor.execute("SELECT movement_date, amount, concept, reference FROM bank_movements WHERE connection_id = ?", (connection_id,))
+            existing = [
+                {
+                    "date": r["movement_date"],
+                    "amount": r["amount"],
+                    "concept": encryptor.decrypt(r["concept"]),
+                    "reference": encryptor.decrypt(r["reference"]) if r["reference"] else ""
+                }
+                for r in cursor.fetchall()
+            ]
+
+            for row in reader:
+                # 1. Extraer fecha
+                raw_date = row.get(col_date, "").strip() if col_date else ""
+                formatted_date = datetime.now().strftime("%d/%m/%Y")
+                if raw_date:
+                    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S"):
+                        try:
+                            clean_d = raw_date[:19].replace("Z", "")
+                            dt = datetime.strptime(clean_d, fmt.replace("Z", ""))
+                            formatted_date = dt.strftime("%d/%m/%Y")
+                            break
+                        except Exception:
+                            pass
+
+                # 2. Extraer importe
+                amount = 0.0
+                if col_amount and row.get(col_amount):
+                    raw_amt = str(row[col_amount]).strip().replace("€", "").replace("$", "").replace("£", "").strip()
+                    # Normalizar separadores numéricos
+                    if "," in raw_amt and "." in raw_amt:
+                        if raw_amt.find(".") < raw_amt.find(","):
+                            raw_amt = raw_amt.replace(".", "").replace(",", ".")
+                        else:
+                            raw_amt = raw_amt.replace(",", "")
+                    elif "," in raw_amt:
+                        raw_amt = raw_amt.replace(",", ".")
+                    try:
+                        amount = float(raw_amt)
+                    except Exception:
+                        amount = 0.0
+                elif col_debit or col_credit:
+                    deb = float(str(row.get(col_debit, "0")).replace(",", ".") or 0) if col_debit else 0.0
+                    cred = float(str(row.get(col_credit, "0")).replace(",", ".") or 0) if col_credit else 0.0
+                    amount = cred - deb if cred else -deb
+
+                # 3. Concepto y Referencia
+                concept = row.get(col_concept, "").strip() if col_concept else "Extracto bancario CSV"
+                if not concept:
+                    concept = "Movimiento extracto"
+                reference = row.get(col_reference, "").strip() if col_reference else ""
+
+                # Comprobar duplicados
+                is_duplicate = False
+                for ext in existing:
+                    if (ext["date"] == formatted_date and
+                        abs(ext["amount"] - amount) < 0.001 and
+                        ext["concept"] == concept and
+                        ext["reference"] == reference):
+                        is_duplicate = True
+                        break
+
+                if is_duplicate:
+                    continue
+
+                cursor.execute("""
+                    INSERT INTO bank_movements (movement_date, concept, amount, reference, reconciled, connection_id)
+                    VALUES (?, ?, ?, ?, 0, ?)
+                """, (
+                    formatted_date,
+                    encryptor.encrypt(concept),
+                    amount,
+                    encryptor.encrypt(reference),
+                    connection_id
+                ))
+                existing.append({
+                    "date": formatted_date,
+                    "amount": amount,
+                    "concept": concept,
+                    "reference": reference
+                })
+                count += 1
+
+            conn.commit()
+        return count
+
+    @classmethod
+    def import_statement(cls, filepath: str, connection_id: int = None) -> int:
+        """
+        Punto de entrada universal para importar cualquier extracto bancario.
+        Detecta automáticamente si el fichero es Norma 43 o CSV / Excel estructurado.
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Archivo de extracto no encontrado: {filepath}")
+
+        # Comprobar si es Norma 43
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            first_lines = [f.readline() for _ in range(5)]
+
+        is_norma43 = any(l.startswith("11") or l.startswith("22") for l in first_lines)
+        if is_norma43:
+            return cls.parse_norma43_file(filepath, connection_id)
+        return cls.parse_csv_statement(filepath, connection_id)
+
+    @classmethod
     def parse_norma43_file(cls, filepath: str, connection_id: int = None) -> int:
         """
         Parser básico de archivos de extracto bancario Norma 43 (estándar español).
@@ -237,19 +403,31 @@ class BankService:
         with _get_connection() as conn:
             cursor = conn.cursor()
             for line in lines:
-                if line.startswith("22"):
+                if line.startswith("22") and len(line) >= 42:
                     try:
-                        day = line[10:12]
-                        month = line[12:14]
-                        year = "20" + line[14:16]
-                        date_str = f"{day}/{month}/{year}"
+                        # Extraer fecha (probar posiciones estándar Norma 43)
+                        raw_date = line[6:12]
+                        if raw_date.isdigit():
+                            p1, p2, p3 = int(raw_date[0:2]), int(raw_date[2:4]), int(raw_date[4:6])
+                            if p1 > 12: # YYMMDD o DDMMYY
+                                date_str = f"{raw_date[0:2]}/{raw_date[2:4]}/20{raw_date[4:6]}"
+                            elif p3 > 31 or p1 <= 31:
+                                date_str = f"{raw_date[4:6]}/{raw_date[2:4]}/20{raw_date[0:2]}"
+                            else:
+                                date_str = f"{raw_date[0:2]}/{raw_date[2:4]}/20{raw_date[4:6]}"
+                        else:
+                            day = line[10:12]
+                            month = line[12:14]
+                            year = "20" + line[14:16]
+                            date_str = f"{day}/{month}/{year}"
 
-                        sign_code = line[27] # '1' es Debe (Gasto/Negativo), '2' es Haber (Cobro/Positivo)
-                        raw_amount = float(line[28:42]) / 100.0
+                        sign_code = line[27] if len(line) > 27 else "2" # '1' es Debe (Gasto/Negativo), '2' es Haber (Cobro/Positivo)
+                        amt_str = line[28:42].strip()
+                        raw_amount = float(amt_str) / 100.0
                         amount = -raw_amount if sign_code == "1" else raw_amount
 
-                        concept = line[52:90].strip()
-                        reference = line[42:52].strip()
+                        reference = line[42:52].strip() if len(line) >= 52 else ""
+                        concept = line[52:].strip() if len(line) > 52 else "Movimiento extracto Norma 43"
 
                         cursor.execute("""
                             INSERT INTO bank_movements (movement_date, concept, amount, reference, reconciled, connection_id)
@@ -329,9 +507,14 @@ class BankService:
                     if abs(abs(mov_amount) - inv["total_amount"]) > 0.01:
                         continue
 
-                    try:
-                        inv_date = datetime.strptime(inv["date"], "%d/%m/%Y")
-                    except ValueError:
+                    inv_date = None
+                    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
+                        try:
+                            inv_date = datetime.strptime(inv["date"][:10], fmt)
+                            break
+                        except Exception:
+                            pass
+                    if not inv_date:
                         continue
 
                     date_diff = abs((mov_date - inv_date).days)

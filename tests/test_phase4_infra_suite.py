@@ -23,10 +23,11 @@ def test_migrations_runner_lifecycle():
     assert "002" in applied_first
     assert "003" in applied_first
     assert "004" in applied_first
+    assert "005" in applied_first
 
     # 2. Verificar que se registraron en schema_migrations
     applied_in_db = MigrationRunner.get_applied_migrations(conn)
-    assert set(applied_in_db) == {"001", "002", "003", "004"}
+    assert set(applied_in_db) == {"001", "002", "003", "004", "005"}
 
     # 3. Idempotencia: segunda ejecución consecutiva no debe reaplicar nada
     applied_second = MigrationRunner.run_pending_migrations(conn)

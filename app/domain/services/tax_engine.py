@@ -241,9 +241,9 @@ class TaxEngine:
                 val = cls.parse_number(m.group(0))
                 if val > 0:
                     numbers.append(val)
-        # Buscar importe explícito de retención IRPF si existe
+        # Buscar importe explícito de retención IRPF si existe (ignorando porcentajes como 15% o (-15%))
         explicit_irpf = 0.0
-        irpf_amt_matches = re.findall(r'(?:retenci[oó]n(?:[\s\w%()]+)?|irpf(?:[\s\w%()]+)?)[\s:]*[-]?([0-9.,]+)\s*(?:€|eur|\b)', text_lower)
+        irpf_amt_matches = re.findall(r'(?:retenci[oó]n|irpf)(?:[^\d\n]*\d+\s*%\)?)?[\s:]*[-]?\s*([0-9.,]+)\s*(?:€|eur|\b)', text_lower)
         if irpf_amt_matches:
             for m in reversed(irpf_amt_matches):
                 val = cls.parse_number(m)

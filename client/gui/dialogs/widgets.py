@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QScrollArea, QSplitter, QGroupBox, QFormLayout, QMessageBox,
                              QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QFileDialog, QStackedWidget, QSpinBox, 
-                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout)
+                             QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout,
+                             QCheckBox, QTabWidget, QTabBar, QApplication)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
@@ -188,7 +189,7 @@ class MailWidget(AlfonsoBaseDialog):
         summary_layout = QVBoxLayout(self.summary_box)
         summary_layout.setSpacing(4)
         
-        summary_title = QLabel("✦ ALFONSO INTELLIGENT SUMMARY:")
+        summary_title = QLabel("ALFONSO INTELLIGENT SUMMARY:")
         summary_title.setStyleSheet("font-weight: bold; font-size: 10px; color: #6366F1; border: none; background: transparent;")
         summary_layout.addWidget(summary_title)
         
@@ -622,16 +623,16 @@ class AlertsWidget(AlfonsoBaseDialog):
             with urllib.request.urlopen(req, timeout=1.0) as resp:
                 pass
         except Exception:
-            alerts.append("⚠️ [RED] Conexión Backend Offline - No se pudo contactar con " + url)
+            alerts.append("[AVISO] [RED] Conexión Backend Offline - No se pudo contactar con " + url)
 
         dev_id = self.dashboard.config.get('device', 8)
-        alerts.append(f"⚠️ [AUDIO] Entrada de audio ID [{dev_id}] en escucha activa.")
+        alerts.append(f"[AVISO] [AUDIO] Entrada de audio ID [{dev_id}] en escucha activa.")
         
-        alerts.append("ℹ️ [SISTEMA] Alfonso OS core v3.7.19 cargado en espacio de usuario.")
+        alerts.append("[INFO] [SISTEMA] Alfonso OS core v3.7.19 cargado en espacio de usuario.")
 
         for msg in alerts:
             item = QListWidgetItem(msg)
-            if "⚠️" in msg:
+            if "[AVISO]" in msg:
                 item.setForeground(QColor("#FFB800"))
             else:
                 item.setForeground(QColor("#00E5FF"))
@@ -1161,7 +1162,7 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         left_layout = QVBoxLayout()
         left_layout.setSpacing(10)
         
-        lbl_proj = QLabel("📁 ACTIVE PROJECTS")
+        lbl_proj = QLabel("ACTIVE PROJECTS")
         lbl_proj.setStyleSheet("font-size: 9px; font-weight: bold; color: #6366F1; letter-spacing: 1px;")
         left_layout.addWidget(lbl_proj)
         
@@ -1189,7 +1190,7 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         self.proj_list.itemClicked.connect(self.select_project)
         left_layout.addWidget(self.proj_list)
         
-        lbl_conv = QLabel("💬 DISCIPLINE CHANNELS")
+        lbl_conv = QLabel("DISCIPLINE CHANNELS")
         lbl_conv.setStyleSheet("font-size: 9px; font-weight: bold; color: #6366F1; letter-spacing: 1px;")
         left_layout.addWidget(lbl_conv)
         
@@ -1523,14 +1524,19 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         self.cb_account.currentIndexChanged.connect(self.load_bank_movements)
         filter_layout.addWidget(self.cb_account)
         
-        btn_manage = QPushButton("⚙️ Administrar Bancos/Cuentas")
+        btn_manage = QPushButton("Administrar Bancos/Cuentas")
         btn_manage.clicked.connect(self.manage_connections)
         filter_layout.addWidget(btn_manage)
         
         self.content_layout.addLayout(filter_layout)
 
         btn_layout = QHBoxLayout()
-        btn_import = QPushButton("Importar Norma 43 (.txt)")
+        btn_sync = QPushButton("🔄 Sincronizar Movimientos")
+        btn_sync.setStyleSheet("background-color: rgba(99, 102, 241, 0.2); border: 1px solid #6366F1; color: #FFFFFF; font-weight: bold;")
+        btn_sync.clicked.connect(self.sync_accounts)
+        btn_layout.addWidget(btn_sync)
+
+        btn_import = QPushButton("📥 Importar Extracto (CSV / N43)")
         btn_import.clicked.connect(self.import_norma43)
         btn_layout.addWidget(btn_import)
 
@@ -1538,15 +1544,15 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         btn_manual.clicked.connect(self.add_manual_mov)
         btn_layout.addWidget(btn_manual)
 
-        btn_transfer = QPushButton("💸 Realizar Transferencia")
+        btn_transfer = QPushButton("Realizar Transferencia")
         btn_transfer.clicked.connect(self.initiate_transfer)
         btn_layout.addWidget(btn_transfer)
 
-        btn_subs = QPushButton("⭐ Plan Premium")
+        btn_subs = QPushButton("Plan Premium")
         btn_subs.clicked.connect(self.show_subscription)
         btn_layout.addWidget(btn_subs)
 
-        btn_reconcile = QPushButton("⚡ Ejecutar Matching Automático")
+        btn_reconcile = QPushButton("Ejecutar Matching Automático")
         btn_reconcile.setStyleSheet("background-color: rgba(99, 102, 241, 0.15); border-color: #6366F1; color: #818CF8; font-weight: bold;")
         btn_reconcile.clicked.connect(self.run_matching)
         btn_layout.addWidget(btn_reconcile)
@@ -1558,6 +1564,7 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         self.table.setHorizontalHeaderLabels(["Fecha", "Cuenta/Banco", "Concepto", "Importe", "Estado"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
         self.content_layout.addWidget(QLabel("<b>Historial de Movimientos Bancarios:</b>"))
         self.content_layout.addWidget(self.table)
 
@@ -1610,7 +1617,7 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
                 fecha = r["movement_date"]
                 concepto = encryptor.decrypt(r["concept"])
                 importe = f"{r['amount']:.2f} €"
-                estado = "🟢 Conciliado" if r["reconciled"] else "🔴 Pendiente"
+                estado = "[Conciliado]" if r["reconciled"] else "[Pendiente]"
                 cuenta = r["alias"] or "Sin Vincular"
 
                 self.table.setItem(row_idx, 0, QTableWidgetItem(fecha))
@@ -1626,30 +1633,36 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         dialog.exec()
         self.refresh_accounts_list()
 
+    def sync_accounts(self):
+        try:
+            from app.domain.services.bank_service import BankService
+            connection_id = self.cb_account.currentData()
+            total_synced = 0
+            if connection_id is not None:
+                total_synced = BankService.sync_connection(connection_id)
+            else:
+                connections = BankService.list_connections()
+                for c in connections:
+                    try:
+                        total_synced += BankService.sync_connection(c["id"])
+                    except Exception:
+                        pass
+            QMessageBox.information(self, "Sincronización", f"Sincronización finalizada.\n\nSe han descargado/actualizado {total_synced} nuevos movimientos.")
+            self.load_bank_movements()
+        except Exception as e:
+            QMessageBox.critical(self, "Error al sincronizar", f"No se pudieron descargar los movimientos: {e}")
+
     def import_norma43(self):
         connection_id = self.cb_account.currentData()
-        if connection_id is None:
-            QMessageBox.warning(self, "Seleccionar Cuenta", "Por favor, selecciona una cuenta bancaria específica en el desplegable superior antes de importar el extracto.")
-            return
-
-        file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar Extracto Norma 43", "", "Norma 43 (*.txt *.n43)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar Extracto Bancario", "", "Archivos de extracto (*.csv *.txt *.n43 *.xlsx);;Todos los archivos (*.*)")
         if file_path:
             try:
-                import requests
-                url = f"{self.api.base_url}/tax/bank/import"
-                if connection_id is not None:
-                    url += f"?connection_id={connection_id}"
-                headers = {"X-API-Key": self.api.api_key}
-                files = {"file": open(file_path, "rb")}
-                res = requests.post(url, files=files, headers=headers)
-                if res.status_code == 200:
-                    info = res.json()
-                    QMessageBox.information(self, "Importación", info.get("message", "Importado correctamente."))
-                    self.load_bank_movements()
-                else:
-                    QMessageBox.warning(self, "Error", f"Error al importar: {res.text}")
+                from app.domain.services.bank_service import BankService
+                count = BankService.import_statement(file_path, connection_id)
+                QMessageBox.information(self, "Importación", f"Extracto procesado correctamente. Se importaron {count} movimientos.")
+                self.load_bank_movements()
             except Exception as e:
-                QMessageBox.critical(self, "Error", str(e))
+                QMessageBox.critical(self, "Error al importar", str(e))
 
     def add_manual_mov(self):
         connection_id = self.cb_account.currentData()
@@ -1715,38 +1728,41 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
 
 
 class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
-    """Diálogo para configurar y administrar múltiples conexiones bancarias."""
+    """Diálogo unificado para configurar y administrar múltiples conexiones bancarias y extractos."""
     def __init__(self, parent=None, embedded=False):
         super().__init__(parent, "ADMINISTRAR CONEXIONES BANCARIAS", embedded=embedded)
         if not embedded:
-            self.setMinimumSize(650, 400)
+            self.setMinimumSize(750, 480)
         self.setup_ui()
 
     def setup_ui(self):
-        self.content_layout.addWidget(QLabel("<b>Cuentas Bancarias Vinculadas:</b>"))
+        self.content_layout.addWidget(QLabel("<b>Cuentas Bancarias y Pasarelas Financieras Vinculadas:</b>"))
         
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Alias", "Banco", "IBAN", "Proveedor", "Estado", "Sincronizado"])
+        self.table.setHorizontalHeaderLabels(["Alias", "Entidad / Banco", "IBAN", "Modalidad", "Estado Consentimiento", "Última Sincronización"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
         self.content_layout.addWidget(self.table)
         
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
         
-        btn_add = QPushButton(" Conectar Banco (Mock)")
-        btn_add.clicked.connect(lambda: self.add_connection("mock"))
+        btn_add = QPushButton(" + Añadir Cuenta Bancaria")
+        btn_add.setStyleSheet("background-color: rgba(99, 102, 241, 0.2); border: 1px solid #6366F1; color: #FFFFFF; font-weight: bold; padding: 8px 16px;")
+        btn_add.clicked.connect(self.show_add_connection_dialog)
         btn_layout.addWidget(btn_add)
         
-        btn_add_gocardless = QPushButton("Conectar Banco (GoCardless/Real)")
-        btn_add_gocardless.clicked.connect(lambda: self.add_connection("gocardless"))
-        btn_layout.addWidget(btn_add_gocardless)
+        btn_import_file = QPushButton(" 📥 Importar Extracto (CSV / N43)")
+        btn_import_file.clicked.connect(self.import_statement_file_dialog)
+        btn_layout.addWidget(btn_import_file)
         
-        btn_sync = QPushButton("Sincronizar")
+        btn_sync = QPushButton(" 🔄 Sincronizar")
         btn_sync.clicked.connect(self.sync_selected)
         btn_layout.addWidget(btn_sync)
         
-        btn_delete = QPushButton("Eliminar")
+        btn_delete = QPushButton(" 🗑️ Eliminar")
         btn_delete.clicked.connect(self.delete_selected)
         btn_layout.addWidget(btn_delete)
         
@@ -1766,115 +1782,329 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
                 self.table.setItem(idx, 1, QTableWidgetItem(c["bank_name"] or "N/A"))
                 self.table.setItem(idx, 2, QTableWidgetItem(c["iban"] or "N/A"))
                 self.table.setItem(idx, 3, QTableWidgetItem(c["provider"].upper()))
-                self.table.setItem(idx, 4, QTableWidgetItem(c["status"].upper()))
+                
+                status_text = c["consent_status"].upper() if c.get("consent_status") else c["status"].upper()
+                self.table.setItem(idx, 4, QTableWidgetItem(status_text))
                 self.table.setItem(idx, 5, QTableWidgetItem(c["last_sync_at"] or "Nunca"))
         except Exception as e:
             print(f"Error loading connections in manager: {e}")
 
-    def add_connection(self, provider: str):
-        dialog = AlfonsoBaseDialog(self, f"VINCULAR CUENTA ({provider.upper()})")
-        dialog.setMinimumSize(350, 250)
+    def show_add_connection_dialog(self):
+        dialog = AlfonsoBaseDialog(self, "VINCULAR CUENTA BANCARIA O FINANCIERA")
+        dialog.setMinimumSize(540, 420)
         
-        form = QFormLayout()
-        txt_alias = QLineEdit()
-        txt_bank = QLineEdit()
-        txt_iban = QLineEdit()
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid rgba(255, 255, 255, 0.1); background: #0F172A; border-radius: 6px; }
+            QTabBar::tab { background: rgba(255, 255, 255, 0.04); color: #94A3B8; padding: 8px 14px; border: 1px solid rgba(255, 255, 255, 0.08); border-top-left-radius: 4px; border-top-right-radius: 4px; }
+            QTabBar::tab:selected { background: rgba(99, 102, 241, 0.25); color: #FFFFFF; border-color: #6366F1; font-weight: bold; }
+        """)
         
-        if provider == "mock":
-            txt_alias.setText("Banco Santander (Pruebas)")
-            txt_bank.setText("Santander")
-            txt_iban.setText("ES9100491500001234567890")
-        else:
-            txt_alias.setText("BBVA Online")
-            txt_bank.setText("BBVA")
-            txt_iban.setText("")
-            
-        form.addRow("Alias Cuenta:", txt_alias)
-        form.addRow("Nombre Banco:", txt_bank)
+        # ── PESTAÑA 1: API DIRECTA (Token / Clave) ──────────────────────────
+        tab_api = QWidget()
+        layout_api = QVBoxLayout(tab_api)
+        layout_api.setSpacing(10)
         
-        if provider == "mock":
-            form.addRow("IBAN Cuenta:", txt_iban)
-            
-        dialog.content_layout.addLayout(form)
+        form_api = QFormLayout()
+        combo_provider = QComboBox()
+        combo_provider.addItems([
+            "Wise (Multidivisa / Token API)",
+            "Revolut Business (API Key)",
+            "Qonto (Secret Key + Org Slug)",
+            "Stripe (Clave Restringida / API Key)",
+            "API REST Genérica (Custom)"
+        ])
         
-        btn_save = QPushButton("GUARDAR Y CONECTAR")
-        dialog.content_layout.addWidget(btn_save)
+        txt_alias_api = QLineEdit("Cuenta Wise Multidivisa")
+        txt_token_api = QLineEdit()
+        txt_token_api.setEchoMode(QLineEdit.EchoMode.Password)
+        txt_token_api.setPlaceholderText("Introduce tu Token API de solo lectura...")
         
-        def save():
+        txt_extra_api = QLineEdit()
+        txt_extra_api.setPlaceholderText("Opcional (Organization Slug o Account ID)...")
+        
+        btn_open_portal = QPushButton(" 🌐 Obtener Token Oficial")
+        btn_open_portal.setStyleSheet("background-color: rgba(99, 102, 241, 0.1); border: 1px solid #4F46E5; color: #A5B4FC; padding: 4px 10px;")
+        
+        def on_provider_change():
+            p_text = combo_provider.currentText()
+            if "Wise" in p_text:
+                txt_alias_api.setText("Cuenta Wise Multidivisa")
+                txt_token_api.setPlaceholderText("Token API personal generado en Wise.com...")
+            elif "Revolut" in p_text:
+                txt_alias_api.setText("Revolut Business")
+                txt_token_api.setPlaceholderText("API Token de Revolut Business...")
+            elif "Qonto" in p_text:
+                txt_alias_api.setText("Qonto Empresa")
+                txt_token_api.setPlaceholderText("Secret Key de Qonto...")
+            elif "Stripe" in p_text:
+                txt_alias_api.setText("Stripe Pasarela")
+                txt_token_api.setPlaceholderText("rk_live_... o sk_live_...")
+            else:
+                txt_alias_api.setText("Cuenta API Genérica")
+                txt_token_api.setPlaceholderText("Token Bearer / API Key...")
+                
+        combo_provider.currentIndexChanged.connect(on_provider_change)
+        
+        def open_portal_url():
+            import webbrowser
+            p_text = combo_provider.currentText()
+            if "Wise" in p_text:
+                webbrowser.open("https://wise.com/settings/api-tokens")
+            elif "Revolut" in p_text:
+                webbrowser.open("https://business.revolut.com/settings/api")
+            elif "Qonto" in p_text:
+                webbrowser.open("https://app.qonto.com/settings/integrations")
+            elif "Stripe" in p_text:
+                webbrowser.open("https://dashboard.stripe.com/apikeys")
+                
+        btn_open_portal.clicked.connect(open_portal_url)
+        
+        form_api.addRow("Entidad Financiera:", combo_provider)
+        form_api.addRow("Alias de la Cuenta:", txt_alias_api)
+        form_api.addRow("Token / Clave API:", txt_token_api)
+        form_api.addRow("Parámetro Extra:", txt_extra_api)
+        form_api.addRow("", btn_open_portal)
+        
+        layout_api.addLayout(form_api)
+        
+        lbl_hint_api = QLabel("<small style='color:#94A3B8;'>ℹ️ Puedes usar tokens reales o prefijo 'mock_' para simulación. Las credenciales se guardan cifradas con AES-256.</small>")
+        lbl_hint_api.setWordWrap(True)
+        layout_api.addWidget(lbl_hint_api)
+        
+        btn_save_api = QPushButton("VERIFICAR Y GUARDAR CONEXIÓN DIRECTA")
+        btn_save_api.setStyleSheet("background-color: #4F46E5; color: white; font-weight: bold; padding: 10px;")
+        
+        def save_api_conn():
             try:
                 from app.domain.services.bank_service import BankService
-                alias = txt_alias.text().strip()
-                bank = txt_bank.text().strip()
-                iban = txt_iban.text().strip() if provider == "mock" else "Autodetectando al conectar..."
+                from app.adapters.bank_providers import BankProviderFactory
                 
-                creds = json.dumps({"account_id": f"acc_{provider}_{bank.lower()}"})
+                p_text = combo_provider.currentText().lower()
+                prov_key = "wise" if "wise" in p_text else "revolut" if "revolut" in p_text else "qonto" if "qonto" in p_text else "stripe" if "stripe" in p_text else "generic"
+                bank_name = "Wise" if "wise" in p_text else "Revolut" if "revolut" in p_text else "Qonto" if "qonto" in p_text else "Stripe" if "stripe" in p_text else "API Externa"
                 
-                conn_id = BankService.add_connection(alias, provider, bank, iban, creds)
+                alias = txt_alias_api.text().strip() or f"Cuenta {bank_name}"
+                token = txt_token_api.text().strip()
+                extra = txt_extra_api.text().strip()
                 
-                if provider == "gocardless":
-                    from app.adapters.bank_providers import BankProviderFactory
-                    import webbrowser
-                    prov = BankProviderFactory.get_provider("gocardless")
-                    url = prov.get_auth_link("http://localhost:8000/callback", {
-                        "institution_id": "SANDBOXFINANCE_SBOX1",
-                        "bank_name": bank
-                    })
-                    
-                    try:
-                        webbrowser.open(url)
-                    except Exception:
-                        pass
-                    
-                    url_dialog = AlfonsoBaseDialog(dialog, "AUTORIZACIÓN BANCARIA")
-                    url_dialog.setMinimumSize(450, 220)
-                    
-                    lbl_msg = QLabel("Hemos abierto el navegador web para iniciar la autorización segura en tu banco.<br><br>Si no se ha abierto automáticamente, puedes copiar el siguiente enlace:")
-                    lbl_msg.setWordWrap(True)
-                    url_dialog.content_layout.addWidget(lbl_msg)
-                    
-                    txt_url = QLineEdit(url)
-                    txt_url.setReadOnly(True)
-                    txt_url.setStyleSheet("background-color: rgba(0, 0, 0, 0.3); border: 1px solid #312E81; color: #818CF8; padding: 6px; border-radius: 4px;")
-                    url_dialog.content_layout.addWidget(txt_url)
-                    
-                    btn_copy = QPushButton("📋 Copiar enlace al portapapeles")
-                    btn_copy.setStyleSheet("background-color: rgba(99, 102, 241, 0.1); border-color: #4F46E5; color: #A5B4FC;")
-                    def copy_link():
-                        clipboard = QApplication.clipboard()
-                        clipboard.setText(url)
-                        btn_copy.setText("✓ ¡Enlace Copiado!")
-                    btn_copy.clicked.connect(copy_link)
-                    url_dialog.content_layout.addWidget(btn_copy)
-                    
-                    btn_close = QPushButton("ENTENDIDO")
-                    btn_close.clicked.connect(url_dialog.accept)
-                    url_dialog.content_layout.addWidget(btn_close)
-                    
-                    url_dialog.exec()
+                creds_dict = {"api_token": token, "api_key": token, "secret_key": token, "organization_slug": extra, "account_id": extra or f"acc_{prov_key}_main"}
+                
+                prov = BankProviderFactory.get_provider(prov_key)
+                val_res = prov.validate_credentials(creds_dict)
+                if not val_res.get("valid", True):
+                    QMessageBox.warning(dialog, "Validación Fallida", val_res.get("error", "No se pudo validar el token."))
+                    return
+                
+                if val_res.get("profile_id"):
+                    creds_dict["profile_id"] = val_res["profile_id"]
+                if val_res.get("accounts") and len(val_res["accounts"]) > 0:
+                    creds_dict["account_id"] = val_res["accounts"][0]
+                
+                conn_id = BankService.add_connection(alias, prov_key, bank_name, "", json.dumps(creds_dict))
+                
+                synced_count = 0
+                try:
+                    synced_count = BankService.sync_connection(conn_id)
+                except Exception as sync_e:
+                    print(f"Error sincronizando cuenta en alta: {sync_e}")
+                
+                if synced_count > 0:
+                    QMessageBox.information(dialog, "Éxito", f"Cuenta {bank_name} vinculada y sincronizada correctamente.\n\nSe han descargado {synced_count} movimientos bancarios.")
                 else:
-                    success_dialog = AlfonsoBaseDialog(dialog, "ÉXITO")
-                    success_dialog.setMinimumSize(300, 150)
-                    success_dialog.content_layout.addWidget(QLabel("Cuenta vinculada correctamente."))
-                    btn_close = QPushButton("ENTENDIDO")
-                    btn_close.clicked.connect(success_dialog.accept)
-                    success_dialog.content_layout.addWidget(btn_close)
-                    success_dialog.exec()
-                    
+                    QMessageBox.information(dialog, "Éxito", f"Cuenta {bank_name} vinculada correctamente.\n\nPuedes pulsar 'Sincronizar' en cualquier momento para descargar los últimos movimientos.")
+                
                 dialog.accept()
                 self.load_connections()
             except Exception as e:
-                error_dialog = AlfonsoBaseDialog(dialog, "ERROR")
-                error_dialog.setMinimumSize(350, 150)
-                lbl = QLabel(f"Error al vincular: {e}")
-                lbl.setWordWrap(True)
-                error_dialog.content_layout.addWidget(lbl)
-                btn_close = QPushButton("ENTENDIDO")
-                btn_close.clicked.connect(error_dialog.accept)
-                error_dialog.content_layout.addWidget(btn_close)
-                error_dialog.exec()
+                QMessageBox.critical(dialog, "Error", str(e))
                 
-        btn_save.clicked.connect(save)
+        btn_save_api.clicked.connect(save_api_conn)
+        layout_api.addWidget(btn_save_api)
+        tabs.addTab(tab_api, "🔑 API Directa (Tokens)")
+        
+        # ── PESTAÑA 2: OPEN BANKING PSD2 (Bancos Tradicionales) ─────────────
+        tab_psd2 = QWidget()
+        layout_psd2 = QVBoxLayout(tab_psd2)
+        layout_psd2.setSpacing(10)
+        
+        form_psd2 = QFormLayout()
+        combo_bank_psd2 = QComboBox()
+        combo_bank_psd2.addItems([
+            "ABANCA",
+            "BBVA",
+            "Banco Santander",
+            "CaixaBank",
+            "Banco Sabadell",
+            "Bankinter",
+            "Unicaja Banco",
+            "Kutxabank",
+            "Ibercaja",
+            "ING Direct",
+            "Openbank",
+            "N26",
+            "Wise (Open Banking)",
+            "Otro Banco PSD2..."
+        ])
+        txt_alias_psd2 = QLineEdit("ABANCA Cuenta Principal")
+        
+        txt_gc_id = QLineEdit(os.getenv("GOCARDLESS_SECRET_ID", ""))
+        txt_gc_id.setPlaceholderText("Secret ID de GoCardless (gratuito)...")
+        txt_gc_key = QLineEdit(os.getenv("GOCARDLESS_SECRET_KEY", ""))
+        txt_gc_key.setEchoMode(QLineEdit.EchoMode.Password)
+        txt_gc_key.setPlaceholderText("Secret Key de GoCardless...")
+        
+        btn_open_gc = QPushButton("🌐 Obtener Claves Gratuitas de GoCardless Bank Data")
+        btn_open_gc.setStyleSheet("background-color: rgba(99, 102, 241, 0.1); border: 1px solid #4F46E5; color: #A5B4FC; padding: 4px 10px;")
+        def open_gc_portal():
+            import webbrowser
+            webbrowser.open("https://bankaccountdata.gocardless.com/overview/")
+        btn_open_gc.clicked.connect(open_gc_portal)
+
+        def on_psd2_bank_change():
+            b_name = combo_bank_psd2.currentText()
+            if b_name == "Otro Banco PSD2...":
+                txt_alias_psd2.setText("Mi Banco Cuenta Principal")
+            else:
+                txt_alias_psd2.setText(f"{b_name} Cuenta Principal")
+        combo_bank_psd2.currentIndexChanged.connect(on_psd2_bank_change)
+
+        form_psd2.addRow("Banco / Entidad:", combo_bank_psd2)
+        form_psd2.addRow("Alias de la Cuenta:", txt_alias_psd2)
+        form_psd2.addRow("GoCardless Secret ID:", txt_gc_id)
+        form_psd2.addRow("GoCardless Secret Key:", txt_gc_key)
+        form_psd2.addRow("", btn_open_gc)
+        layout_psd2.addLayout(form_psd2)
+        
+        lbl_info_psd2 = QLabel("<small style='color:#94A3B8;'>ℹ️ <b>Open Banking en Vivo</b>: Requiere tus claves gratuitas de GoCardless Bank Data (Nordigen). Al pulsar conectar, se abrirá la pasarela oficial de tu banco (normativa PSD2 180 días).</small>")
+        lbl_info_psd2.setWordWrap(True)
+        layout_psd2.addWidget(lbl_info_psd2)
+        
+        btn_connect_psd2 = QPushButton("CONECTAR CUENTA REAL MEDIANTE OPEN BANKING")
+        btn_connect_psd2.setStyleSheet("background-color: #059669; color: white; font-weight: bold; padding: 10px;")
+        
+        def start_psd2_auth():
+            try:
+                from app.domain.services.bank_service import BankService
+                from app.adapters.bank_providers import BankProviderFactory
+                import webbrowser
+                
+                bank_name = combo_bank_psd2.currentText()
+                alias = txt_alias_psd2.text().strip() or f"Cuenta {bank_name}"
+                sec_id = txt_gc_id.text().strip() or os.getenv("GOCARDLESS_SECRET_ID", "")
+                sec_key = txt_gc_key.text().strip() or os.getenv("GOCARDLESS_SECRET_KEY", "")
+                
+                if not sec_id or not sec_key:
+                    QMessageBox.warning(
+                        dialog, 
+                        "Claves Requeridas para Conexión Real", 
+                        f"Para conectar tu cuenta real de {bank_name} por Open Banking en vivo, necesitas tus claves gratuitas de GoCardless Bank Data.\n\n"
+                        "1. Pulsa el botón 'Obtener Claves Gratuitas' para generarlas en 2 minutos.\n"
+                        "2. O bien utiliza el botón '📥 Importar Extracto (CSV / N43)' para cargar directamente el extracto descargado de tu banca online de ABANCA."
+                    )
+                    return
+                
+                creds_dict = {
+                    "secret_id": sec_id,
+                    "secret_key": sec_key,
+                    "bank_name": bank_name,
+                    "account_id": f"acc_psd2_{bank_name.lower().replace(' ', '_')}"
+                }
+                
+                prov = BankProviderFactory.get_provider("gocardless")
+                val_res = prov.validate_credentials(creds_dict)
+                if not val_res.get("valid", True):
+                    QMessageBox.warning(dialog, "Validación Fallida", val_res.get("error", "Error al autenticar con GoCardless."))
+                    return
+                
+                conn_id = BankService.add_connection(alias, "gocardless", bank_name, "Autodetectando por PSD2...", json.dumps(creds_dict))
+                url = prov.get_auth_link("http://localhost:8000/callback", creds_dict)
+                
+                try:
+                    webbrowser.open(url)
+                except Exception:
+                    pass
+                    
+                QMessageBox.information(dialog, "Pasarela Oficial Abierta", f"Se ha abierto la pasarela oficial de {bank_name} en tu navegador para autorizar la conexión real.\n\nURL: {url}")
+                dialog.accept()
+                self.load_connections()
+            except Exception as e:
+                QMessageBox.critical(dialog, "Error", str(e))
+                
+        btn_connect_psd2.clicked.connect(start_psd2_auth)
+        layout_psd2.addWidget(btn_connect_psd2)
+
+        lbl_or = QLabel("<center style='color:#64748B; font-weight:bold; margin: 4px 0;'>— O TAMBIÉN —</center>")
+        layout_psd2.addWidget(lbl_or)
+
+        btn_direct_stmt = QPushButton("📥 IMPORTAR EXTRACTO REAL OFICIAL DE TU BANCO (CSV / NORMA 43)")
+        btn_direct_stmt.setStyleSheet("background-color: rgba(99, 102, 241, 0.15); border: 1px solid #6366F1; color: #A5B4FC; font-weight: bold; padding: 10px;")
+        def on_direct_stmt_click():
+            from PyQt6.QtWidgets import QFileDialog
+            filepath, _ = QFileDialog.getOpenFileName(dialog, "Seleccionar Extracto Bancario Oficial", "", "Extractos Bancarios (*.csv *.n43 *.txt *.xlsx);;Todos los archivos (*.*)")
+            if filepath:
+                try:
+                    from app.domain.services.bank_service import BankService
+                    bank_name = combo_bank_psd2.currentText()
+                    alias = txt_alias_psd2.text().strip() or f"Cuenta {bank_name}"
+                    conn_id = BankService.add_connection(alias, "statement", bank_name, "Importación Extracto", "{}")
+                    count = BankService.import_statement(filepath, conn_id)
+                    QMessageBox.information(dialog, "Extracto Real Importado", f"¡Éxito! Cuenta {bank_name} vinculada con {count} movimientos reales importados.")
+                    dialog.accept()
+                    self.load_connections()
+                except Exception as e:
+                    QMessageBox.critical(dialog, "Error de Importación", str(e))
+        btn_direct_stmt.clicked.connect(on_direct_stmt_click)
+        layout_psd2.addWidget(btn_direct_stmt)
+
+        tabs.addTab(tab_psd2, "🏦 Open Banking / Banco Tradicional")
+        
+        # ── PESTAÑA 3: CUENTA DE PRUEBAS / MOCK ──────────────────────────────
+        tab_mock = QWidget()
+        layout_mock = QVBoxLayout(tab_mock)
+        form_mock = QFormLayout()
+        txt_alias_mock = QLineEdit("Banco Santander (Pruebas)")
+        txt_bank_mock = QLineEdit("Santander")
+        txt_iban_mock = QLineEdit("ES9100491500001234567890")
+        form_mock.addRow("Alias:", txt_alias_mock)
+        form_mock.addRow("Banco:", txt_bank_mock)
+        form_mock.addRow("IBAN:", txt_iban_mock)
+        layout_mock.addLayout(form_mock)
+        
+        btn_save_mock = QPushButton("CREAR CUENTA SIMULADA")
+        def save_mock():
+            try:
+                from app.domain.services.bank_service import BankService
+                conn_id = BankService.add_connection(txt_alias_mock.text().strip(), "mock", txt_bank_mock.text().strip(), txt_iban_mock.text().strip(), "{}")
+                synced = BankService.sync_connection(conn_id)
+                QMessageBox.information(dialog, "Éxito", f"Cuenta de pruebas creada y sincronizada ({synced} movimientos).")
+                dialog.accept()
+                self.load_connections()
+            except Exception as e:
+                QMessageBox.critical(dialog, "Error", str(e))
+        btn_save_mock.clicked.connect(save_mock)
+        layout_mock.addWidget(btn_save_mock)
+        tabs.addTab(tab_mock, "🧪 Pruebas / Mock")
+        
+        dialog.content_layout.addWidget(tabs)
         dialog.exec()
+
+    def import_statement_file_dialog(self):
+        from PyQt6.QtWidgets import QFileDialog
+        filepath, _ = QFileDialog.getOpenFileName(self, "Seleccionar Extracto Bancario", "", "Archivos de extracto (*.csv *.txt *.n43 *.xlsx);;Todos los archivos (*.*)")
+        if not filepath:
+            return
+            
+        try:
+            from app.domain.services.bank_service import BankService
+            row = self.table.currentRow()
+            conn_id = self.connection_ids[row] if row >= 0 and hasattr(self, 'connection_ids') and len(self.connection_ids) > row else None
+            
+            count = BankService.import_statement(filepath, conn_id)
+            QMessageBox.information(self, "Importación Finalizada", f"Se han importado correctamente {count} movimientos desde el archivo.")
+            self.load_connections()
+        except Exception as e:
+            QMessageBox.critical(self, "Error de Importación", f"No se pudo procesar el extracto: {e}")
 
     def delete_selected(self):
         row = self.table.currentRow()
@@ -1910,93 +2140,501 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
 
 
 class AlfonsoSubscriptionDialog(AlfonsoBaseDialog):
-    """Diálogo para ver y gestionar planes de suscripción de transferencias."""
+    """Diálogo y vista ejecutiva con diseño limpio, sobrio y ordenado estilo Apple, sin bordes llamativos."""
     def __init__(self, parent=None, embedded=False):
-        super().__init__(parent, "PLAN PREMIUM Y TRANSFERENCIAS", embedded=embedded)
+        super().__init__(parent, "PLANES Y LICENCIAS ALFONSO", embedded=embedded)
         if not embedded:
-            self.setMinimumSize(450, 350)
+            self.setMinimumSize(980, 720)
+        self.cards = {}
+        self.is_annual_billing = True
         self.setup_ui()
 
     def setup_ui(self):
         from app.domain.services.bank_service import BankService
         
-        status = BankService.get_subscription_status()
-        tier = status["tier"]
-        used = status["used"]
-        limit = status["limit"]
-        remaining = status["remaining"]
-        charges = status["accumulated_extra_charges"]
+        # 1. Cabecera Minimalista
+        header_widget = QWidget()
+        hw_layout = QVBoxLayout(header_widget)
+        hw_layout.setContentsMargins(10, 6, 10, 8)
+        hw_layout.setSpacing(4)
+
+        eyebrow = QLabel("LICENCIA OFICIAL ALFONSO")
+        eyebrow.setStyleSheet("font-size: 10px; font-weight: 700; color: #86868B; letter-spacing: 1.5px;")
         
-        lbl_info = QLabel("<b>Gestión del cupo mensual de transferencias directas:</b>")
-        self.content_layout.addWidget(lbl_info)
+        hw_title = QLabel("Planes diseñados para cada etapa de tu negocio.")
+        hw_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.3px;")
         
-        grid = QGridLayout()
-        grid.addWidget(QLabel("Plan Contratado:"), 0, 0)
+        hw_sub = QLabel("Cumplimiento normativo Veri*Factu (Ley 11/2021), facturación electrónica y contabilidad inteligente en una sola app.")
+        hw_sub.setStyleSheet("font-size: 12px; color: #86868B; line-height: 1.4;")
         
-        self.lbl_tier = QLabel(f"<font color='#818CF8'><b>{tier.upper()}</b></font>")
-        grid.addWidget(self.lbl_tier, 0, 1)
-        
-        grid.addWidget(QLabel("Transferencias Usadas:"), 1, 0)
-        grid.addWidget(QLabel(f"{used} / {limit if limit > 0 else '0'}"), 1, 1)
-        
-        grid.addWidget(QLabel("Restantes en Plan:"), 2, 0)
-        grid.addWidget(QLabel(f"{remaining}"), 2, 1)
-        
-        grid.addWidget(QLabel("Costes Extra Acumulados:"), 3, 0)
-        grid.addWidget(QLabel(f"<font color='#EF4444'><b>{charges:.2f} €</b></font>"), 3, 1)
-        
-        self.content_layout.addLayout(grid)
-        
-        self.progress = QProgressBar()
-        if limit > 0:
-            self.progress.setMaximum(limit)
-            self.progress.setValue(min(used, limit))
-        else:
-            self.progress.setMaximum(100)
-            self.progress.setValue(0)
-        self.progress.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #334155;
-                border-radius: 4px;
-                text-align: center;
-                background-color: #0F172A;
-                color: #e2e8f0;
-            }
-            QProgressBar::chunk {
-                background-color: #6366F1;
+        hw_layout.addWidget(eyebrow, alignment=Qt.AlignmentFlag.AlignCenter)
+        hw_layout.addWidget(hw_title, alignment=Qt.AlignmentFlag.AlignCenter)
+        hw_layout.addWidget(hw_sub, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.content_layout.addWidget(header_widget)
+
+        # 2. Segmented Control tipo Apple (Pill Switcher)
+        toggle_container = QFrame()
+        toggle_container.setStyleSheet("""
+            QFrame {
+                background-color: #1C1C1E;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 18px;
             }
         """)
-        self.content_layout.addWidget(self.progress)
-        
-        self.content_layout.addWidget(QLabel("<br><b>Cambiar de Plan de Suscripción:</b>"))
-        self.cmb_tier = QComboBox()
-        self.cmb_tier.addItem("Gratuito (Solo Lectura, +0.50€ por transfer)", "free")
-        self.cmb_tier.addItem("Premium 10 (Hasta 10 transfes/mes)", "premium_10")
-        self.cmb_tier.addItem("Premium 20 (Hasta 20 transfes/mes)", "premium_20")
-        self.cmb_tier.addItem("Premium 50 (Hasta 50 transfes/mes)", "premium_50")
-        
-        idx = self.cmb_tier.findData(tier)
-        if idx >= 0:
-            self.cmb_tier.setCurrentIndex(idx)
-        self.content_layout.addWidget(self.cmb_tier)
-        
-        btn_save = QPushButton("CAMBIAR DE PLAN")
-        btn_save.clicked.connect(self.save_tier)
-        self.content_layout.addWidget(btn_save)
-        
-        btn_close = QPushButton("CERRAR")
-        btn_close.clicked.connect(self.accept)
-        self.content_layout.addWidget(btn_close)
+        toggle_layout = QHBoxLayout(toggle_container)
+        toggle_layout.setContentsMargins(3, 3, 3, 3)
+        toggle_layout.setSpacing(2)
 
-    def save_tier(self):
+        self.btn_billing_annual = QPushButton("Pago Anual  •  Ahorra 20%")
+        self.btn_billing_annual.setCheckable(True)
+        self.btn_billing_annual.setChecked(True)
+        self.btn_billing_annual.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_billing_annual.setFixedHeight(28)
+        self.btn_billing_annual.clicked.connect(lambda: self.set_billing_period(True))
+
+        self.btn_billing_monthly = QPushButton("Pago Mensual")
+        self.btn_billing_monthly.setCheckable(True)
+        self.btn_billing_monthly.setChecked(False)
+        self.btn_billing_monthly.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_billing_monthly.setFixedHeight(28)
+        self.btn_billing_monthly.clicked.connect(lambda: self.set_billing_period(False))
+
+        toggle_layout.addWidget(self.btn_billing_annual)
+        toggle_layout.addWidget(self.btn_billing_monthly)
+
+        tc_wrapper = QHBoxLayout()
+        tc_wrapper.addStretch()
+        tc_wrapper.addWidget(toggle_container)
+        tc_wrapper.addStretch()
+        self.content_layout.addLayout(tc_wrapper)
+        self.update_toggle_styles()
+
+        # 3. Grid de 3 Tarjetas de Planes (Limpio y Ordenado)
+        cards_layout = QHBoxLayout()
+        cards_layout.setContentsMargins(0, 10, 0, 10)
+        cards_layout.setSpacing(14)
+
+        # Plan 1: Autónomo Basic
+        card_basic = self.create_plan_card(
+            tier_key="basic",
+            badge_text="AUTÓNOMO BASIC",
+            badge_color="#86868B",
+            title="Basic",
+            price_annual=15,
+            price_monthly=19,
+            description="La base esencial para facturar con Veri*Factu y presentar impuestos trimestrales.",
+            features=[
+                ("Facturación Veri*Factu SIF", "ilimitada + QR AEAT"),
+                ("Modelos 303, 130 y 390", "automáticos"),
+                ("Libro Diario y Mayor", "en tiempo real"),
+                ("10 transferencias", "PSD2 al mes"),
+                ("Catálogo completo", "de clientes y productos"),
+                ("Soporte estándar", "por correo (24-48h)")
+            ],
+            is_popular=False
+        )
+        cards_layout.addWidget(card_basic)
+
+        # Plan 2: Autónomo Pro (Recomendado)
+        card_pro = self.create_plan_card(
+            tier_key="pro",
+            badge_text="MÁS POPULAR",
+            badge_color="#F5F5F7",
+            title="Profesional Pro",
+            price_annual=32,
+            price_monthly=39,
+            description="Automatización contable completa, nóminas, tesorería y el Asistente IA de Alfonso.",
+            features=[
+                ("Todo lo incluido", "en el Plan Basic"),
+                ("Conexiones bancarias PSD2", "+ 50 transferencias/mes"),
+                ("Asistente IA Alfonso", "con comandos por voz"),
+                ("Nóminas y contratos", "hasta 5 empleados"),
+                ("Previsión de Tesorería", "Cash Flow inteligente"),
+                ("Auditoría fiscal continua", "y alertas AEAT"),
+                ("Presupuestos comerciales", "con firma digital")
+            ],
+            is_popular=True
+        )
+        cards_layout.addWidget(card_pro)
+
+        # Plan 3: Asesoría / Enterprise
+        card_advisor = self.create_plan_card(
+            tier_key="advisor",
+            badge_text="DESPACHO & EMPRESA",
+            badge_color="#86868B",
+            title="Asesoría Enterprise",
+            price_annual=65,
+            price_monthly=79,
+            description="Para gestorías, asesorías o autónomos con múltiples sociedades y volumen alto.",
+            features=[
+                ("Todo lo incluido", "en el Plan Pro"),
+                ("Gestión Multi-inquilino", "hasta 20 empresas"),
+                ("Factura Electrónica B2B", "FACe (Crea y Crece)"),
+                ("Exportación directa", "a A3, Contasol y Sage"),
+                ("Transferencias SEPA", "directas ilimitadas"),
+                ("Pack Cierre Fiscal", "automatizado para asesor"),
+                ("Soporte VIP 24/7", "con Asesor dedicado")
+            ],
+            is_popular=False
+        )
+        cards_layout.addWidget(card_advisor)
+
+        self.content_layout.addLayout(cards_layout)
+
+        # 4. Pie de Página con Garantías
+        footer_widget = QWidget()
+        fw_layout = QVBoxLayout(footer_widget)
+        fw_layout.setContentsMargins(10, 6, 10, 6)
+        fw_layout.setSpacing(6)
+
+        badges_layout = QHBoxLayout()
+        badges_layout.setSpacing(20)
+        badges_layout.addStretch()
+
+        badges = [
+            ("✓", "Ley 11/2021 Antifraude y SIF Veri*Factu"),
+            ("✓", "Cifrado Bancario PSD2 256-bit"),
+            ("✓", "Sin permanencia ni compromiso"),
+            ("✓", "Servidores y Soporte en España")
+        ]
+        for icon, text in badges:
+            b_layout = QHBoxLayout()
+            b_layout.setSpacing(5)
+            lbl_i = QLabel(icon)
+            lbl_i.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868B;")
+            lbl_t = QLabel(text)
+            lbl_t.setStyleSheet("font-size: 11px; color: #86868B; font-weight: 500;")
+            b_layout.addWidget(lbl_i)
+            b_layout.addWidget(lbl_t)
+            badges_layout.addLayout(b_layout)
+
+        badges_layout.addStretch()
+        fw_layout.addLayout(badges_layout)
+
+        lbl_legal = QLabel("Precios en euros sin IVA aplicable. Actualiza, cambia o cancela tu suscripción en cualquier momento desde tu panel.")
+        lbl_legal.setStyleSheet("font-size: 10px; color: #636366;")
+        fw_layout.addWidget(lbl_legal, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        if not getattr(self, "embedded", False):
+            btn_close = QPushButton("Cerrar")
+            btn_close.setFixedHeight(28)
+            btn_close.setFixedWidth(80)
+            btn_close.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 14px;
+                    color: #FFFFFF;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 255, 255, 0.16);
+                }
+            """)
+            btn_close.clicked.connect(self.accept)
+            fw_layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.content_layout.addWidget(footer_widget)
+
+        # Sincronizar estado visual de las tarjetas
+        self.refresh_cards()
+
+    def set_billing_period(self, is_annual: bool):
+        """Alterna el periodo de facturación y actualiza los importes mostrados."""
+        self.is_annual_billing = is_annual
+        self.btn_billing_annual.setChecked(is_annual)
+        self.btn_billing_monthly.setChecked(not is_annual)
+        self.update_toggle_styles()
+        self.update_price_labels()
+
+    def update_toggle_styles(self):
+        """Estiliza el Segmented Control estilo Apple."""
+        if self.is_annual_billing:
+            self.btn_billing_annual.setStyleSheet("""
+                QPushButton {
+                    background-color: #2C2C2E;
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 14px;
+                    color: #FFFFFF;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 4px 16px;
+                }
+            """)
+            self.btn_billing_monthly.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 14px;
+                    color: #8E8E93;
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 4px 16px;
+                }
+                QPushButton:hover {
+                    color: #FFFFFF;
+                }
+            """)
+        else:
+            self.btn_billing_monthly.setStyleSheet("""
+                QPushButton {
+                    background-color: #2C2C2E;
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 14px;
+                    color: #FFFFFF;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 4px 16px;
+                }
+            """)
+            self.btn_billing_annual.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 14px;
+                    color: #8E8E93;
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 4px 16px;
+                }
+                QPushButton:hover {
+                    color: #FFFFFF;
+                }
+            """)
+
+    def update_price_labels(self):
+        """Actualiza los textos de precio según la modalidad anual/mensual seleccionada."""
+        for tier_key, data in self.cards.items():
+            lbl_p = data["price_label"]
+            lbl_sub = data["period_label"]
+            
+            p_val = data["price_annual"] if self.is_annual_billing else data["price_monthly"]
+            lbl_p.setText(f"{p_val} €")
+            
+            if self.is_annual_billing:
+                total_year = p_val * 12
+                lbl_sub.setText(f"Facturado anualmente ({total_year} €/año)")
+            else:
+                lbl_sub.setText("Facturación mensual cancelable")
+
+    def create_plan_card(self, tier_key: str, badge_text: str, badge_color: str, title: str, 
+                         price_annual: int, price_monthly: int, description: str, features: list, is_popular: bool = False) -> QFrame:
+        """Genera una tarjeta limpia, sobria y ordenada sin bordes estridentes."""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #141417;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        # Eyebrow / Badge superior sobrio
+        badge_lbl = QLabel(badge_text)
+        badge_lbl.setStyleSheet(f"""
+            color: {badge_color};
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+        """)
+        layout.addWidget(badge_lbl, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        # Título del Plan
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-size: 18px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.2px;")
+        layout.addWidget(title_lbl)
+
+        # Precio Limpio
+        price_layout = QHBoxLayout()
+        price_layout.setSpacing(4)
+        lbl_price = QLabel(f"{price_annual if self.is_annual_billing else price_monthly} €")
+        lbl_price.setStyleSheet("font-size: 32px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px;")
+        lbl_vat = QLabel("<span style='color: #86868B; font-size: 12px; font-weight: 500;'>/ mes</span>")
+        price_layout.addWidget(lbl_price)
+        price_layout.addWidget(lbl_vat, alignment=Qt.AlignmentFlag.AlignBottom)
+        price_layout.addStretch()
+        layout.addLayout(price_layout)
+
+        # Subtítulo de Facturación
+        lbl_period = QLabel(f"Facturado anualmente ({price_annual * 12} €/año)" if self.is_annual_billing else "Facturación mensual cancelable")
+        lbl_period.setStyleSheet("font-size: 11px; color: #86868B;")
+        layout.addWidget(lbl_period)
+
+        # Descripción breve
+        desc_lbl = QLabel(description)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet("font-size: 11px; color: #94A3B8; min-height: 32px; line-height: 1.35;")
+        layout.addWidget(desc_lbl)
+
+        # Separador Fino
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background-color: rgba(255, 255, 255, 0.06); border: none; max-height: 1px; margin: 4px 0px;")
+        layout.addWidget(sep)
+
+        # Lista de Características Limpia
+        feat_layout = QVBoxLayout()
+        feat_layout.setSpacing(7)
+        for strong_txt, regular_txt in features:
+            f_row = QHBoxLayout()
+            f_row.setSpacing(8)
+            ico = QLabel("✓")
+            ico.setStyleSheet("color: #86868B; font-size: 11px; font-weight: 700;")
+            txt = QLabel(f"<span style='color: #F5F5F7; font-weight: 600;'>{strong_txt}</span> <span style='color: #86868B;'>{regular_txt}</span>")
+            txt.setWordWrap(True)
+            txt.setStyleSheet("font-size: 11px;")
+            f_row.addWidget(ico, alignment=Qt.AlignmentFlag.AlignTop)
+            f_row.addWidget(txt, 1)
+            feat_layout.addLayout(f_row)
+
+        layout.addLayout(feat_layout)
+        layout.addStretch()
+
+        # Botón de Acción
+        btn = QPushButton("Seleccionar")
+        btn.setFixedHeight(38)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(lambda checked=False, tk=tier_key: self.select_plan(tk))
+        layout.addWidget(btn)
+
+        self.cards[tier_key] = {
+            "frame": card,
+            "button": btn,
+            "is_popular": is_popular,
+            "badge_color": badge_color,
+            "price_annual": price_annual,
+            "price_monthly": price_monthly,
+            "price_label": lbl_price,
+            "period_label": lbl_period
+        }
+
+        return card
+
+    def refresh_cards(self):
+        """Actualiza el estado de los botones con diseño limpio y ordenado."""
+        from app.domain.services.bank_service import BankService
+        status = BankService.get_subscription_status()
+        raw_tier = status.get("tier", "free").lower()
+        
+        # Mapeo a los 3 planes principales
+        if "50" in raw_tier or "pro" in raw_tier:
+            current_plan = "pro"
+        elif "advisor" in raw_tier:
+            current_plan = "advisor"
+        else:
+            current_plan = "basic"
+
+        for tier_key, data in self.cards.items():
+            btn = data["button"]
+            is_active = (tier_key == current_plan)
+            is_popular = data["is_popular"]
+
+            if is_active:
+                btn.setText("PLAN ACTUAL")
+                btn.setEnabled(False)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: rgba(48, 209, 88, 0.12);
+                        border: 1px solid rgba(48, 209, 88, 0.35);
+                        border-radius: 19px;
+                        color: #30D158;
+                        font-size: 11px;
+                        font-weight: 600;
+                        letter-spacing: 0.3px;
+                    }
+                """)
+            else:
+                btn.setEnabled(True)
+                if is_popular:
+                    btn.setText("CONTRATAR PRO")
+                    btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #FFFFFF;
+                            border: none;
+                            border-radius: 19px;
+                            color: #000000;
+                            font-size: 12px;
+                            font-weight: 600;
+                            letter-spacing: 0.2px;
+                        }
+                        QPushButton:hover {
+                            background-color: #E5E5EA;
+                        }
+                    """)
+                elif tier_key == "advisor":
+                    btn.setText("SELECCIONAR ASESORÍA")
+                    btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: rgba(255, 255, 255, 0.08);
+                            border: 1px solid rgba(255, 255, 255, 0.14);
+                            border-radius: 19px;
+                            color: #FFFFFF;
+                            font-size: 11px;
+                            font-weight: 600;
+                            letter-spacing: 0.2px;
+                        }
+                        QPushButton:hover {
+                            background-color: rgba(255, 255, 255, 0.14);
+                        }
+                    """)
+                else:
+                    btn.setText("SELECCIONAR BASIC")
+                    btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: rgba(255, 255, 255, 0.08);
+                            border: 1px solid rgba(255, 255, 255, 0.14);
+                            border-radius: 19px;
+                            color: #FFFFFF;
+                            font-size: 11px;
+                            font-weight: 600;
+                            letter-spacing: 0.2px;
+                        }
+                        QPushButton:hover {
+                            background-color: rgba(255, 255, 255, 0.14);
+                        }
+                    """)
+
+    def select_plan(self, tier_key: str):
+        """Aplica el cambio de plan y sincroniza la interfaz y el servicio de banca."""
         try:
             from app.domain.services.bank_service import BankService
-            new_tier = self.cmb_tier.currentData()
-            BankService.update_subscription_tier(new_tier)
-            QMessageBox.information(self, "Plan Actualizado", f"Tu suscripción se ha cambiado a {new_tier.upper()} correctamente.")
-            self.accept()
+            tier_mapping = {
+                "basic": "premium_10",
+                "pro": "premium_50",
+                "advisor": "advisor"
+            }
+            db_tier = tier_mapping.get(tier_key, tier_key)
+            BankService.update_subscription_tier(db_tier)
+            self.refresh_cards()
+
+            # Actualizar la tarjeta de licencia en la barra lateral del dashboard
+            p = self.parent()
+            while p is not None:
+                if hasattr(p, "sidebar") and hasattr(p.sidebar, "lbl_plan_title"):
+                    title_map = {
+                        "basic": ("Plan Autónomo Basic", "Verifactu + Modelos AEAT"),
+                        "pro": ("Plan Profesional", "Conciliación + Verifactu SIF"),
+                        "advisor": ("Plan Gestoría / Advisor", "Multi-inquilino + FacturaE B2B")
+                    }
+                    if tier_key in title_map:
+                        p.sidebar.lbl_plan_title.setText(title_map[tier_key][0])
+                        p.sidebar.lbl_plan_sub.setText(title_map[tier_key][1])
+                    break
+                p = p.parent()
+
+            QMessageBox.information(
+                self,
+                "Plan Actualizado",
+                f"Has actualizado tu suscripción al Plan {tier_key.upper()} correctamente.\nTodas las funcionalidades asociadas se han activado."
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            QMessageBox.critical(self, "Error al cambiar de plan", str(e))
+
 
 
 class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
@@ -2042,7 +2680,7 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
         self.update_quota_warning()
         self.content_layout.addWidget(self.lbl_warning)
         
-        btn_send = QPushButton("⚡ INICIAR PAGO Y FIRMAR")
+        btn_send = QPushButton("INICIAR PAGO Y FIRMAR")
         btn_send.setStyleSheet("background-color: rgba(99, 102, 241, 0.15); border-color: #6366F1; color: #818CF8; font-weight: bold;")
         btn_send.clicked.connect(self.send_transfer)
         self.content_layout.addWidget(btn_send)
@@ -2053,12 +2691,12 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
 
     def update_quota_warning(self):
         if self.tier == "free":
-            self.lbl_warning.setText(f"<font color='#F59E0B'>⚠️ <b>Aviso:</b> Tu plan actual es <b>Gratuito</b>. Esta transferencia se procesará pero incurrirá en un recargo extra de <b>{self.fee:.2f} €</b>.</font>")
+            self.lbl_warning.setText(f"<font color='#F59E0B'><b>Aviso:</b> Tu plan actual es <b>Gratuito</b>. Esta transferencia se procesará pero incurrirá en un recargo extra de <b>{self.fee:.2f} €</b>.</font>")
         elif self.used >= self.limit:
-            self.lbl_warning.setText(f"<font color='#F59E0B'>⚠️ <b>Aviso:</b> Has agotado tu cupo de {self.limit} transferencias. Tendrá un recargo extra de <b>{self.fee:.2f} €</b>.</font>")
+            self.lbl_warning.setText(f"<font color='#F59E0B'><b>Aviso:</b> Has agotado tu cupo de {self.limit} transferencias. Tendrá un recargo extra de <b>{self.fee:.2f} €</b>.</font>")
         else:
             remaining = self.limit - self.used
-            self.lbl_warning.setText(f"<font color='#10B981'>✓ <b>Incluido en el plan:</b> Tienes {remaining} transferencias restantes de tu plan <b>{self.tier.upper()}</b>.</font>")
+            self.lbl_warning.setText(f"<font color='#10B981'><b>Incluido en el plan:</b> Tienes {remaining} transferencias restantes de tu plan <b>{self.tier.upper()}</b>.</font>")
 
     def send_transfer(self):
         recipient = self.txt_recipient.text().strip()
@@ -2305,6 +2943,9 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
         self.table.setHorizontalHeaderLabels(["Fecha", "Asiento", "Cuenta PGC", "Nombre Cuenta", "Concepto", "Debe", "Haber"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.setToolTip("Haz doble clic sobre cualquier fila para abrir el Libro Mayor de esa subcuenta.")
+        self.table.cellDoubleClicked.connect(self.on_diario_cell_double_clicked)
         right_layout.addWidget(self.table)
 
         self.summary_bar = QHBoxLayout()
@@ -2339,9 +2980,15 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
         mayor_filter_layout.addWidget(QLabel("Seleccionar Cuenta PGC:"))
         
         self.cmb_mayor_account = QComboBox()
-        self.cmb_mayor_account.setMinimumWidth(300)
+        self.cmb_mayor_account.setMinimumWidth(320)
         self.cmb_mayor_account.currentIndexChanged.connect(self.load_mayor_data)
         mayor_filter_layout.addWidget(self.cmb_mayor_account)
+
+        self.chk_only_active = QCheckBox("Sólo cuentas con movimientos")
+        self.chk_only_active.setChecked(True)
+        self.chk_only_active.setStyleSheet("color: #94A3B8; font-size: 11px;")
+        self.chk_only_active.toggled.connect(lambda: self.populate_mayor_accounts(only_active=self.chk_only_active.isChecked()))
+        mayor_filter_layout.addWidget(self.chk_only_active)
         
         self.btn_export_mayor = QPushButton("EXPORTAR ESTA CUENTA")
         self.btn_export_mayor.clicked.connect(self.export_mayor_csv)
@@ -2354,6 +3001,7 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
         self.table_mayor.setHorizontalHeaderLabels(["Fecha", "Asiento", "Concepto", "Debe", "Haber", "Saldo"])
         self.table_mayor.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_mayor.verticalHeader().setVisible(False)
+        self.table_mayor.setAlternatingRowColors(True)
         page_mayor_layout.addWidget(self.table_mayor)
         
         self.mayor_summary_layout = QHBoxLayout()
@@ -2376,13 +3024,92 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
         
         self.main_stack.addWidget(self.page_mayor)
 
+        self.populate_mayor_accounts(only_active=True)
+        self.load_ledger_data()
+        self.update_segmented_style()
+
+    def populate_mayor_accounts(self, preferred_code=None, only_active=True):
+        """Puebla el combobox de cuentas del Mayor priorizando las que tienen movimientos."""
+        self.cmb_mayor_account.blockSignals(True)
+        self.cmb_mayor_account.clear()
+        
         from app.domain.services.ledger_service import LedgerService
         accounts = LedgerService.get_pgc_accounts()
-        for acc in accounts:
-            label = f"{acc['code']} - {acc['name']}"
-            self.cmb_mayor_account.addItem(label, acc['code'])
+        
+        entry_counts = {}
+        try:
+            from app.adapters.memory.memory import _get_connection
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                rows = cursor.execute("""
+                    SELECT l.account_code, COUNT(*) as cnt 
+                    FROM ledger_entries l
+                    JOIN journal_entries j ON l.journal_entry_id = j.id
+                    GROUP BY l.account_code
+                """).fetchall()
+                for r in rows:
+                    entry_counts[r["account_code"]] = r["cnt"]
+        except Exception:
+            pass
 
-        self.load_ledger_data()
+        active_accounts = []
+        inactive_accounts = []
+        
+        for acc in accounts:
+            code = acc["code"]
+            cnt = entry_counts.get(code, 0)
+            if cnt > 0:
+                active_accounts.append((code, acc["name"], cnt))
+            else:
+                inactive_accounts.append((code, acc["name"], 0))
+                
+        active_accounts.sort(key=lambda x: x[0])
+        inactive_accounts.sort(key=lambda x: x[0])
+        
+        for code, name, cnt in active_accounts:
+            label = f"{code} - {name} ({cnt} apuntes)"
+            self.cmb_mayor_account.addItem(label, code)
+            
+        if not only_active:
+            for code, name, _ in inactive_accounts:
+                label = f"    {code} - {name} (0 apuntes)"
+                self.cmb_mayor_account.addItem(label, code)
+
+        self.cmb_mayor_account.blockSignals(False)
+
+        if preferred_code:
+            target_str = str(preferred_code).strip()
+            idx = -1
+            for i in range(self.cmb_mayor_account.count()):
+                if str(self.cmb_mayor_account.itemData(i)).strip() == target_str:
+                    idx = i
+                    break
+            if idx >= 0:
+                self.cmb_mayor_account.setCurrentIndex(idx)
+            elif only_active:
+                self.populate_mayor_accounts(preferred_code=preferred_code, only_active=False)
+                return
+            elif self.cmb_mayor_account.count() > 0:
+                self.cmb_mayor_account.setCurrentIndex(0)
+        elif self.cmb_mayor_account.count() > 0:
+            self.cmb_mayor_account.setCurrentIndex(0)
+
+        self.load_mayor_data()
+
+    def on_diario_cell_double_clicked(self, row, col):
+        """Al hacer doble clic en el Diario, salta automáticamente al Mayor de esa subcuenta."""
+        item = self.table.item(row, 2)
+        if item:
+            acc_code = item.text().strip()
+            self.jump_to_mayor(acc_code)
+
+    def jump_to_mayor(self, account_code):
+        """Conmuta al Libro Mayor seleccionando la subcuenta indicada."""
+        only_active = self.chk_only_active.isChecked() if hasattr(self, 'chk_only_active') else False
+        self.populate_mayor_accounts(preferred_code=account_code, only_active=only_active)
+        self.main_stack.setCurrentIndex(1)
+        self.btn_view_diario.setChecked(False)
+        self.btn_view_mayor.setChecked(True)
         self.update_segmented_style()
 
     def switch_view(self, index):
@@ -2438,6 +3165,7 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
         dialog = AlfonsoManualEntryDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_ledger_data()
+            self.populate_mayor_accounts(only_active=self.chk_only_active.isChecked())
 
     def export_ledger_csv(self):
         try:
@@ -2515,10 +3243,10 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
             self.lbl_total_haber.setText(f"Total Haber: {total_haber:.2f} €")
             diff = abs(total_debe - total_haber)
             if diff < 0.01:
-                self.lbl_balance_status.setText("Balance: Cuadrado ✓")
+                self.lbl_balance_status.setText("Balance: Cuadrado [OK]")
                 self.lbl_balance_status.setStyleSheet("font-weight: bold; color: #10B981; font-size: 11px;")
             else:
-                self.lbl_balance_status.setText(f"Descuadre: {diff:.2f} € ✗")
+                self.lbl_balance_status.setText(f"Descuadre: {diff:.2f} € [ERROR]")
                 self.lbl_balance_status.setStyleSheet("font-weight: bold; color: #EF4444; font-size: 11px;")
                 
         except Exception as e:
@@ -2527,12 +3255,30 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
     def load_mayor_data(self):
         code = self.cmb_mayor_account.currentData()
         if not code:
+            self.table_mayor.setRowCount(0)
+            self.lbl_mayor_total_debe.setText("Total Debe: 0.00 €")
+            self.lbl_mayor_total_haber.setText("Total Haber: 0.00 €")
+            self.lbl_mayor_saldo_final.setText("Saldo Final: 0.00 €")
             return
             
         try:
             from app.domain.services.ledger_service import LedgerService
             mayor = LedgerService.get_libro_mayor(code, 2026)
             
+            if not mayor:
+                self.table_mayor.setRowCount(1)
+                for c in range(6):
+                    if c == 2:
+                        it = QTableWidgetItem(f"ℹ️ La subcuenta {code} no tiene apuntes en el ejercicio 2026.")
+                        it.setForeground(QColor("#94A3B8"))
+                        self.table_mayor.setItem(0, c, it)
+                    else:
+                        self.table_mayor.setItem(0, c, QTableWidgetItem(""))
+                self.lbl_mayor_total_debe.setText("Total Debe: 0.00 €")
+                self.lbl_mayor_total_haber.setText("Total Haber: 0.00 €")
+                self.lbl_mayor_saldo_final.setText("Saldo Final: 0.00 €")
+                return
+
             self.table_mayor.setRowCount(len(mayor))
             total_debe = 0.0
             total_haber = 0.0
@@ -2822,21 +3568,21 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
 
         top_bar.addSpacing(10)
 
-        self.btn_back = QPushButton("◀")
+        self.btn_back = QPushButton("<")
         self.btn_back.setToolTip("Atrás")
         self.btn_back.setFixedWidth(36)
         self.btn_back.setStyleSheet("font-weight: bold; background-color: rgba(255, 255, 255, 0.05); color: #E2E8F0;")
         self.btn_back.clicked.connect(self.navigate_back)
         top_bar.addWidget(self.btn_back)
         
-        self.btn_forward = QPushButton("▶")
+        self.btn_forward = QPushButton(">")
         self.btn_forward.setToolTip("Adelante")
         self.btn_forward.setFixedWidth(36)
         self.btn_forward.setStyleSheet("font-weight: bold; background-color: rgba(255, 255, 255, 0.05); color: #E2E8F0;")
         self.btn_forward.clicked.connect(self.navigate_forward)
         top_bar.addWidget(self.btn_forward)
         
-        self.btn_up = QPushButton("▲ SUBIR")
+        self.btn_up = QPushButton("SUBIR")
         self.btn_up.setToolTip("Subir un nivel")
         self.btn_up.setFixedWidth(80)
         self.btn_up.setStyleSheet("font-weight: bold; background-color: rgba(255, 255, 255, 0.05); color: #E2E8F0;")
@@ -2972,9 +3718,9 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
         lbl_inspector_title.setStyleSheet("font-weight: bold; font-size: 9px; color: #6366F1; letter-spacing: 0.5px;")
         inspector_layout.addWidget(lbl_inspector_title)
 
-        self.lbl_big_icon = QLabel("📄")
+        self.lbl_big_icon = QLabel("[DOC]")
         self.lbl_big_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_big_icon.setStyleSheet("font-size: 54px; margin-top: 15px; margin-bottom: 10px;")
+        self.lbl_big_icon.setStyleSheet("font-size: 24px; font-weight: bold; color: #6366F1; margin-top: 15px; margin-bottom: 10px;")
         inspector_layout.addWidget(self.lbl_big_icon)
 
         self.lbl_file_name = QLabel("Selecciona un archivo")
@@ -3188,7 +3934,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
             
         try:
             if is_dir:
-                self.lbl_big_icon.setText("📁")
+                self.lbl_big_icon.setText("[DIR]")
                 self.lbl_file_name.setText(filename)
                 self.lbl_file_size.setText("Carpeta de archivos")
                 self.lbl_file_date.setText("-")
@@ -3209,11 +3955,11 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                 
                 ext = os.path.splitext(filename)[1].lower()
                 if ext == ".pdf":
-                    self.lbl_big_icon.setText("📕")
+                    self.lbl_big_icon.setText("[PDF]")
                 elif ext in (".png", ".jpg", ".jpeg", ".gif"):
-                    self.lbl_big_icon.setText("🖼️")
+                    self.lbl_big_icon.setText("[IMG]")
                 else:
-                    self.lbl_big_icon.setText("📄")
+                    self.lbl_big_icon.setText("[DOC]")
                     
                 self.lbl_file_name.setText(filename)
                 self.lbl_file_size.setText(f"Tamaño: {size_str}")
@@ -3226,7 +3972,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
             print(f"Error reading file details: {e}")
 
     def reset_inspector(self):
-        self.lbl_big_icon.setText("📄")
+        self.lbl_big_icon.setText("[DOC]")
         self.lbl_file_name.setText("Selecciona un archivo")
         self.lbl_file_size.setText("-")
         self.lbl_file_date.setText("-")

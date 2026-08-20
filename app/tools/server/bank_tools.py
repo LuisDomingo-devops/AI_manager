@@ -25,17 +25,17 @@ async def add_manual_bank_movement(date_str: str, concept: str, amount: float, r
 
 async def import_bank_statement(filepath: str) -> dict:
     """
-    Importa extractos bancarios desde un fichero estructurado Norma 43 español.
+    Importa extractos bancarios desde ficheros CSV o estándar Norma 43 español.
     """
     try:
-        count = BankService.parse_norma43_file(filepath)
+        count = BankService.import_statement(filepath)
         return {
             "status": "ok",
-            "message": f"Se han importado con éxito {count} movimientos desde el archivo Norma 43.",
+            "message": f"Se han importado con éxito {count} movimientos desde el extracto bancario.",
             "movements_imported": count
         }
     except Exception as e:
-        tool_logger.exception("Error al importar extracto Norma 43")
+        tool_logger.exception("Error al importar extracto bancario")
         return {"status": "error", "message": str(e)}
 
 async def run_bank_reconciliation(confirmed_by_user: bool = False) -> dict:

@@ -227,3 +227,197 @@ def test_specialized_auxiliary_widgets_integration(qapp):
     tenant = AlfonsoTenantAdvisorWidget(embedded=True)
     tenant.show()
     assert tenant.cb_tenants.count() >= 1
+
+
+def test_ai_assistant_and_subscription_routing_integration(qapp, mock_dashboard_config):
+    """Verifica que el índice 22 monta AlfonsoAIChatAssistantWidget y la suscripción redirige al índice 32."""
+    from client.gui.dialogs.specialized_views import AlfonsoAIChatAssistantWidget
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # Verificar índice 22 es AlfonsoAIChatAssistantWidget
+        widget_22 = dashboard.central_stack.widget(22)
+        assert isinstance(widget_22, AlfonsoAIChatAssistantWidget)
+
+        # Probar switch_to_view a Asistente IA
+        dashboard.switch_to_view(("comunicacion", "asistente_ia"))
+        assert dashboard.central_stack.currentIndex() == 22
+
+        # Probar navegación a suscripción
+        dashboard.show_subscription_dialog()
+        assert dashboard.central_stack.currentIndex() == 32
+
+
+def test_subview_mode_propagation_integration(qapp, mock_dashboard_config):
+    """Verifica que switch_to_view activa los modos y pestañas correspondientes en las vistas compuestas."""
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # 1. Laboral: empleados (16), nóminas (17), tgss (18)
+        dashboard.switch_to_view(("laboral", "empleados_contratos"))
+        assert dashboard.central_stack.currentIndex() == 16
+        assert dashboard.view_employees.mode == "employees"
+
+        dashboard.switch_to_view(("laboral", "generador_nominas"))
+        assert dashboard.central_stack.currentIndex() == 17
+        assert dashboard.view_payrolls.mode == "payrolls"
+
+        dashboard.switch_to_view(("laboral", "afiliacion_tgss"))
+        assert dashboard.central_stack.currentIndex() == 18
+        assert dashboard.view_tgss.mode == "tgss"
+
+        # 2. Impuestos: modelos (12), automatización/sede (13)
+        dashboard.switch_to_view(("impuestos", "modelos_trimestrales"))
+        assert dashboard.central_stack.currentIndex() == 12
+        assert dashboard.view_taxes.stack.currentIndex() == 0
+
+        dashboard.switch_to_view(("impuestos", "automatizacion_aeat"))
+        assert dashboard.central_stack.currentIndex() == 13
+        assert dashboard.view_aeat_auto.stack.currentIndex() == 1
+
+        # 3. Configuración: perfil fiscal (29), voz/IA (30)
+        dashboard.switch_to_view(("sistema", "perfil_fiscal"))
+        assert dashboard.central_stack.currentIndex() == 29
+        assert dashboard.view_config.stack.currentIndex() == 0
+
+        dashboard.switch_to_view(("sistema", "voz_modelos_ia"))
+        assert dashboard.central_stack.currentIndex() == 30
+        assert dashboard.view_voice_config.stack.currentIndex() == 1
+
+
+def test_central_stack_tables_integration(qapp, mock_dashboard_config):
+    """Verifica que todas las tablas del panel central están configuradas con cabeceras estilizadas y filas legibles."""
+    from PyQt6.QtWidgets import QTableWidget
+
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # 1. Tabla de Movimientos Recientes en Dashboard (Índice 0)
+        dashboard.switch_to_view(("dashboard", "resumen_ejecutivo"))
+        assert dashboard.tbl_recent_invoices.columnCount() == 4
+        assert dashboard.tbl_recent_invoices.verticalHeader().isVisible() is False
+        assert dashboard.tbl_recent_invoices.horizontalHeader().count() == 4
+
+        # 2. Tablas en CashFlow (Índice 2)
+        dashboard.switch_to_view(("dashboard", "cash_flow_prevision"))
+        cf_tables = dashboard.view_cashflow.findChildren(QTableWidget)
+        assert len(cf_tables) == 2
+        for t in cf_tables:
+            assert t.alternatingRowColors() is True
+            assert t.verticalHeader().isVisible() is False
+
+        # 3. Tablas en Laboral / Nóminas (Índice 16, 17, 18)
+        dashboard.switch_to_view(("laboral", "empleados_contratos"))
+        assert dashboard.view_employees.tbl_employees.alternatingRowColors() is True
+        assert dashboard.view_employees.tbl_employees.columnCount() == 6
+
+        # 4. Tabla en Auditoría Verifactu (Índice 27)
+        dashboard.switch_to_view(("auditoria", "huella_verifactu"))
+        assert dashboard.view_verifactu_audit.tbl_hashes.alternatingRowColors() is True
+        assert dashboard.view_verifactu_audit.tbl_hashes.columnCount() == 5
+
+
+def test_ledger_navigation_and_mayor_population_integration(qapp, mock_dashboard_config):
+    """Verifica la integración completa del Libro Diario y Mayor desde el Dashboard."""
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # Navegar a Libro Diario / Facturas Emitidas
+        dashboard.switch_to_view(("facturacion", "facturas_emitidas"))
+        assert dashboard.central_stack.currentIndex() == 3
+        ledger = dashboard.view_invoices
+
+        # Verificar que el Libro Diario tiene filas
+        assert ledger.table.rowCount() > 0
+
+        # Conmutar al Mayor y comprobar carga de datos
+        ledger.switch_view(1)
+        assert ledger.table_mayor.rowCount() > 0
+        assert "€" in ledger.lbl_mayor_total_debe.text()
+
+        # Conmutar al Diario de nuevo y ejecutar salto interactivo al Mayor
+        ledger.switch_view(0)
+        target_code = "70500000" if ledger.cmb_mayor_account.findData("70500000") >= 0 else ledger.cmb_mayor_account.itemData(0)
+        ledger.jump_to_mayor(target_code)
+        assert ledger.main_stack.currentIndex() == 1
+        assert ledger.cmb_mayor_account.currentData() == target_code
+        assert ledger.table_mayor.rowCount() > 0
+
+
+def test_help_center_navigation_and_shortcuts_integration(qapp, mock_dashboard_config):
+    """Verifica la navegación integral al Centro de Ayuda vía sidebar, método show_help y atajo F1."""
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # 1. Navegación directa vía switch_to_view tupla
+        dashboard.switch_to_view(("sistema", "centro_ayuda"))
+        assert dashboard.central_stack.currentIndex() == 33
+        assert "CENTRO DE AYUDA" in dashboard.lbl_view_title.text()
+        assert dashboard.sidebar.current_subcat_id == "centro_ayuda"
+
+        # 2. Navegación vía método helper show_help
+        dashboard.switch_to_view("Dashboard")
+        assert dashboard.central_stack.currentIndex() == 0
+        dashboard.show_help()
+        assert dashboard.central_stack.currentIndex() == 33
+
+        # 3. Navegación vía alias de cadena "Ayuda"
+        dashboard.switch_to_view("Ayuda")
+        assert dashboard.central_stack.currentIndex() == 33
+
+        # 4. Verificar que el widget interno de ayuda está montado correctamente
+        hc = dashboard.view_help_center
+        assert hc.tab_stack.count() == 4
+        assert len(hc.manual_full_text) > 0
+
+
+def test_recent_movements_and_quick_access_integration(qapp, mock_dashboard_config):
+    """Verifica la integración de los paneles inferiores de movimientos y accesos rápidos."""
+    with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+        
+        dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
+        dashboard.show()
+
+        # 1. Comprobar que la tabla de movimientos está activa en el dashboard (índice 0)
+        assert dashboard.central_stack.currentIndex() == 0
+        tbl = dashboard.tbl_recent_invoices
+        assert tbl.rowCount() >= 4
+        assert tbl.columnCount() == 4
+
+        # 2. Comprobar que los datos cargados respetan el alineamiento y colores de importe
+        first_amount_item = tbl.item(0, 3)
+        assert first_amount_item is not None
+        assert first_amount_item.text().startswith("+") or first_amount_item.text().startswith("-")
+
+        # 3. Comprobar que la sección de accesos rápidos está integrada en la vista principal
+        dashboard.switch_to_view(("dashboard", "resumen_ejecutivo"))
+        assert dashboard.central_stack.currentIndex() == 0
+
+
+
+
+
+
+

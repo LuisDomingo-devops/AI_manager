@@ -16,25 +16,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "dashboard",
         "title": "PANEL DE CONTROL",
-        "icon": "📊",
+        "icon": "",
         "badge": "En Vivo",
         "subcategories": [
             {
                 "id": "resumen_ejecutivo",
                 "title": "Resumen Ejecutivo",
-                "icon": "📈",
+                "icon": "",
                 "desc": "KPIs en tiempo real, Donut Chart y alertas AEAT"
             },
             {
                 "id": "kpis_analitica",
                 "title": "Analítica & KPIs",
-                "icon": "📊",
+                "icon": "",
                 "desc": "Métricas avanzadas, márgenes y evolución trimestral"
             },
             {
                 "id": "prevision_cashflow",
                 "title": "Previsión Tesorería",
-                "icon": "🔮",
+                "icon": "",
                 "desc": "Cash Flow a 30/60/90 días y cobros previstos"
             }
         ]
@@ -42,25 +42,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "facturacion",
         "title": "FACTURACIÓN & VENTAS",
-        "icon": "💼",
+        "icon": "",
         "badge": "Veri*Factu",
         "subcategories": [
             {
                 "id": "facturas_emitidas",
                 "title": "Facturas Emitidas",
-                "icon": "📄",
+                "icon": "",
                 "desc": "Libro de ingresos (7XX), estados de cobro y exportación"
             },
             {
                 "id": "nueva_factura_b2b",
                 "title": "Nueva Factura / FacturaE",
-                "icon": "⚡",
+                "icon": "",
                 "desc": "Emisión rápida, FacturaE B2B XML y Ley Crea y Crece"
             },
             {
                 "id": "verifactu_sif",
                 "title": "Veri*Factu & Huella Hash",
-                "icon": "🛡️",
+                "icon": "",
                 "desc": "Registro inalterable RD 1007/2023 y QR de cotejo AEAT"
             }
         ]
@@ -68,25 +68,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "gastos",
         "title": "GASTOS & COMPRAS",
-        "icon": "🛒",
+        "icon": "",
         "badge": "Deducible",
         "subcategories": [
             {
                 "id": "libro_gastos",
                 "title": "Libro de Gastos",
-                "icon": "📑",
+                "icon": "",
                 "desc": "Libro de compras (6XX) y partidas deducibles"
             },
             {
                 "id": "ocr_extraccion",
                 "title": "Captura & OCR IA",
-                "icon": "📥",
+                "icon": "",
                 "desc": "Extracción automática de tickets y facturas recibidas"
             },
             {
                 "id": "registro_manual",
                 "title": "Registro Manual",
-                "icon": "➕",
+                "icon": "",
                 "desc": "Inserción directa de gastos y cuota de autónomo RETA"
             }
         ]
@@ -94,25 +94,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "bancos",
         "title": "BANCA & TESORERÍA",
-        "icon": "🏦",
+        "icon": "",
         "badge": "PSD2",
         "subcategories": [
             {
                 "id": "conciliacion_bancaria",
                 "title": "Conciliación Bancaria",
-                "icon": "🔄",
+                "icon": "",
                 "desc": "Emparejamiento inteligente de apuntes y facturas"
             },
             {
                 "id": "conexiones_psd2",
                 "title": "Cuentas Conectadas",
-                "icon": "🌐",
+                "icon": "",
                 "desc": "Banca abierta Open Banking y sincronización de saldos"
             },
             {
                 "id": "transferencias_pagos",
                 "title": "Emisión de Pagos",
-                "icon": "💸",
+                "icon": "",
                 "desc": "Transferencias a proveedores y remesas SEPA"
             }
         ]
@@ -120,31 +120,31 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "impuestos",
         "title": "FISCALIDAD & AEAT",
-        "icon": "🏛️",
+        "icon": "",
         "badge": "Oficial",
         "subcategories": [
             {
                 "id": "modelos_trimestrales",
                 "title": "Modelos 303 y 130",
-                "icon": "📋",
+                "icon": "",
                 "desc": "Autoliquidación trimestral de IVA e IRPF en tiempo real"
             },
             {
                 "id": "automatizacion_aeat",
                 "title": "Sede Electrónica AEAT",
-                "icon": "🤖",
+                "icon": "",
                 "desc": "Asistente de presentación telemática con Playwright"
             },
             {
                 "id": "calendario_fiscal",
                 "title": "Calendario Fiscal",
-                "icon": "📅",
+                "icon": "",
                 "desc": "Vencimientos oficiales, plazos tributarios y alarmas"
             },
             {
                 "id": "novedades_boe",
                 "title": "Monitor BOE & Leyes",
-                "icon": "📜",
+                "icon": "",
                 "desc": "Novedades fiscales, deducciones y normativa estatal"
             }
         ]
@@ -152,25 +152,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "laboral",
         "title": "LABORAL & NÓMINAS",
-        "icon": "👥",
+        "icon": "",
         "badge": "TGSS",
         "subcategories": [
             {
                 "id": "empleados_contratos",
                 "title": "Empleados & Contratos",
-                "icon": "👥",
+                "icon": "",
                 "desc": "Gestión de plantilla, altas y contratos de trabajo"
             },
             {
                 "id": "generador_nominas",
                 "title": "Generador de Nóminas",
-                "icon": "📑",
+                "icon": "",
                 "desc": "Cálculo de IRPF/SS y generación de nóminas PDF"
             },
             {
                 "id": "afiliacion_tgss",
                 "title": "Seguridad Social TGSS",
-                "icon": "🏛️",
+                "icon": "",
                 "desc": "Ficheros AFI/CRA, cotizaciones y cuota RETA"
             }
         ]
@@ -178,25 +178,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "documentos",
         "title": "DOCUMENTOS & ARCHIVO",
-        "icon": "📁",
+        "icon": "",
         "badge": "Custodia",
         "subcategories": [
             {
                 "id": "archivo_fiscal",
                 "title": "Archivo Digital",
-                "icon": "🗄️",
+                "icon": "",
                 "desc": "Explorador organizado por ejercicios y trimestres"
             },
             {
                 "id": "visor_documental",
                 "title": "Visor Documental IA",
-                "icon": "🔍",
+                "icon": "",
                 "desc": "Previsualización con metadatos contables extraídos"
             },
             {
                 "id": "libros_oficiales_aeat",
                 "title": "Libros Registro Oficiales",
-                "icon": "📗",
+                "icon": "",
                 "desc": "Exportador Excel/CSV normalizado para la AEAT"
             }
         ]
@@ -204,31 +204,31 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "comunicacion",
         "title": "ASISTENTE & COMUNICACIÓN",
-        "icon": "🤖",
+        "icon": "",
         "badge": "AI 2.0",
         "subcategories": [
             {
                 "id": "asistente_ia",
                 "title": "Chat IA & Voz Alfonso",
-                "icon": "💬",
+                "icon": "",
                 "desc": "Asistente conversacional, órdenes y comandos"
             },
             {
                 "id": "correo_inteligente",
                 "title": "Alfonso Mail",
-                "icon": "✉️",
+                "icon": "",
                 "desc": "Bandeja de correo, extracción de facturas y respuestas"
             },
             {
                 "id": "agenda_citas",
                 "title": "Agenda & Citas",
-                "icon": "🗓️",
+                "icon": "",
                 "desc": "Citas previas en Administraciones y recordatorios"
             },
             {
                 "id": "proyectos_sesiones",
                 "title": "Proyectos & Sesiones",
-                "icon": "📁",
+                "icon": "",
                 "desc": "Gestor multi-sesión de proyectos de trabajo"
             }
         ]
@@ -236,25 +236,25 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "cumplimiento",
         "title": "AUDITORÍA & ASESORÍA",
-        "icon": "🛡️",
+        "icon": "",
         "badge": "Audit",
         "subcategories": [
             {
                 "id": "declaracion_sif",
                 "title": "Declaración SIF",
-                "icon": "🛡️",
+                "icon": "",
                 "desc": "Acreditación y declaración responsable RD 1007/2023"
             },
             {
                 "id": "auditoria_inmutabilidad",
                 "title": "Auditoría de Inmutabilidad",
-                "icon": "🔒",
+                "icon": "",
                 "desc": "Verificación criptográfica y registro inalterable"
             },
             {
                 "id": "panel_asesor",
                 "title": "Panel Gestoría / Advisor",
-                "icon": "🏢",
+                "icon": "",
                 "desc": "Gestión multi-empresa y multi-inquilino"
             }
         ]
@@ -262,32 +262,38 @@ SIDEBAR_CATEGORIES = [
     {
         "id": "sistema",
         "title": "SISTEMA & CONFIGURACIÓN",
-        "icon": "⚙️",
+        "icon": "",
         "badge": "Ajustes",
         "subcategories": [
             {
                 "id": "perfil_fiscal",
                 "title": "Perfil del Autónomo",
-                "icon": "👤",
+                "icon": "",
                 "desc": "NIF, actividad IAE, tipo IRPF y domicilio fiscal"
             },
             {
                 "id": "voz_modelos_ia",
                 "title": "IA & Dispositivos",
-                "icon": "🎙️",
+                "icon": "",
                 "desc": "Configuración de audio, Whisper y modelo de IA"
             },
             {
                 "id": "copias_seguridad",
                 "title": "Copias de Seguridad",
-                "icon": "💾",
+                "icon": "",
                 "desc": "Snapshots locales, exportación y restauración de datos"
             },
             {
                 "id": "suscripcion_licencia",
                 "title": "Suscripción & Licencia",
-                "icon": "👑",
+                "icon": "",
                 "desc": "Detalles del plan activo y ampliación de licencia"
+            },
+            {
+                "id": "centro_ayuda",
+                "title": "Centro de Ayuda & Manual",
+                "icon": "",
+                "desc": "Manual de usuario, preguntas frecuentes (FAQ), glosario y atajos"
             }
         ]
     }
@@ -303,8 +309,16 @@ class SubcategoryButton(QPushButton):
         self.subcat_id = subcat_data["id"]
         self.is_active = False
         
-        self.setText(f"  {subcat_data['icon']}  {subcat_data['title']}")
-        self.setToolTip(subcat_data.get("desc", ""))
+        self.setText(f"  {subcat_data['title']}")
+        
+        desc = subcat_data.get("desc", "")
+        title = subcat_data.get("title", "")
+        if desc:
+            tooltip_html = f"<div style='font-family: Segoe UI, sans-serif; padding: 2px;'><b style='color: #00F0FF; font-size: 11px;'>{title}</b><br/><span style='color: #CBD5E1; font-size: 10px;'>{desc}</span></div>"
+            self.setToolTip(tooltip_html)
+        else:
+            self.setToolTip(f"{title}")
+
         self.setFixedHeight(30)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_style()
@@ -353,11 +367,11 @@ class CategoryGroupWidget(QWidget):
     """Grupo de categoría colapsable con cabecera interactiva y lista de subcategorías."""
     subcategory_clicked = pyqtSignal(str, str, str)  # cat_id, subcat_id, title
 
-    def __init__(self, category_data, parent=None):
+    def __init__(self, category_data, parent=None, default_expanded: bool = False):
         super().__init__(parent)
         self.category_data = category_data
         self.category_id = category_data["id"]
-        self.is_expanded = True
+        self.is_expanded = default_expanded
         self.buttons = {}
 
         self.setup_ui()
@@ -377,17 +391,13 @@ class CategoryGroupWidget(QWidget):
         header_layout.setContentsMargins(6, 0, 6, 0)
         header_layout.setSpacing(6)
 
-        self.lbl_chevron = QLabel("▾")
+        self.lbl_chevron = QLabel("▾" if self.is_expanded else "▸")
         self.lbl_chevron.setStyleSheet("color: #6366F1; font-size: 10px; font-weight: bold;")
-
-        self.lbl_icon = QLabel(self.category_data["icon"])
-        self.lbl_icon.setStyleSheet("font-size: 11px;")
 
         self.lbl_title = QLabel(self.category_data["title"])
         self.lbl_title.setStyleSheet("color: #E2E8F0; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;")
 
         header_layout.addWidget(self.lbl_chevron)
-        header_layout.addWidget(self.lbl_icon)
         header_layout.addWidget(self.lbl_title)
         header_layout.addStretch()
 
@@ -421,8 +431,9 @@ class CategoryGroupWidget(QWidget):
 
         self.main_layout.addWidget(self.header_btn)
 
-        # Contenedor de subcategorías
+        # Contenedor de subcategorías (cerrado/oculto por defecto)
         self.subcat_container = QWidget()
+        self.subcat_container.setVisible(self.is_expanded)
         self.subcat_layout = QVBoxLayout(self.subcat_container)
         self.subcat_layout.setContentsMargins(10, 2, 0, 2)
         self.subcat_layout.setSpacing(2)
@@ -453,6 +464,7 @@ class CategoryGroupWidget(QWidget):
             for btn in self.buttons.values():
                 btn.setVisible(True)
             self.setVisible(True)
+            self.set_expanded(False)
             return True
 
         cat_match = (
@@ -506,6 +518,15 @@ class AlfonsoSidebarWidget(QFrame):
                 background-color: #070B14;
                 border-right: 1px solid rgba(255, 255, 255, 0.06);
             }
+            QToolTip {
+                background-color: #0F172A;
+                color: #F8FAFC;
+                border: 1px solid rgba(0, 240, 255, 0.5);
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 11px;
+            }
         """)
 
         layout = QVBoxLayout(self)
@@ -528,9 +549,6 @@ class AlfonsoSidebarWidget(QFrame):
         search_layout.setContentsMargins(8, 4, 8, 4)
         search_layout.setSpacing(6)
 
-        search_icon = QLabel("🔍")
-        search_icon.setStyleSheet("font-size: 10px; color: #64748B; background: transparent; border: none;")
-
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Buscar módulo o función...")
         self.search_input.setStyleSheet("""
@@ -539,12 +557,12 @@ class AlfonsoSidebarWidget(QFrame):
                 border: none;
                 color: #FFFFFF;
                 font-size: 11px;
-                padding: 2px;
+                padding: 2px 6px;
             }
         """)
         self.search_input.textChanged.connect(self.on_search_text_changed)
 
-        self.btn_clear_search = QPushButton("✕")
+        self.btn_clear_search = QPushButton("X")
         self.btn_clear_search.setFixedSize(16, 16)
         self.btn_clear_search.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear_search.setVisible(False)
@@ -565,7 +583,6 @@ class AlfonsoSidebarWidget(QFrame):
         """)
         self.btn_clear_search.clicked.connect(self.search_input.clear)
 
-        search_layout.addWidget(search_icon)
         search_layout.addWidget(self.search_input, 1)
         search_layout.addWidget(self.btn_clear_search)
         layout.addWidget(search_box)
@@ -605,7 +622,7 @@ class AlfonsoSidebarWidget(QFrame):
         container_layout.setSpacing(4)
 
         for cat_data in SIDEBAR_CATEGORIES:
-            group = CategoryGroupWidget(cat_data, container)
+            group = CategoryGroupWidget(cat_data, container, default_expanded=False)
             group.subcategory_clicked.connect(self.on_subcategory_selected)
             container_layout.addWidget(group)
             self.groups[cat_data["id"]] = group
@@ -617,19 +634,19 @@ class AlfonsoSidebarWidget(QFrame):
         layout.addWidget(scroll, 1)
 
         # 3. Tarjeta inferior de Plan y Licencia Dinámica
-        tier_title = "⚡ Plan Profesional"
+        tier_title = "Plan Profesional"
         tier_sub = "Verifactu SIF + PSD2"
         try:
             from app.utils.license_validator import get_active_license_tier
             t = get_active_license_tier()
             if t == "advisor":
-                tier_title = "👑 Plan Gestoría / Advisor"
+                tier_title = "Plan Gestoría / Advisor"
                 tier_sub = "Multi-inquilino + FacturaE B2B"
             elif t == "pro":
-                tier_title = "⚡ Plan Profesional"
+                tier_title = "Plan Profesional"
                 tier_sub = "Conciliación + Verifactu SIF"
             else:
-                tier_title = "🌱 Plan Autónomo Basic"
+                tier_title = "Plan Autónomo Basic"
                 tier_sub = "Verifactu + Modelos AEAT"
         except Exception:
             pass
@@ -654,7 +671,7 @@ class AlfonsoSidebarWidget(QFrame):
         self.lbl_plan_sub = QLabel(tier_sub)
         self.lbl_plan_sub.setStyleSheet("font-size: 9px; color: #94A3B8;")
 
-        btn_plan = QPushButton("Gestionar Licencia →")
+        btn_plan = QPushButton("Gestionar Licencia")
         btn_plan.setFixedHeight(22)
         btn_plan.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_plan.clicked.connect(self.plan_clicked.emit)
@@ -677,8 +694,8 @@ class AlfonsoSidebarWidget(QFrame):
         plan_layout.addWidget(btn_plan)
         layout.addWidget(plan_card)
 
-        # Establecer selección inicial por defecto
-        self.set_active("dashboard", "resumen_ejecutivo")
+        # Establecer selección inicial por defecto sin expandir grupos
+        self.set_active("dashboard", "resumen_ejecutivo", expand_group=False)
 
     def on_search_text_changed(self, text: str):
         self.btn_clear_search.setVisible(bool(text))
@@ -686,10 +703,10 @@ class AlfonsoSidebarWidget(QFrame):
             group.filter_items(text)
 
     def on_subcategory_selected(self, cat_id: str, subcat_id: str, title: str):
-        self.set_active(cat_id, subcat_id)
+        self.set_active(cat_id, subcat_id, expand_group=True)
         self.category_selected.emit(cat_id, subcat_id, title)
 
-    def set_active(self, cat_id: str, subcat_id: str):
+    def set_active(self, cat_id: str, subcat_id: str, expand_group: bool = False):
         """Marca una subcategoría como activa visualmente."""
         self.current_cat_id = cat_id
         self.current_subcat_id = subcat_id
@@ -698,6 +715,6 @@ class AlfonsoSidebarWidget(QFrame):
             is_match = (c_id == cat_id and s_id == subcat_id)
             btn.set_active_state(is_match)
 
-        # Asegurar que el grupo correspondiente esté expandido
-        if cat_id in self.groups:
+        # Si se solicita explícitamente, asegurar que el grupo esté expandido
+        if expand_group and cat_id in self.groups:
             self.groups[cat_id].set_expanded(True)

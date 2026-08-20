@@ -87,9 +87,50 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data, ensure_ascii=False)
 
 
+class SafeRotatingFileHandler(RotatingFileHandler):
+    """
+    Handler de rotación de archivos seguro para Windows y entornos multiproceso/concurrente.
+    Evita PermissionError [WinError 32] cerrando los streams antes de rotar y capturando
+    bloqueos de archivo de forma tolerante a fallos para que la aplicación nunca falle.
+    """
+    def doRollover(self):
+        if self.stream:
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+            self.stream = None
+        try:
+            super().doRollover()
+        except (PermissionError, OSError):
+            # En Windows, si otro proceso o subproceso tiene el archivo abierto, continuar de forma segura
+            pass
+        finally:
+            if not self.stream:
+                try:
+                    self.stream = self._open()
+                except Exception:
+                    pass
+
+
 formatter = RequestIdFormatter(FORMAT)
 console_formatter = ColorFormatter(FORMAT)
 json_formatter = JSONFormatter()
+
+_shared_json_handler = None
+
+def get_shared_json_handler():
+    global _shared_json_handler
+    if _shared_json_handler is None:
+        _shared_json_handler = SafeRotatingFileHandler(
+            LOG_DIR / "app.json.log",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+            delay=True
+        )
+        _shared_json_handler.setFormatter(json_formatter)
+    return _shared_json_handler
 
 
 def attach_request_id(logger: logging.Logger, request_id: str | None = None):
@@ -107,25 +148,19 @@ def build_logger(name: str, filename: str, log_to_console: bool = True):
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
-    # 1. Handler tradicional de texto
-    file_handler = RotatingFileHandler(
+    # 1. Handler tradicional de texto seguro
+    file_handler = SafeRotatingFileHandler(
         LOG_DIR / filename,
         maxBytes=5 * 1024 * 1024,
         backupCount=5,
-        encoding="utf-8"
+        encoding="utf-8",
+        delay=True
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    # 2. Handler estructurado JSON global
-    json_handler = RotatingFileHandler(
-        LOG_DIR / "app.json.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8"
-    )
-    json_handler.setFormatter(json_formatter)
-    logger.addHandler(json_handler)
+    # 2. Handler estructurado JSON global compartido (singleton)
+    logger.addHandler(get_shared_json_handler())
 
     # 3. Handler de consola
     if log_to_console:

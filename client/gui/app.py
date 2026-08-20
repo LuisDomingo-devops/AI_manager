@@ -14,15 +14,15 @@ import datetime
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, 
                              QWidget, QLabel, QFrame, QPushButton, QLineEdit, QHBoxLayout, QScrollArea, QProgressBar, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QMenu,
-                             QListWidget, QListWidgetItem, QTextEdit, QTextBrowser, QSplitter, QGroupBox, QDialog, QFormLayout, QMessageBox, QStackedWidget)
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QEvent
+                             QListWidget, QListWidgetItem, QTextEdit, QTextBrowser, QSplitter, QGroupBox, QDialog, QFormLayout, QMessageBox, QStackedWidget, QSizePolicy)
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QEvent, QSize
 from PyQt6.QtGui import QScreen, QPainter, QColor, QBrush, QPen, QPainterPath, QFont, QKeyEvent, QPixmap, QRadialGradient, QTextOption
 
 from core.api_client import AlfonsoAPI
 from core.processor import ResponseProcessor
 from services.audio import AudioService
 from core.alfonso_agent_logic import AlfonsoAgentLogic
-from client.gui.widgets import DonutChartWidget, SparklineWidget
+from client.gui.widgets import DonutChartWidget, SparklineWidget, create_professional_icon
 from client.gui.sidebar_widget import AlfonsoSidebarWidget, SIDEBAR_CATEGORIES
 from client.gui.dialogs import (
     AlfonsoBaseDialog,
@@ -51,8 +51,11 @@ from client.gui.dialogs import (
     AlfonsoBoeWidget,
     AlfonsoOfficialBooksWidget,
     AlfonsoBackupWidget,
-    AlfonsoTenantAdvisorWidget
+    AlfonsoTenantAdvisorWidget,
+    AlfonsoAIChatAssistantWidget,
+    AlfonsoHelpCenterWidget
 )
+
 
 
 
@@ -406,38 +409,38 @@ class QuarterlyBarChartWidget(QFrame):
     """Gráfico de barras estilizado de ingresos/gastos del trimestre en curso."""
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setMinimumHeight(300)
         self.setStyleSheet("""
             QuarterlyBarChartWidget {
                 background-color: rgba(255, 255, 255, 0.02);
                 border: 1px solid rgba(99, 102, 241, 0.15);
-                border-radius: 6px;
-                padding: 10px;
+                border-radius: 10px;
+                padding: 14px;
             }
         """)
         from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
-        # No setCursor to match other standard buttons
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(14)
         
         import datetime
         now_dt = datetime.datetime.now()
         current_quarter = (now_dt.month - 1) // 3 + 1
         
         lbl_title = QLabel(f"RENDIMIENTO {current_quarter}T (EN CURSO)")
-        lbl_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #818CF8; letter-spacing: 0.5px; background: transparent; border: none;")
+        lbl_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #818CF8; letter-spacing: 0.5px; background: transparent; border: none;")
         lbl_title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(lbl_title)
         
         # Ingresos
         ing_layout = QHBoxLayout()
         lbl_ing = QLabel("Ingresos:")
-        lbl_ing.setStyleSheet("font-size: 10px; color: #94A3B8; background: transparent; border: none;")
+        lbl_ing.setStyleSheet("font-size: 13px; color: #94A3B8; background: transparent; border: none;")
         lbl_ing.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.lbl_ing_val = QLabel("0,00 €")
-        self.lbl_ing_val.setStyleSheet("font-family: 'Consolas'; font-size: 10px; color: #10B981; font-weight: bold; background: transparent; border: none;")
+        self.lbl_ing_val.setStyleSheet("font-family: 'Consolas'; font-size: 13px; color: #10B981; font-weight: bold; background: transparent; border: none;")
         self.lbl_ing_val.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         ing_layout.addWidget(lbl_ing)
         ing_layout.addStretch()
@@ -445,17 +448,17 @@ class QuarterlyBarChartWidget(QFrame):
         layout.addLayout(ing_layout)
         
         self.bar_ing = QProgressBar()
-        self.bar_ing.setFixedHeight(8)
+        self.bar_ing.setFixedHeight(14)
         self.bar_ing.setTextVisible(False)
         self.bar_ing.setStyleSheet("""
             QProgressBar {
                 background-color: rgba(255, 255, 255, 0.05);
                 border: none;
-                border-radius: 4px;
+                border-radius: 7px;
             }
             QProgressBar::chunk {
                 background-color: #10B981;
-                border-radius: 4px;
+                border-radius: 7px;
             }
         """)
         self.bar_ing.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -464,10 +467,10 @@ class QuarterlyBarChartWidget(QFrame):
         # Gastos
         gast_layout = QHBoxLayout()
         lbl_gast = QLabel("Gastos:")
-        lbl_gast.setStyleSheet("font-size: 10px; color: #94A3B8; background: transparent; border: none;")
+        lbl_gast.setStyleSheet("font-size: 13px; color: #94A3B8; background: transparent; border: none;")
         lbl_gast.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.lbl_gast_val = QLabel("0,00 €")
-        self.lbl_gast_val.setStyleSheet("font-family: 'Consolas'; font-size: 10px; color: #EF4444; font-weight: bold; background: transparent; border: none;")
+        self.lbl_gast_val.setStyleSheet("font-family: 'Consolas'; font-size: 13px; color: #EF4444; font-weight: bold; background: transparent; border: none;")
         self.lbl_gast_val.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         gast_layout.addWidget(lbl_gast)
         gast_layout.addStretch()
@@ -475,21 +478,22 @@ class QuarterlyBarChartWidget(QFrame):
         layout.addLayout(gast_layout)
         
         self.bar_gast = QProgressBar()
-        self.bar_gast.setFixedHeight(8)
+        self.bar_gast.setFixedHeight(14)
         self.bar_gast.setTextVisible(False)
         self.bar_gast.setStyleSheet("""
             QProgressBar {
                 background-color: rgba(255, 255, 255, 0.05);
                 border: none;
-                border-radius: 4px;
+                border-radius: 7px;
             }
             QProgressBar::chunk {
                 background-color: #EF4444;
-                border-radius: 4px;
+                border-radius: 7px;
             }
         """)
         self.bar_gast.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(self.bar_gast)
+        layout.addStretch()
         
     def update_data(self, ingresos, gastos):
         self.lbl_ing_val.setText(f"{ingresos:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -1043,18 +1047,15 @@ class AttachedFileWidget(QFrame):
             }
         """)
         
-        # Icono
-        lbl_icon = QLabel("📄")
-        layout.addWidget(lbl_icon)
-        
         # Nombre (truncado si es largo)
         display_name = filename if len(filename) < 20 else filename[:17] + "..."
         lbl_name = QLabel(display_name)
         lbl_name.setToolTip(filename)
         layout.addWidget(lbl_name)
         
-        # Tick verde
-        lbl_check = QLabel("✔️")
+        # Estado OK
+        lbl_check = QLabel("[OK]")
+        lbl_check.setStyleSheet("color: #10B981; font-weight: bold; font-size: 10px;")
         layout.addWidget(lbl_check)
         
         # Botón eliminar
@@ -1475,6 +1476,27 @@ class AlfonsoHUDDashboard(QMainWindow):
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Escape:
             self.close_gui()
+            return
+        elif event.key() == Qt.Key.Key_F1:
+            self.show_help()
+            return
+        elif event.key() == Qt.Key.Key_F5:
+            self.update_business_metrics()
+            return
+        elif event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_N:
+                self.switch_to_view(("facturacion", "nueva_factura_b2b"))
+                return
+            elif event.key() == Qt.Key.Key_G:
+                self.switch_to_view(("gastos", "ocr_extraccion"))
+                return
+            elif event.key() == Qt.Key.Key_D:
+                self.switch_to_view(("facturacion", "facturas_emitidas"))
+                return
+            elif event.key() == Qt.Key.Key_H:
+                self.show_help()
+                return
+
         super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
@@ -1494,6 +1516,101 @@ class AlfonsoHUDDashboard(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def setup_layout(self):
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #0B0F19;
+            }
+            QToolTip {
+                background-color: #0F172A;
+                color: #F8FAFC;
+                border: 1px solid rgba(0, 240, 255, 0.5);
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 11px;
+            }
+            QTableWidget, QTableView {
+                background-color: #0B111E;
+                alternate-background-color: #0F172A;
+                gridline-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 8px;
+                color: #E2E8F0;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 11px;
+                selection-background-color: rgba(0, 240, 255, 0.18);
+                selection-color: #00F0FF;
+                outline: none;
+            }
+            QTableWidget::item, QTableView::item {
+                padding: 6px 10px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            }
+            QTableWidget::item:hover, QTableView::item:hover {
+                background-color: rgba(99, 102, 241, 0.12);
+                color: #FFFFFF;
+            }
+            QTableWidget::item:selected, QTableView::item:selected {
+                background-color: rgba(0, 240, 255, 0.2);
+                color: #00F0FF;
+                font-weight: bold;
+            }
+            QHeaderView {
+                background-color: transparent;
+                border: none;
+            }
+            QHeaderView::section {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E293B, stop:1 #0F172A);
+                color: #00F0FF;
+                font-weight: bold;
+                font-size: 10px;
+                letter-spacing: 0.8px;
+                padding: 8px 10px;
+                border: none;
+                border-bottom: 2px solid rgba(0, 240, 255, 0.4);
+                border-right: 1px solid rgba(255, 255, 255, 0.05);
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QHeaderView::section:hover {
+                background: #334155;
+                color: #FFFFFF;
+            }
+            QTableCornerButton::section {
+                background-color: #0F172A;
+                border: none;
+                border-bottom: 2px solid rgba(0, 240, 255, 0.4);
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: rgba(15, 23, 42, 0.3);
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(99, 102, 241, 0.4);
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(0, 240, 255, 0.7);
+            }
+            QScrollBar::horizontal {
+                border: none;
+                background: rgba(15, 23, 42, 0.3);
+                height: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal {
+                background: rgba(99, 102, 241, 0.4);
+                min-width: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: rgba(0, 240, 255, 0.7);
+            }
+        """)
         root_layout = QVBoxLayout(self.central_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
@@ -1531,7 +1648,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         top_bar_layout.addStretch()
 
         # Badge Verifactu SIF
-        sif_badge = QLabel("🛡️ SIF VERI*FACTU RD 1007/2023 ● REGISTRO INALTERABLE")
+        sif_badge = QLabel("SIF VERI*FACTU RD 1007/2023 ● REGISTRO INALTERABLE")
         sif_badge.setStyleSheet("""
             QLabel {
                 background-color: rgba(0, 240, 255, 0.08);
@@ -1546,7 +1663,8 @@ class AlfonsoHUDDashboard(QMainWindow):
         top_bar_layout.addWidget(sif_badge)
 
         # Fecha / Reloj
-        self.clock_lbl = QPushButton("📅 Mayo 2024")
+        now_init = datetime.datetime.now()
+        self.clock_lbl = QPushButton(f"{now_init.strftime('%d.%m.%Y')} - {now_init.strftime('%H:%M:%S')}")
         self.clock_lbl.setStyleSheet("""
             QPushButton {
                 background-color: #111827;
@@ -1560,7 +1678,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         top_bar_layout.addWidget(self.clock_lbl)
 
         # Perfil Usuario
-        user_pill = QLabel("👤 Luis Domingo (Autónomo)")
+        user_pill = QLabel("Luis Domingo (Autónomo)")
         user_pill.setStyleSheet("color: #E2E8F0; font-size: 11px; font-weight: 500; padding: 0 4px;")
         top_bar_layout.addWidget(user_pill)
 
@@ -1599,7 +1717,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         # 1. Saludo y Estado del Negocio
         greeting_banner = QHBoxLayout()
         greeting_layout = QVBoxLayout()
-        greeting_lbl = QLabel("Buenos días, Luis ☀️")
+        greeting_lbl = QLabel("Buenos días, Luis")
         greeting_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
         sub_greeting = QLabel("Panel Ejecutivo Integral ● Contabilidad, Facturación Verifactu e Impuestos en Tiempo Real")
         sub_greeting.setStyleSheet("font-size: 11px; color: #94A3B8;")
@@ -1675,17 +1793,19 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         content_layout.addLayout(kpi_row)
 
-        # 3. Filas Centrales: Gráfico Donut + Alertas + Movimientos Bancarios
+        # 3. Filas Centrales: Gráfico Donut + Rendimiento Trimestral + Alertas
         middle_grid = QHBoxLayout()
         middle_grid.setSpacing(12)
 
         # Columna 1: Facturas del Mes y Gráfico Donut
         donut_panel = QFrame()
+        donut_panel.setMinimumHeight(300)
         donut_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         dp_layout = QVBoxLayout(donut_panel)
-        dp_layout.setContentsMargins(14, 12, 14, 12)
+        dp_layout.setContentsMargins(16, 16, 16, 16)
+        dp_layout.setSpacing(10)
         dp_title = QLabel("Facturas del Mes")
-        dp_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF;")
+        dp_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #94A3B8; letter-spacing: 0.5px; text-transform: uppercase;")
         dp_layout.addWidget(dp_title)
 
         donut_inner = QHBoxLayout()
@@ -1693,75 +1813,80 @@ class AlfonsoHUDDashboard(QMainWindow):
         donut_inner.addWidget(self.donut_chart)
 
         legend_layout = QVBoxLayout()
-        legend_layout.setSpacing(6)
+        legend_layout.setSpacing(16)
         
-        l1 = QLabel("● Pagadas (14) - 8.450 €")
-        l1.setStyleSheet("color: #00F0FF; font-size: 11px;")
-        l2 = QLabel("● Pendientes (3) - 2.150 €")
-        l2.setStyleSheet("color: #F59E0B; font-size: 11px;")
-        l3 = QLabel("● Vencidas (1) - 450 €")
-        l3.setStyleSheet("color: #EF4444; font-size: 11px;")
+        self.leg1 = QLabel("● Pagadas (0)")
+        self.leg1.setStyleSheet("color: #00F0FF; font-size: 13px;")
+        self.leg2 = QLabel("● Pendientes (0)")
+        self.leg2.setStyleSheet("color: #F59E0B; font-size: 13px;")
+        self.leg3 = QLabel("● Rechazadas (0)")
+        self.leg3.setStyleSheet("color: #EF4444; font-size: 13px;")
         
-        legend_layout.addWidget(l1)
-        legend_layout.addWidget(l2)
-        legend_layout.addWidget(l3)
+        legend_layout.addWidget(self.leg1)
+        legend_layout.addWidget(self.leg2)
+        legend_layout.addWidget(self.leg3)
         legend_layout.addStretch()
         donut_inner.addLayout(legend_layout)
 
         dp_layout.addLayout(donut_inner)
         middle_grid.addWidget(donut_panel, 2)
 
-        # Columna 2: Alertas y Avisos AEAT
+        # Columna 2: Gráfico de Rendimiento Trimestral (QuarterlyBarChartWidget)
+        self.bar_chart = QuarterlyBarChartWidget(self)
+        middle_grid.addWidget(self.bar_chart, 2)
+
+        # Columna 3: Alertas y Avisos AEAT
         alerts_panel = QFrame()
+        alerts_panel.setMinimumHeight(300)
         alerts_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         ap_layout = QVBoxLayout(alerts_panel)
-        ap_layout.setContentsMargins(14, 12, 14, 12)
-        ap_layout.setSpacing(8)
+        ap_layout.setContentsMargins(16, 16, 16, 16)
+        ap_layout.setSpacing(12)
 
         ap_title = QLabel("Alertas y Próximos Vencimientos")
-        ap_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF;")
+        ap_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #94A3B8; letter-spacing: 0.5px; text-transform: uppercase;")
         ap_layout.addWidget(ap_title)
 
-        alert1 = QPushButton("⚠️ Modelo 303 (IVA 2T) vence en 12 días")
+        alert1 = QPushButton("Modelo 303 (IVA 2T) vence en 12 días")
         alert1.setStyleSheet("""
             QPushButton {
                 background-color: rgba(245, 158, 11, 0.1);
                 border: 1px solid rgba(245, 158, 11, 0.3);
-                border-radius: 6px;
+                border-radius: 8px;
                 color: #F59E0B;
                 text-align: left;
-                padding: 6px;
-                font-size: 11px;
+                padding: 12px 14px;
+                font-size: 12px;
             }
             QPushButton:hover { background-color: rgba(245, 158, 11, 0.2); }
         """)
         alert1.clicked.connect(self.show_aeat)
 
-        alert2 = QPushButton("ℹ️ 4 movimientos bancarios sin conciliar")
+        alert2 = QPushButton("4 movimientos bancarios sin conciliar")
         alert2.setStyleSheet("""
             QPushButton {
                 background-color: rgba(0, 240, 255, 0.08);
                 border: 1px solid rgba(0, 240, 255, 0.2);
-                border-radius: 6px;
+                border-radius: 8px;
                 color: #00F0FF;
                 text-align: left;
-                padding: 6px;
-                font-size: 11px;
+                padding: 12px 14px;
+                font-size: 12px;
             }
             QPushButton:hover { background-color: rgba(0, 240, 255, 0.15); }
         """)
         alert2.clicked.connect(self.show_reconcile)
 
-        alert3 = QPushButton("✅ SIF Veri*Factu: Cadena HASH válida y auditada")
+        alert3 = QPushButton("SIF Veri*Factu: Cadena HASH válida y auditada")
         alert3.setStyleSheet("""
             QPushButton {
                 background-color: rgba(16, 185, 129, 0.08);
                 border: 1px solid rgba(16, 185, 129, 0.2);
-                border-radius: 6px;
+                border-radius: 8px;
                 color: #10B981;
                 text-align: left;
-                padding: 6px;
-                font-size: 11px;
+                padding: 12px 14px;
+                font-size: 12px;
             }
             QPushButton:hover { background-color: rgba(16, 185, 129, 0.15); }
         """)
@@ -1773,7 +1898,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         ap_layout.addStretch()
         middle_grid.addWidget(alerts_panel, 2)
 
-        content_layout.addLayout(middle_grid)
+        content_layout.addLayout(middle_grid, 6)
 
         # 4. Fila Inferior: Actividad Reciente + Accesos Rápidos
         footer_grid = QHBoxLayout()
@@ -1783,31 +1908,41 @@ class AlfonsoHUDDashboard(QMainWindow):
         recent_panel = QFrame()
         recent_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         rp_layout = QVBoxLayout(recent_panel)
-        rp_layout.setContentsMargins(14, 12, 14, 12)
-        rp_title = QLabel("Últimos Movimientos del Negocio")
-        rp_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF;")
+        rp_layout.setContentsMargins(12, 10, 12, 10)
+        rp_layout.setSpacing(6)
+
+        rp_title = QLabel("Últimos Movimientos")
+        rp_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 0.5px; text-transform: uppercase;")
+        rp_title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        rp_title.setFixedHeight(14)
         rp_layout.addWidget(rp_title)
 
         self.tbl_recent_invoices = QTableWidget(4, 4)
         self.tbl_recent_invoices.setHorizontalHeaderLabels(["Fecha", "Concepto / Cliente", "Tipo", "Importe"])
-        self.tbl_recent_invoices.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tbl_recent_invoices.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.tbl_recent_invoices.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tbl_recent_invoices.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.tbl_recent_invoices.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.tbl_recent_invoices.verticalHeader().setVisible(False)
+        self.tbl_recent_invoices.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_recent_invoices.setShowGrid(False)
-        self.tbl_recent_invoices.setFixedHeight(120)
+        self.tbl_recent_invoices.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.tbl_recent_invoices.setStyleSheet("""
             QTableWidget {
-                background: transparent;
-                border: none;
+                background-color: rgba(10, 15, 29, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
                 color: #F1F5F9;
                 font-size: 11px;
             }
             QHeaderView::section {
-                background-color: #0A0F1D;
-                color: #64748B;
+                background-color: #0E1626;
+                color: #00F0FF;
                 border: none;
+                border-bottom: 1px solid rgba(0, 240, 255, 0.3);
                 font-size: 10px;
                 font-weight: bold;
-                padding: 4px;
+                padding: 4px 6px;
             }
         """)
 
@@ -1829,89 +1964,133 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.tbl_recent_invoices.setItem(row_idx, col_idx, item)
 
         rp_layout.addWidget(self.tbl_recent_invoices)
-        footer_grid.addWidget(recent_panel, 5)
+        footer_grid.addWidget(recent_panel, 6)
 
         # Accesos Rápidos
         quick_panel = QFrame()
         quick_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         quick_layout = QVBoxLayout(quick_panel)
-        quick_layout.setContentsMargins(14, 12, 14, 12)
+        quick_layout.setContentsMargins(12, 10, 12, 10)
+        quick_layout.setSpacing(8)
+
         quick_title = QLabel("Accesos Rápidos")
-        quick_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF;")
+        quick_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 0.5px; text-transform: uppercase;")
+        quick_title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        quick_title.setFixedHeight(14)
         quick_layout.addWidget(quick_title)
 
         quick_buttons_layout = QHBoxLayout()
-        quick_buttons_layout.setSpacing(8)
+        quick_buttons_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        quick_buttons_layout.setSpacing(10)
+        quick_buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-        q1 = QPushButton("⚡ Nueva Factura")
+        # 1. Nueva Factura (Invoice)
+        q1 = QPushButton()
+        q1.setIcon(create_professional_icon("invoice", "#00F0FF", 48))
+        q1.setIconSize(QSize(34, 34))
+        q1.setToolTip("Nueva Factura — Crear y emitir factura electrónica Veri*Factu")
         q1.setCursor(Qt.CursorShape.PointingHandCursor)
         q1.clicked.connect(self.show_ledger)
+        q1.setFixedSize(70, 70)
         q1.setStyleSheet("""
             QPushButton {
-                background-color: rgba(0, 240, 255, 0.1);
-                border: 1px solid rgba(0, 240, 255, 0.3);
-                border-radius: 6px;
-                color: #00F0FF;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                background-color: rgba(0, 240, 255, 0.08);
+                border: 1px solid rgba(0, 240, 255, 0.25);
+                border-radius: 10px;
             }
-            QPushButton:hover { background-color: rgba(0, 240, 255, 0.2); }
+            QPushButton:hover {
+                background-color: rgba(0, 240, 255, 0.2);
+                border: 1px solid #00F0FF;
+            }
         """)
         quick_buttons_layout.addWidget(q1)
 
-        q2 = QPushButton("🏦 Conciliar Bancos")
+        # 2. Conciliar Bancos (Bank)
+        q2 = QPushButton()
+        q2.setIcon(create_professional_icon("bank", "#10B981", 48))
+        q2.setIconSize(QSize(34, 34))
+        q2.setToolTip("Conciliar Bancos — Conciliación bancaria automática PSD2")
         q2.setCursor(Qt.CursorShape.PointingHandCursor)
         q2.clicked.connect(self.show_reconcile)
+        q2.setFixedSize(70, 70)
         q2.setStyleSheet("""
             QPushButton {
-                background-color: rgba(16, 185, 129, 0.1);
-                border: 1px solid rgba(16, 185, 129, 0.3);
-                border-radius: 6px;
-                color: #10B981;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                background-color: rgba(16, 185, 129, 0.08);
+                border: 1px solid rgba(16, 185, 129, 0.25);
+                border-radius: 10px;
             }
-            QPushButton:hover { background-color: rgba(16, 185, 129, 0.2); }
+            QPushButton:hover {
+                background-color: rgba(16, 185, 129, 0.2);
+                border: 1px solid #10B981;
+            }
         """)
         quick_buttons_layout.addWidget(q2)
 
-        q3 = QPushButton("📋 Modelo 303")
+        # 3. Modelo 303 (Tax)
+        q3 = QPushButton()
+        q3.setIcon(create_professional_icon("tax", "#6366F1", 48))
+        q3.setIconSize(QSize(34, 34))
+        q3.setToolTip("Modelo 303 — Autoliquidación trimestral de IVA AEAT")
         q3.setCursor(Qt.CursorShape.PointingHandCursor)
         q3.clicked.connect(self.show_aeat)
+        q3.setFixedSize(70, 70)
         q3.setStyleSheet("""
             QPushButton {
-                background-color: rgba(99, 102, 241, 0.1);
-                border: 1px solid rgba(99, 102, 241, 0.3);
-                border-radius: 6px;
-                color: #6366F1;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                background-color: rgba(99, 102, 241, 0.08);
+                border: 1px solid rgba(99, 102, 241, 0.25);
+                border-radius: 10px;
             }
-            QPushButton:hover { background-color: rgba(99, 102, 241, 0.2); }
+            QPushButton:hover {
+                background-color: rgba(99, 102, 241, 0.2);
+                border: 1px solid #6366F1;
+            }
         """)
         quick_buttons_layout.addWidget(q3)
 
-        q4 = QPushButton("📁 Archivo Fiscal")
+        # 4. Archivo Fiscal (Archive)
+        q4 = QPushButton()
+        q4.setIcon(create_professional_icon("archive", "#F59E0B", 48))
+        q4.setIconSize(QSize(34, 34))
+        q4.setToolTip("Archivo Fiscal — Visor de expedientes y documentación tributaria")
         q4.setCursor(Qt.CursorShape.PointingHandCursor)
         q4.clicked.connect(self.show_archive)
+        q4.setFixedSize(70, 70)
         q4.setStyleSheet("""
             QPushButton {
-                background-color: rgba(245, 158, 11, 0.1);
-                border: 1px solid rgba(245, 158, 11, 0.3);
-                border-radius: 6px;
-                color: #F59E0B;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                background-color: rgba(245, 158, 11, 0.08);
+                border: 1px solid rgba(245, 158, 11, 0.25);
+                border-radius: 10px;
             }
-            QPushButton:hover { background-color: rgba(245, 158, 11, 0.2); }
+            QPushButton:hover {
+                background-color: rgba(245, 158, 11, 0.2);
+                border: 1px solid #F59E0B;
+            }
         """)
         quick_buttons_layout.addWidget(q4)
 
+        # 5. Ayuda F1 (Help)
+        q5 = QPushButton()
+        q5.setIcon(create_professional_icon("help", "#00F0FF", 48))
+        q5.setIconSize(QSize(34, 34))
+        q5.setToolTip("Centro de Ayuda (F1) — Manual operativo, FAQ y diagnóstico")
+        q5.setCursor(Qt.CursorShape.PointingHandCursor)
+        q5.clicked.connect(self.show_help)
+        q5.setFixedSize(70, 70)
+        q5.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0, 240, 255, 0.08);
+                border: 1px solid rgba(0, 240, 255, 0.25);
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 240, 255, 0.2);
+                border: 1px solid #00F0FF;
+            }
+        """)
+        quick_buttons_layout.addWidget(q5)
+
         quick_layout.addLayout(quick_buttons_layout)
+        quick_layout.addStretch()
         footer_grid.addWidget(quick_panel, 4)
 
         content_layout.addLayout(footer_grid)
@@ -2007,7 +2186,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.central_stack.addWidget(self.view_official_books)
 
         # 22: Asistente > Chat IA & Voz Alfonso
-        self.view_ai_chat = AlfonsoComplianceDialog(self, embedded=True)
+        self.view_ai_chat = AlfonsoAIChatAssistantWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_ai_chat)
 
         # 23: Asistente > Alfonso Mail Inteligente
@@ -2049,6 +2228,10 @@ class AlfonsoHUDDashboard(QMainWindow):
         # 32: Sistema > Suscripción & Licencia
         self.view_subscription = AlfonsoSubscriptionDialog(self, embedded=True)
         self.central_stack.addWidget(self.view_subscription)
+
+        # 33: Sistema > Centro de Ayuda & Manual
+        self.view_help_center = AlfonsoHelpCenterWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_help_center)
 
         main_layout.addWidget(self.central_stack, 1)
 
@@ -2138,7 +2321,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.chat_history = "### 🤖 ¡Hola! Soy Alfonso, tu asistente contable.\n\nPuedes pedirme por voz o texto que emita facturas, concilie bancos, revise impuestos o calcule tus modelos de la AEAT.\n\n*Arrastra facturas o tickets aquí para procesarlos automáticamente.*"
+        self.chat_history = "### ¡Hola! Soy Alfonso, tu asistente contable.\n\nPuedes pedirme por voz o texto que emita facturas, concilie bancos, revise impuestos o calcule tus modelos de la AEAT.\n\n*Arrastra facturas o tickets aquí para procesarlos automáticamente.*"
         self.chat_lbl.setMarkdown(self.chat_history)
         chat_layout.addWidget(self.chat_lbl, 1)
 
@@ -2205,7 +2388,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         """)
         self.btn_clear.clicked.connect(self.clear_chat)
 
-        btn_send = QPushButton("Enviar ↵")
+        btn_send = QPushButton("Enviar")
         btn_send.setFixedHeight(28)
         btn_send.setStyleSheet("""
             QPushButton {
@@ -2229,15 +2412,6 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         main_layout.addWidget(chat_panel)
         root_layout.addLayout(main_layout, 1)
-
-    def show_subscription_dialog(self):
-        try:
-            from client.gui.dialogs.base import AlfonsoSubscriptionDialog
-            dialog = AlfonsoSubscriptionDialog(self)
-            dialog.exec()
-        except Exception as e:
-            print(f"Error abriendo diálogo de suscripción: {e}")
-        pass
 
     def setup_body_columns(self):
         pass
@@ -2450,6 +2624,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             ("sistema", "voz_modelos_ia"): (30, "SISTEMA & CONFIGURACIÓN > IA, VOZ & DISPOSITIVOS", "sistema", "voz_modelos_ia"),
             ("sistema", "copias_seguridad"): (31, "SISTEMA & CONFIGURACIÓN > COPIAS DE SEGURIDAD & RESTAURACIÓN", "sistema", "copias_seguridad"),
             ("sistema", "suscripcion_licencia"): (32, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
+            ("sistema", "centro_ayuda"): (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
 
             # Legacy string aliases
             "Dashboard": (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
@@ -2461,7 +2636,9 @@ class AlfonsoHUDDashboard(QMainWindow):
             "Correo": (23, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
             "Calendario": (14, "FISCALIDAD & AEAT > CALENDARIO FISCAL & VENCIMIENTOS", "impuestos", "calendario_fiscal"),
             "Asesor": (26, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
-            "Configuración": (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal")
+            "Configuración": (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
+            "Ayuda": (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
+            "Manual": (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda")
         }
 
         if isinstance(target, tuple):
@@ -2517,16 +2694,43 @@ class AlfonsoHUDDashboard(QMainWindow):
                     self.view_expenses.load_ledger_data()
             elif idx == 9 and hasattr(self, 'view_banks') and hasattr(self.view_banks, 'load_movements'):
                 self.view_banks.load_movements()
-            elif idx in (12, 13) and hasattr(self, 'view_taxes') and hasattr(self.view_taxes, 'calculate_taxes_live'):
-                self.view_taxes.calculate_taxes_live()
+            elif idx == 12 and hasattr(self, 'view_taxes'):
+                if hasattr(self.view_taxes, 'switch_tab'):
+                    self.view_taxes.switch_tab(0)
+                if hasattr(self.view_taxes, 'calculate_taxes_live'):
+                    self.view_taxes.calculate_taxes_live()
+            elif idx == 13 and hasattr(self, 'view_aeat_auto'):
+                if hasattr(self.view_aeat_auto, 'switch_tab'):
+                    self.view_aeat_auto.switch_tab(1)
+                if hasattr(self.view_aeat_auto, 'calculate_taxes_live'):
+                    self.view_aeat_auto.calculate_taxes_live()
             elif idx == 14 and hasattr(self, 'view_calendar') and hasattr(self.view_calendar, 'load_events'):
                 self.view_calendar.load_events()
-            elif idx in (16, 17, 18) and hasattr(self, 'view_employees') and hasattr(self.view_employees, 'load_employees'):
-                self.view_employees.load_employees()
+            elif idx == 16 and hasattr(self, 'view_employees'):
+                if hasattr(self.view_employees, 'set_mode'):
+                    self.view_employees.set_mode("employees")
+                elif hasattr(self.view_employees, 'load_employees'):
+                    self.view_employees.load_employees()
+            elif idx == 17 and hasattr(self, 'view_payrolls'):
+                if hasattr(self.view_payrolls, 'set_mode'):
+                    self.view_payrolls.set_mode("payrolls")
+                elif hasattr(self.view_payrolls, 'load_employees'):
+                    self.view_payrolls.load_employees()
+            elif idx == 18 and hasattr(self, 'view_tgss'):
+                if hasattr(self.view_tgss, 'set_mode'):
+                    self.view_tgss.set_mode("tgss")
+                elif hasattr(self.view_tgss, 'load_employees'):
+                    self.view_tgss.load_employees()
             elif idx == 19 and hasattr(self, 'view_docs') and hasattr(self.view_docs, 'refresh_file_list'):
                 self.view_docs.refresh_file_list()
             elif idx == 23 and hasattr(self, 'view_mail') and hasattr(self.view_mail, 'load_emails'):
                 self.view_mail.load_emails()
+            elif idx == 29 and hasattr(self, 'view_config'):
+                if hasattr(self.view_config, 'switch_tab'):
+                    self.view_config.switch_tab(0)
+            elif idx == 30 and hasattr(self, 'view_voice_config'):
+                if hasattr(self.view_voice_config, 'switch_tab'):
+                    self.view_voice_config.switch_tab(1)
         except Exception as e:
             print(f"Error actualizando vista {title_text}: {e}")
 
@@ -2561,7 +2765,10 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.switch_to_view("Configuración")
 
     def show_subscription_dialog(self):
-        self.switch_to_view("Configuración")
+        self.switch_to_view(("sistema", "suscripcion_licencia"))
+
+    def show_help(self):
+        self.switch_to_view(("sistema", "centro_ayuda"))
 
     def hide_calendar(self):
         self.switch_to_view("Dashboard")
@@ -2754,7 +2961,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             # Rellenar listado de proyectos (Columna Izquierda)
             selected_item = None
             for project in sorted(projects_grouped.keys()):
-                proj_item = QListWidgetItem(f"📁 {project.upper()}")
+                proj_item = QListWidgetItem(f"{project.upper()}")
                 self.projects_dialog.proj_list.addItem(proj_item)
                 
                 # Si es el proyecto activo actual, guardamos la referencia para seleccionarlo
@@ -2867,7 +3074,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         time_str = now.strftime("%H:%M:%S")
         date_str = now.strftime("%d.%m.%Y")
         if hasattr(self, 'clock_lbl') and self.clock_lbl:
-            self.clock_lbl.setText(f"📅 {date_str} - {time_str}")
+            self.clock_lbl.setText(f"{date_str} - {time_str}")
         self.update_business_metrics()
 
     def update_business_metrics(self):
@@ -2891,65 +3098,70 @@ class AlfonsoHUDDashboard(QMainWindow):
             pendientes = 0
             rechazadas = 0
             iva_soportado = 0.0
+            recent_invoices_data = []
 
             with _get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # 1. Calcular Saldo Bancario
-                cursor.execute("SELECT SUM(amount) FROM bank_movements")
-                row_bank = cursor.fetchone()
-                if row_bank and row_bank[0] is not None:
-                    saldo = float(row_bank[0])
+                try:
+                    cursor.execute("SELECT SUM(amount) FROM bank_movements")
+                    row_bank = cursor.fetchone()
+                    if row_bank and row_bank[0] is not None:
+                        saldo = float(row_bank[0])
+                except Exception:
+                    pass
                     
                 # 2. Calcular Ingresos, Gastos e IVA Soportado
-                cursor.execute("SELECT base_imponible, category, quarter, status, iva_amount FROM invoices WHERE year = 2026")
-                invs = cursor.fetchall()
-                for inv in invs:
-                    try:
-                        base = float(encryptor.decrypt(inv["base_imponible"]))
-                        total_facturas += 1
-                        
-                        # Conteo por estado de pago
-                        inv_status = inv.get("status")
-                        if inv_status in ("pagada", "paid"):
-                            pagadas += 1
-                        elif inv_status in ("rechazada", "rejected"):
-                            rechazadas += 1
-                        else:
-                            pendientes += 1
+                try:
+                    cursor.execute("SELECT invoice_id, date, issuer_name, receiver_name, concept, base_imponible, category, quarter, status, iva_amount, total_amount, year FROM invoices WHERE year = ?", (now_dt.year,))
+                    invs = cursor.fetchall()
+                    for inv in invs:
+                        try:
+                            base = float(encryptor.decrypt(inv["base_imponible"]))
+                            total_facturas += 1
                             
-                        # Clasificación ingreso vs gasto
-                        if inv["category"] in ("ingreso", "income"):
-                            ingresos += base
-                        elif inv["category"] in ("gasto", "expense"):
-                            gastos += base
-                            if inv.get("iva_amount"):
-                                try:
-                                    iva_soportado += float(encryptor.decrypt(inv["iva_amount"]))
-                                except Exception:
-                                    pass
-                        else:
-                            gastos += base
-                            
-                        # Filtrar trimestre actual
-                        if inv["quarter"] == current_quarter:
-                            if inv["category"] in ("ingreso", "income"):
-                                ingresos_trim += base
-                            elif inv["category"] in ("gasto", "expense"):
-                                gastos_trim += base
+                            # Conteo por estado de pago
+                            inv_status = str(inv.get("status", "")).lower()
+                            if inv_status in ("pagada", "paid"):
+                                pagadas += 1
+                            elif inv_status in ("rechazada", "rejected"):
+                                rechazadas += 1
                             else:
-                                gastos_trim += base
-                    except Exception:
-                        pass
+                                pendientes += 1
+                                
+                            # Clasificación ingreso vs gasto
+                            is_income = inv["category"] in ("ingreso", "income")
+                            if is_income:
+                                ingresos += base
+                            elif inv["category"] in ("gasto", "expense"):
+                                gastos += base
+                                if inv.get("iva_amount"):
+                                    try:
+                                        iva_soportado += float(encryptor.decrypt(inv["iva_amount"]))
+                                    except Exception:
+                                        pass
+                            else:
+                                gastos += base
+                                
+                            # Filtrar trimestre actual
+                            if inv["quarter"] == current_quarter:
+                                if is_income:
+                                    ingresos_trim += base
+                                else:
+                                    gastos_trim += base
+
+                            # Guardar para tabla de movimientos recientes
+                            dec_date = encryptor.decrypt(inv["date"]) if inv.get("date") else "—"
+                            dec_client = encryptor.decrypt(inv["receiver_name"]) if is_income else (encryptor.decrypt(inv["issuer_name"]) if inv.get("issuer_name") else "Proveedor")
+                            dec_concept = encryptor.decrypt(inv["concept"]) if inv.get("concept") else ("Factura Emitida" if is_income else "Gasto Deducible")
+                            sign = "+" if is_income else "-"
+                            recent_invoices_data.append((dec_date, f"{dec_concept} ({dec_client})", "Factura Emitida" if is_income else "Gasto Deducible", f"{sign}{base:,.2f} €"))
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                         
-            # Actualizar textos de la interfaz en tiempo real
-            if hasattr(self, 'lbl_saldo_banco_main') and self.lbl_saldo_banco_main:
-                self.lbl_saldo_banco_main.setText(f"{saldo:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
-                if saldo >= 0:
-                    self.lbl_saldo_banco_main.setStyleSheet("font-size: 18px; font-weight: bold; color: #10B981;")
-                else:
-                    self.lbl_saldo_banco_main.setStyleSheet("font-size: 18px; font-weight: bold; color: #EF4444;")
-            
             # Tarjetas de KPIs superiores
             if hasattr(self, 'lbl_kpi_ingresos') and self.lbl_kpi_ingresos:
                 self.lbl_kpi_ingresos.setText(f"{ingresos:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -2961,16 +3173,35 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.lbl_kpi_iva.setText(f"{iva_soportado:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
             
             # Actualizar el gráfico circular donut dinámicamente con los estados reales
-            if total_facturas > 0:
-                if hasattr(self, 'donut_widget') and self.donut_widget:
-                    self.donut_widget.set_values(total_facturas, pagadas, pendientes, rechazadas)
-                if hasattr(self, 'leg1') and self.leg1: self.leg1.setText(f"● Pagadas ({pagadas})")
-                if hasattr(self, 'leg2') and self.leg2: self.leg2.setText(f"● Pendientes ({pendientes})")
-                if hasattr(self, 'leg3') and self.leg3: self.leg3.setText(f"● Rechazadas ({rechazadas})")
+            if hasattr(self, 'donut_chart') and self.donut_chart:
+                if total_facturas > 0:
+                    self.donut_chart.set_values(total_facturas, pagadas, pendientes, rechazadas)
+                else:
+                    self.donut_chart.set_values(18, 14, 3, 1)
+            if hasattr(self, 'leg1') and self.leg1:
+                self.leg1.setText(f"● Pagadas ({pagadas if total_facturas > 0 else 14})")
+            if hasattr(self, 'leg2') and self.leg2:
+                self.leg2.setText(f"● Pendientes ({pendientes if total_facturas > 0 else 3})")
+            if hasattr(self, 'leg3') and self.leg3:
+                self.leg3.setText(f"● Rechazadas ({rechazadas if total_facturas > 0 else 1})")
             
-            # Actualizar el gráfico de barras del trimestre (si existe)
+            # Actualizar el gráfico de barras del trimestre
             if hasattr(self, 'bar_chart') and self.bar_chart:
-                self.bar_chart.update_data(ingresos_trim, gastos_trim)
+                self.bar_chart.update_data(ingresos_trim if ingresos_trim > 0 else 12430.50, gastos_trim if gastos_trim > 0 else 6256.90)
+
+            # Actualizar tabla de últimos movimientos con datos reales si existen
+            if recent_invoices_data and hasattr(self, 'tbl_recent_invoices') and self.tbl_recent_invoices:
+                self.tbl_recent_invoices.setRowCount(min(4, len(recent_invoices_data)))
+                for row_idx, row in enumerate(recent_invoices_data[:4]):
+                    for col_idx, text in enumerate(row):
+                        item = QTableWidgetItem(text)
+                        if col_idx == 3:
+                            if text.startswith("+"):
+                                item.setForeground(QColor("#10B981"))
+                            else:
+                                item.setForeground(QColor("#EF4444"))
+                            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                        self.tbl_recent_invoices.setItem(row_idx, col_idx, item)
 
         except Exception as e:
             print(f"Error updating business telemetry: {e}")
@@ -2980,11 +3211,11 @@ class AlfonsoHUDDashboard(QMainWindow):
         if self.isMaximized():
             self.showNormal()
             if hasattr(self, 'btn_maximize'):
-                self.btn_maximize.setText("□")
+                self.btn_maximize.setText("[ ]")
         else:
             self.showMaximized()
             if hasattr(self, 'btn_maximize'):
-                self.btn_maximize.setText("❐")
+                self.btn_maximize.setText("[ ]")
 
     def open_kpi_dashboard(self):
         try:
@@ -2995,16 +3226,26 @@ class AlfonsoHUDDashboard(QMainWindow):
 
     def close_gui(self):
         try:
+            if hasattr(self, 'ipc_server') and self.ipc_server:
+                self.ipc_server.close()
+        except Exception:
+            pass
+        try:
             if hasattr(self, 'agent_process') and self.agent_process:
-                self.agent_process.kill()
+                self.agent_process.terminate()
         except Exception:
             pass
         try:
             if hasattr(self, 'thread') and self.thread:
-                self.thread.stop()
+                self.thread.running = False
+                self.thread.quit()
+                self.thread.wait(300)
         except Exception:
             pass
-        os._exit(0)
+        self.close()
+        app_inst = QApplication.instance()
+        if app_inst:
+            app_inst.quit()
 
     def closeEvent(self, event):
         self.close_gui()

@@ -48,7 +48,7 @@ def test_sidebar_categories_structure_integrity():
     for cat in SIDEBAR_CATEGORIES:
         assert "id" in cat and cat["id"], "Cada categoría debe tener un ID no vacío"
         assert "title" in cat and cat["title"], "Cada categoría debe tener un título"
-        assert "icon" in cat and cat["icon"], "Cada categoría debe tener un icono representativo"
+        assert "icon" in cat, "Cada categoría debe contener la clave icon"
         assert "subcategories" in cat and isinstance(cat["subcategories"], list), "Debe contener subcategorías"
         assert len(cat["subcategories"]) >= 2, f"La categoría {cat['id']} debe tener al menos 2 subcategorías"
 
@@ -58,7 +58,7 @@ def test_sidebar_categories_structure_integrity():
         for subcat in cat["subcategories"]:
             assert "id" in subcat and subcat["id"], "Cada subcategoría debe tener un ID"
             assert "title" in subcat and subcat["title"], "Cada subcategoría debe tener un título"
-            assert "icon" in subcat and subcat["icon"], "Cada subcategoría debe tener un icono"
+            assert "icon" in subcat, "Cada subcategoría debe contener la clave icon"
             assert "desc" in subcat, "Cada subcategoría debe tener una descripción de tooltip"
             
             full_sub_key = (cat["id"], subcat["id"])
@@ -74,13 +74,13 @@ def test_subcategory_button_unit(qapp):
     subcat_data = {
         "id": "test_sub",
         "title": "Subcategoría Test",
-        "icon": "⚡",
+        "icon": "",
         "desc": "Descripción de prueba para el tooltip"
     }
     btn = SubcategoryButton(subcat_data, "test_cat")
     assert "Subcategoría Test" in btn.text()
-    assert "⚡" in btn.text()
-    assert btn.toolTip() == "Descripción de prueba para el tooltip"
+    assert "Descripción de prueba para el tooltip" in btn.toolTip()
+    assert "Subcategoría Test" in btn.toolTip()
     assert btn.is_active is False
 
     btn.set_active_state(True)
@@ -106,18 +106,22 @@ def test_category_group_widget_unit(qapp):
     group.show()
     assert group.category_id == "facturacion"
     assert len(group.buttons) == 2
-    assert group.is_expanded is True
-
-    # Test colapso / despliegue
-    group.set_expanded(False)
+    # Por defecto los desplegables deben aparecer cerrados
     assert group.is_expanded is False
     assert group.subcat_container.isHidden() is True
     assert group.lbl_chevron.text() == "▸"
 
+    # Test despliegue
     group.set_expanded(True)
     assert group.is_expanded is True
     assert group.subcat_container.isHidden() is False
     assert group.lbl_chevron.text() == "▾"
+
+    # Test colapso
+    group.set_expanded(False)
+    assert group.is_expanded is False
+    assert group.subcat_container.isHidden() is True
+    assert group.lbl_chevron.text() == "▸"
 
     # Test filtrado de items
     # 1. Búsqueda que coincide con una subcategoría

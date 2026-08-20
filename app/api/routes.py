@@ -1020,12 +1020,13 @@ async def import_bank_statement_file(file: UploadFile = File(...), connection_id
         import shutil
         import os
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as temp:
+        suffix = ".csv" if file.filename and file.filename.lower().endswith(".csv") else ".txt"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
             shutil.copyfileobj(file.file, temp)
             temp_path = temp.name
             
         try:
-            count = BankService.parse_norma43_file(temp_path, connection_id)
+            count = BankService.import_statement(temp_path, connection_id)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -1039,65 +1040,221 @@ async def import_bank_statement_file(file: UploadFile = File(...), connection_id
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router_tax.get("/bank/mock-auth", response_class=HTMLResponse)
-async def bank_mock_auth(redirect: str, bank: str = "BBVA"):
-    from fastapi.responses import HTMLResponse
+# ── Endpoints Públicos de Autorización y Retorno Bancario (Navegador Web) ────
+
+@router.get("/bank/mock-auth", response_class=HTMLResponse)
+@router.get("/api/tax/bank/mock-auth", response_class=HTMLResponse)
+async def bank_mock_auth_endpoint(redirect: str = "/callback", bank: str = "Banco"):
+    """
+    Portal de simulación de autorización bancaria para desarrollo y pruebas.
+    Público para ser abierto desde navegadores web sin cabeceras API key.
+    """
     html_content = f"""
-    <html>
+    <!DOCTYPE html>
+    <html lang="es">
         <head>
-            <title>Simulacion de Autorizacion Bancaria</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Autorización Bancaria - Alfonso</title>
             <style>
                 body {{
-                    font-family: Arial, sans-serif;
-                    background-color: #0f172a;
-                    color: #e2e8f0;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    background-color: #0B0F19;
+                    color: #E2E8F0;
                     display: flex;
                     justify-content: center;
                     align-items: center;
-                    height: 100vh;
+                    min-height: 100vh;
                     margin: 0;
+                    padding: 20px;
+                    box-sizing: border-box;
                 }}
                 .card {{
-                    background-color: #1e293b;
-                    padding: 30px;
-                    border-radius: 12px;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    background: linear-gradient(145deg, #1E293B, #0F172A);
+                    padding: 40px;
+                    border-radius: 16px;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
                     text-align: center;
-                    max-width: 400px;
-                    border: 1px solid #334155;
+                    max-width: 480px;
+                    width: 100%;
+                    border: 1px solid rgba(99, 102, 241, 0.2);
                 }}
-                h1 {{
-                    color: #38bdf8;
-                    font-size: 24px;
+                .badge {{
+                    display: inline-block;
+                    background-color: rgba(99, 102, 241, 0.15);
+                    color: #818CF8;
+                    border: 1px solid rgba(99, 102, 241, 0.3);
+                    padding: 4px 12px;
+                    border-radius: 9999px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
                     margin-bottom: 20px;
                 }}
+                h1 {{
+                    color: #F8FAFC;
+                    font-size: 24px;
+                    margin: 0 0 12px 0;
+                    font-weight: 700;
+                }}
                 p {{
-                    color: #94a3b8;
-                    margin-bottom: 30px;
-                    line-height: 1.5;
+                    color: #94A3B8;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    margin-bottom: 28px;
                 }}
                 .btn {{
-                    background-color: #0284c7;
-                    color: white;
-                    padding: 12px 24px;
+                    background: linear-gradient(135deg, #4F46E5, #6366F1);
+                    color: #FFFFFF;
+                    padding: 14px 28px;
                     border: none;
-                    border-radius: 6px;
-                    font-weight: bold;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 15px;
                     cursor: pointer;
                     text-decoration: none;
                     display: inline-block;
-                    transition: background-color 0.2s;
+                    transition: all 0.2s ease;
+                    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
                 }}
                 .btn:hover {{
-                    background-color: #0369a1;
+                    background: linear-gradient(135deg, #4338CA, #4F46E5);
+                    transform: translateY(-1px);
+                    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6);
                 }}
             </style>
         </head>
         <body>
             <div class="card">
+                <span class="badge">Open Banking / PSD2</span>
                 <h1>Conectar Alfonso con {bank}</h1>
-                <p>Estás en el portal seguro de autorización de <strong>{bank}</strong>. Al hacer clic en el botón de abajo, permitirás que Alfonso acceda a los movimientos de tu cuenta para la conciliación fiscal.</p>
-                <a href="{redirect}" class="btn">Autorizar Acceso</a>
+                <p>Estás en el portal de autorización de <strong>{bank}</strong>. Al autorizar el acceso, permitirás que Alfonso sincronice de forma segura tus movimientos bancarios para la conciliación fiscal y contable.</p>
+                <a href="{redirect}" class="btn">Autorizar y Vincular Cuenta</a>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/callback", response_class=HTMLResponse)
+@router.get("/api/tax/bank/callback", response_class=HTMLResponse)
+async def banking_callback_endpoint(
+    ref: Optional[str] = None,
+    requisition_id: Optional[str] = None,
+    error: Optional[str] = None,
+    details: Optional[str] = None,
+    bank: Optional[str] = None
+):
+    """
+    Página de confirmación de retorno tras la autorización bancaria en el navegador.
+    Pública para cualquier pasarela bancaria o redirección de usuario.
+    """
+    is_error = bool(error)
+    title = "¡Conexión Bancaria Exitosa!" if not is_error else "Error en la Autorización Bancaria"
+    accent_color = "#10B981" if not is_error else "#EF4444"
+    status_badge = "Autorización Completada" if not is_error else "Autorización Cancelada / Error"
+    
+    if is_error:
+        desc = f"No se pudo completar la conexión bancaria ({error}). {details or 'Puedes cerrar esta ventana e intentarlo de nuevo desde la aplicación.'}"
+    else:
+        bank_name = bank or "tu entidad financiera"
+        desc = f"La conexión con <strong>{bank_name}</strong> se ha completado correctamente. Tus movimientos bancarios ya están listos para sincronizarse en Alfonso."
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title} - Alfonso</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    background-color: #0B0F19;
+                    color: #E2E8F0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    padding: 20px;
+                    box-sizing: border-box;
+                }}
+                .card {{
+                    background: linear-gradient(145deg, #1E293B, #0F172A);
+                    padding: 44px 36px;
+                    border-radius: 16px;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+                    text-align: center;
+                    max-width: 480px;
+                    width: 100%;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                }}
+                .icon-circle {{
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 50%;
+                    background-color: {accent_color}20;
+                    color: {accent_color};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    margin: 0 auto 20px auto;
+                    border: 1px solid {accent_color}40;
+                }}
+                .badge {{
+                    display: inline-block;
+                    background-color: {accent_color}15;
+                    color: {accent_color};
+                    border: 1px solid {accent_color}30;
+                    padding: 4px 12px;
+                    border-radius: 9999px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 16px;
+                }}
+                h1 {{
+                    color: #F8FAFC;
+                    font-size: 22px;
+                    margin: 0 0 12px 0;
+                    font-weight: 700;
+                }}
+                p {{
+                    color: #94A3B8;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    margin-bottom: 28px;
+                }}
+                .btn-close {{
+                    background: rgba(255, 255, 255, 0.08);
+                    color: #F8FAFC;
+                    padding: 12px 24px;
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    display: inline-block;
+                    transition: all 0.2s ease;
+                }}
+                .btn-close:hover {{
+                    background: rgba(255, 255, 255, 0.15);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon-circle">{"✓" if not is_error else "✕"}</div>
+                <span class="badge">{status_badge}</span>
+                <h1>{title}</h1>
+                <p>{desc}</p>
+                <p style="font-size: 13px; color: #64748B;">Ya puedes cerrar esta ventana y regresar a la aplicación de escritorio Alfonso.</p>
+                <button class="btn-close" onclick="window.close()">Cerrar Ventana</button>
             </div>
         </body>
     </html>

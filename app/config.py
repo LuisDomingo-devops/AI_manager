@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     ALFONSO_USER_PHONE: str = "+34 600 000 000"
     ALFONSO_USER_NIF: str = ""
 
+    # ── Credenciales Open Banking PSD2 (GoCardless / Nordigen) ─────────
+    GOCARDLESS_SECRET_ID: str = ""
+    GOCARDLESS_SECRET_KEY: str = ""
+
     CHAT_PROMPT_PATH: str = "app/prompts/chat_system.txt"
 
     # ── Datos de Certificación SIF (Veri*Factu) ────────────────────────

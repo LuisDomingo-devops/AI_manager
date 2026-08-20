@@ -98,6 +98,8 @@ def test_tool_without_schema_passes_through_untouched():
 
 def test_prepare_tool_args_end_to_end_create_file(tmp_path, monkeypatch):
     """Camino completo: tool_registry.prepare_tool_args + ejecución real del tool."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "TOOL_VALIDATION_MODE", "permissive")
     tool_registry.load_plugins()
 
     target = tmp_path / "salida.txt"

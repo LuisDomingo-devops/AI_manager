@@ -37,7 +37,7 @@ class AlfonsoInvoiceConfirmDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        title = QLabel("⚠️ REVISIÓN PREVIA FISCAL REGLAMENTARIA")
+        title = QLabel("REVISIÓN PREVIA FISCAL REGLAMENTARIA")
         title.setStyleSheet("color: #F59E0B; font-size: 14px; font-weight: bold;")
         layout.addWidget(title)
 

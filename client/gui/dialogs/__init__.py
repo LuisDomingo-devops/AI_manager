@@ -1,14 +1,17 @@
 from client.gui.dialogs.base import (
     AlfonsoBaseDialog,
-    AlfonsoComplianceDialog,
-    AlfonsoSubscriptionDialog,
-    CalendarWidget,
-    AeatAutofillWidget,
-    ConfigWidget
+    AlfonsoComplianceDialog
 )
-from client.gui.dialogs.invoice import AlfonsoInvoiceConfirmDialog
+from client.gui.dialogs.invoice import (
+    AlfonsoInvoiceConfirmDialog,
+    CalendarWidget
+)
 from client.gui.dialogs.widgets import (
     MailWidget,
+    ConfigWidget,
+    AlertsWidget,
+    AeatAutofillWidget,
+    AlfonsoSubscriptionDialog,
     AlfonsoOnboardingWizard, 
     AlfonsoBankReconciliationDialog,
     AlfonsoBankConnectionsDialog, 
@@ -18,8 +21,7 @@ from client.gui.dialogs.widgets import (
     AlfonsoKPIDashboardDialog,
     AlfonsoInitiateTransferDialog,
     AlfonsoManualEntryDialog,
-    ProjectNavigatorDialog,
-    AlertsWidget
+    ProjectNavigatorDialog
 )
 from client.gui.dialogs.specialized_views import (
     AlfonsoCashFlowWidget,
@@ -29,5 +31,7 @@ from client.gui.dialogs.specialized_views import (
     AlfonsoBoeWidget,
     AlfonsoOfficialBooksWidget,
     AlfonsoBackupWidget,
-    AlfonsoTenantAdvisorWidget
+    AlfonsoTenantAdvisorWidget,
+    AlfonsoAIChatAssistantWidget,
+    AlfonsoHelpCenterWidget
 )

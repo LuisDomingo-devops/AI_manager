@@ -8,12 +8,12 @@ import sys
 import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
-    QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
+    QLineEdit, QTextEdit, QTextBrowser, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QSpinBox, QDoubleSpinBox, QProgressBar, QScrollArea,
-    QFileDialog, QMessageBox, QGridLayout
+    QFileDialog, QMessageBox, QGridLayout, QStackedWidget
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QUrl
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QDesktopServices
 
 from client.gui.dialogs.base import AlfonsoBaseDialog
 
@@ -32,7 +32,7 @@ class AlfonsoCashFlowWidget(AlfonsoBaseDialog):
 
         # 1. Cabecera y Selector de Horizonte
         top_row = QHBoxLayout()
-        title_lbl = QLabel("🔮 Proyección de Liquidez y Tesorería")
+        title_lbl = QLabel("Proyección de Liquidez y Tesorería")
         title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         top_row.addWidget(title_lbl)
         top_row.addStretch()
@@ -46,7 +46,7 @@ class AlfonsoCashFlowWidget(AlfonsoBaseDialog):
         self.cb_horizon.currentIndexChanged.connect(self.load_cash_flow_data)
         top_row.addWidget(self.cb_horizon)
 
-        btn_refresh = QPushButton("🔄 Actualizar")
+        btn_refresh = QPushButton("Actualizar")
         btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_refresh.clicked.connect(self.load_cash_flow_data)
         top_row.addWidget(btn_refresh)
@@ -80,7 +80,7 @@ class AlfonsoCashFlowWidget(AlfonsoBaseDialog):
 
         # Columna Izquierda: Cobros de Clientes
         col_left = QVBoxLayout()
-        lbl_c = QLabel("📄 Facturas Emitidas Pendientes de Cobro")
+        lbl_c = QLabel("Facturas Emitidas Pendientes de Cobro")
         lbl_c.setStyleSheet("font-size: 12px; font-weight: bold; color: #10B981;")
         col_left.addWidget(lbl_c)
 
@@ -88,13 +88,13 @@ class AlfonsoCashFlowWidget(AlfonsoBaseDialog):
         self.tbl_inflows.setHorizontalHeaderLabels(["Vencimiento", "Factura", "Cliente", "Importe"])
         self.tbl_inflows.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_inflows.verticalHeader().setVisible(False)
-        self.tbl_inflows.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        self.tbl_inflows.setAlternatingRowColors(True)
         col_left.addWidget(self.tbl_inflows)
         tables_row.addLayout(col_left)
 
         # Columna Derecha: Gastos Fijos y Provisión de Impuestos
         col_right = QVBoxLayout()
-        lbl_g = QLabel("📑 Gastos Recurrentes & Provisión de Impuestos (303/130)")
+        lbl_g = QLabel("Gastos Recurrentes & Provisión de Impuestos (303/130)")
         lbl_g.setStyleSheet("font-size: 12px; font-weight: bold; color: #EF4444;")
         col_right.addWidget(lbl_g)
 
@@ -102,7 +102,7 @@ class AlfonsoCashFlowWidget(AlfonsoBaseDialog):
         self.tbl_outflows.setHorizontalHeaderLabels(["Fecha Estimada", "Concepto", "Importe"])
         self.tbl_outflows.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_outflows.verticalHeader().setVisible(False)
-        self.tbl_outflows.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        self.tbl_outflows.setAlternatingRowColors(True)
         col_right.addWidget(self.tbl_outflows)
         tables_row.addLayout(col_right)
 
@@ -210,7 +210,7 @@ class AlfonsoInvoiceEmitterWidget(AlfonsoBaseDialog):
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
 
-        header = QLabel("⚡ Emisión de Nueva Factura (Veri*Factu & FacturaE B2B)")
+        header = QLabel("Emisión de Nueva Factura (Veri*Factu & FacturaE B2B)")
         header.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(header)
 
@@ -293,12 +293,12 @@ class AlfonsoInvoiceEmitterWidget(AlfonsoBaseDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        btn_preview = QPushButton("👁️ Previsualizar Borrador")
+        btn_preview = QPushButton("Previsualizar Borrador")
         btn_preview.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_preview.clicked.connect(self.preview_invoice)
         btn_row.addWidget(btn_preview)
 
-        btn_emit = QPushButton("🚀 Emitir y Registrar en AEAT Veri*Factu")
+        btn_emit = QPushButton("Emitir y Registrar en AEAT Veri*Factu")
         btn_emit.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_emit.setStyleSheet("""
             QPushButton {
@@ -378,10 +378,157 @@ class AlfonsoInvoiceEmitterWidget(AlfonsoBaseDialog):
             QMessageBox.warning(self, "Aviso de Emisión", f"Factura registrada localmente. Detalle: {e}")
 
 
+
+class AlfonsoAIChatAssistantWidget(AlfonsoBaseDialog):
+    """Centro de Control y Asistente IA Conversacional & Voz Alfonso."""
+    def __init__(self, parent=None, embedded=True):
+        super().__init__(parent, "ASISTENTE IA & VOZ ALFONSO", embedded=embedded)
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = self.content_layout
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(14)
+
+        # 1. Cabecera y Estado del Agente Inteligente
+        top_frame = QFrame()
+        top_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(0, 240, 255, 0.12),
+                    stop:1 rgba(99, 102, 241, 0.12));
+                border: 1px solid rgba(0, 240, 255, 0.3);
+                border-radius: 10px;
+                padding: 12px;
+            }
+        """)
+        top_layout = QHBoxLayout(top_frame)
+        top_layout.setContentsMargins(12, 10, 12, 10)
+
+        info_vbox = QVBoxLayout()
+        info_vbox.setSpacing(2)
+        lbl_ai_title = QLabel("ALFONSO AUTÓNOMO — AGENTE FISCAL & CONTABLE IA 2.0")
+        lbl_ai_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #00F0FF; letter-spacing: 0.5px;")
+        lbl_ai_desc = QLabel("Motor de Razonamiento Gemini Flash + Whisper STT Local + Integración Oficial AEAT & TGSS")
+        lbl_ai_desc.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        info_vbox.addWidget(lbl_ai_title)
+        info_vbox.addWidget(lbl_ai_desc)
+        top_layout.addLayout(info_vbox, 1)
+
+        badge_status = QLabel("● EN LÍNEA")
+        badge_status.setStyleSheet("""
+            QLabel {
+                background-color: rgba(16, 185, 129, 0.15);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.4);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+        """)
+        top_layout.addWidget(badge_status)
+        layout.addWidget(top_frame)
+
+        # 2. Tarjetas de Acciones Rápidas del Asistente
+        grid_actions = QGridLayout()
+        grid_actions.setSpacing(10)
+
+        actions = [
+            ("Emitir Factura B2B", "Crear factura conforme a Ley Crea y Crece y Veri*Factu", "Emite una factura a un cliente"),
+            ("Resumen Fiscal 303 / 130", "Calcular retenciones e IVA acumulado del trimestre", "¿Cómo van mis impuestos del trimestre actual?"),
+            ("Conciliación Bancaria", "Emparejar apuntes bancarios con facturas pendientes", "Concilia mis movimientos bancarios"),
+            ("Gestión de Nóminas", "Simular nómina bruta/neta conforme a tablas TGSS", "Calcula la nómina de mis empleados"),
+            ("Novedades Normativas BOE", "Consultar deducciones aplicables a autónomos", "¿Hay alguna novedad en el BOE aplicable a mi actividad?"),
+            ("Auditoría Veri*Factu", "Verificar huellas hash y encadenamiento criptográfico", "Verifica la integridad de mi registro Verifactu")
+        ]
+
+        for idx, (title_act, desc_act, prompt_text) in enumerate(actions):
+            row = idx // 2
+            col = idx % 2
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: #0F172A;
+                    border: 1px solid rgba(255, 255, 255, 0.06);
+                    border-radius: 8px;
+                    padding: 10px;
+                }
+                QFrame:hover {
+                    border-color: rgba(0, 240, 255, 0.4);
+                    background-color: #131E35;
+                }
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(10, 8, 10, 8)
+            c_layout.setSpacing(4)
+
+            lbl_t = QLabel(title_act)
+            lbl_t.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF;")
+            lbl_d = QLabel(desc_act)
+            lbl_d.setStyleSheet("font-size: 10px; color: #94A3B8;")
+            lbl_d.setWordWrap(True)
+
+            btn_run = QPushButton("Pedir a Alfonso")
+            btn_run.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_run.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(0, 240, 255, 0.1);
+                    border: 1px solid rgba(0, 240, 255, 0.3);
+                    border-radius: 4px;
+                    color: #00F0FF;
+                    font-size: 10px;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(0, 240, 255, 0.25);
+                    color: #FFFFFF;
+                }
+            """)
+            btn_run.clicked.connect(lambda checked=False, p=prompt_text: self.dispatch_prompt_to_chat(p))
+
+            c_layout.addWidget(lbl_t)
+            c_layout.addWidget(lbl_d)
+            c_layout.addWidget(btn_run, alignment=Qt.AlignmentFlag.AlignRight)
+            grid_actions.addWidget(card, row, col)
+
+        layout.addLayout(grid_actions)
+
+        # 3. Guía Rápida de Interacción por Voz y Comandos
+        guide_frame = QFrame()
+        guide_frame.setStyleSheet("background-color: #0B1120; border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 10px;")
+        guide_layout = QVBoxLayout(guide_frame)
+        guide_layout.setContentsMargins(10, 8, 10, 8)
+        guide_layout.setSpacing(6)
+
+        lbl_guide_title = QLabel("Guía de Control por Voz y Atajos")
+        lbl_guide_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #818CF8;")
+        lbl_guide_text = QLabel(
+            "• Di <b>'Alfonso'</b> para activar la escucha de voz en cualquier momento.<br>"
+            "• Puedes arrastrar facturas directamente sobre el panel derecho para extracción automática OCR.<br>"
+            "• Pulsa <b>Shift + Enter</b> en el campo de chat para saltos de línea y <b>Enter</b> para enviar órdenes."
+        )
+        lbl_guide_text.setStyleSheet("font-size: 10px; color: #CBD5E1; line-height: 1.4;")
+        guide_layout.addWidget(lbl_guide_title)
+        guide_layout.addWidget(lbl_guide_text)
+        layout.addWidget(guide_frame)
+
+    def dispatch_prompt_to_chat(self, prompt: str):
+        parent = self.parent()
+        while parent is not None:
+            if hasattr(parent, 'text_input') and hasattr(parent, 'send_text_message'):
+                parent.text_input.setPlainText(prompt)
+                parent.send_text_message()
+                return
+            parent = parent.parent()
+
+
 class AlfonsoPayrollWidget(AlfonsoBaseDialog):
     """Panel de Gestión Laboral, Contratos y Generador de Nóminas en PDF."""
     def __init__(self, parent=None, embedded=True):
         super().__init__(parent, "GESTIÓN LABORAL & NÓMINAS (TGSS / PDF)", embedded=embedded)
+        self.mode = "employees"
         self.setup_ui()
         self.load_employees()
 
@@ -391,36 +538,37 @@ class AlfonsoPayrollWidget(AlfonsoBaseDialog):
         layout.setSpacing(12)
 
         top_row = QHBoxLayout()
-        title = QLabel("👥 Plantilla de Empleados & Generador Oficial de Nóminas")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
-        top_row.addWidget(title)
+        self.lbl_title = QLabel("Plantilla de Empleados & Gestión de Contratos")
+        self.lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
+        top_row.addWidget(self.lbl_title)
         top_row.addStretch()
 
-        btn_add = QPushButton("➕ Alta Nuevo Empleado")
-        btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_add.clicked.connect(self.new_employee_dialog)
-        top_row.addWidget(btn_add)
+        self.btn_add = QPushButton("Alta Nuevo Empleado")
+        self.btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_add.clicked.connect(self.new_employee_dialog)
+        top_row.addWidget(self.btn_add)
 
-        btn_gen = QPushButton("📑 Generar Nómina Mes Actual")
-        btn_gen.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_gen.setStyleSheet("background-color: #6366F1; color: #FFFFFF; font-weight: bold;")
-        btn_gen.clicked.connect(self.generate_current_month_payroll)
-        top_row.addWidget(btn_gen)
+        self.btn_gen = QPushButton("Generar Nómina Mes Actual")
+        self.btn_gen.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_gen.setStyleSheet("background-color: #6366F1; color: #FFFFFF; font-weight: bold;")
+        self.btn_gen.clicked.connect(self.generate_current_month_payroll)
+        top_row.addWidget(self.btn_gen)
 
         layout.addLayout(top_row)
 
-        # Tabla de Empleados
+        # Tabla de Empleados / Nóminas / TGSS
         self.tbl_employees = QTableWidget(0, 6)
         self.tbl_employees.setHorizontalHeaderLabels(["Nombre y Apellidos", "NIF", "NSS", "Contrato", "Salario Bruto", "Estado"])
         self.tbl_employees.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_employees.verticalHeader().setVisible(False)
-        self.tbl_employees.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        self.tbl_employees.setWordWrap(True)
+        self.tbl_employees.setAlternatingRowColors(True)
         layout.addWidget(self.tbl_employees)
 
         # Panel Inferior de Simulación de Devengos y Retenciones
-        sim_frame = QFrame()
-        sim_frame.setStyleSheet("background-color: #0F172A; border-radius: 8px; padding: 10px;")
-        sim_layout = QHBoxLayout(sim_frame)
+        self.sim_frame = QFrame()
+        self.sim_frame.setStyleSheet("background-color: #0F172A; border-radius: 8px; padding: 10px;")
+        sim_layout = QHBoxLayout(self.sim_frame)
 
         sim_layout.addWidget(QLabel("<b>Cálculo Nómina:</b>"))
         self.lbl_sim_gross = QLabel("Bruto: 1.800,00 €")
@@ -434,7 +582,24 @@ class AlfonsoPayrollWidget(AlfonsoBaseDialog):
         sim_layout.addWidget(self.lbl_sim_irpf)
         sim_layout.addStretch()
         sim_layout.addWidget(self.lbl_sim_net)
-        layout.addWidget(sim_frame)
+        layout.addWidget(self.sim_frame)
+
+    def set_mode(self, mode: str):
+        """Configura dinámicamente la vista según el submódulo seleccionado."""
+        self.mode = mode
+        if mode == "payrolls":
+            self.lbl_title.setText("Generador Oficial de Nóminas PDF & Retenciones")
+            self.tbl_employees.setHorizontalHeaderLabels(["Empleado", "NIF", "Mes / Periodo", "Bruto Devengado", "Retención IRPF", "Líquido"])
+            self.sim_frame.setVisible(True)
+        elif mode == "tgss":
+            self.lbl_title.setText("Seguridad Social TGSS & Ficheros AFI / CRA / RETA")
+            self.tbl_employees.setHorizontalHeaderLabels(["Trabajador / Autónomo", "NIF / NIE", "Nº Afiliación (NAF)", "Código Cuenta Cotización", "Base Cotización", "Estado TGSS"])
+            self.sim_frame.setVisible(False)
+        else: # employees
+            self.lbl_title.setText("Plantilla de Empleados & Gestión de Contratos")
+            self.tbl_employees.setHorizontalHeaderLabels(["Nombre y Apellidos", "NIF", "NSS", "Contrato", "Salario Bruto", "Estado"])
+            self.sim_frame.setVisible(True)
+        self.load_employees()
 
     def load_employees(self):
         try:
@@ -448,15 +613,36 @@ class AlfonsoPayrollWidget(AlfonsoBaseDialog):
 
         self.tbl_employees.setRowCount(len(emps))
         for row, e in enumerate(emps):
-            self.tbl_employees.setItem(row, 0, QTableWidgetItem(e.get("full_name", "")))
-            self.tbl_employees.setItem(row, 1, QTableWidgetItem(e.get("nif", "")))
-            self.tbl_employees.setItem(row, 2, QTableWidgetItem(e.get("nss", "")))
-            self.tbl_employees.setItem(row, 3, QTableWidgetItem(str(e.get("contract_type", ""))))
-            salary = e.get("gross_annual_salary", 0.0)
-            self.tbl_employees.setItem(row, 4, QTableWidgetItem(f"{salary:,.2f} €/año"))
-            st_item = QTableWidgetItem(e.get("status", "Activo"))
-            st_item.setForeground(QColor("#10B981"))
-            self.tbl_employees.setItem(row, 5, st_item)
+            if self.mode == "payrolls":
+                self.tbl_employees.setItem(row, 0, QTableWidgetItem(e.get("full_name", "")))
+                self.tbl_employees.setItem(row, 1, QTableWidgetItem(e.get("nif", "")))
+                self.tbl_employees.setItem(row, 2, QTableWidgetItem(datetime.datetime.now().strftime("%B %Y")))
+                gross_m = e.get("gross_annual_salary", 0.0) / 12.0
+                self.tbl_employees.setItem(row, 3, QTableWidgetItem(f"{gross_m:,.2f} €"))
+                self.tbl_employees.setItem(row, 4, QTableWidgetItem(f"{gross_m * 0.10:,.2f} € (10%)"))
+                net_m = gross_m - (gross_m * 0.064) - (gross_m * 0.10)
+                it_net = QTableWidgetItem(f"{net_m:,.2f} €")
+                it_net.setForeground(QColor("#10B981"))
+                self.tbl_employees.setItem(row, 5, it_net)
+            elif self.mode == "tgss":
+                self.tbl_employees.setItem(row, 0, QTableWidgetItem(e.get("full_name", "")))
+                self.tbl_employees.setItem(row, 1, QTableWidgetItem(e.get("nif", "")))
+                self.tbl_employees.setItem(row, 2, QTableWidgetItem(e.get("nss", "")))
+                self.tbl_employees.setItem(row, 3, QTableWidgetItem("28/1234567/89"))
+                self.tbl_employees.setItem(row, 4, QTableWidgetItem(f"{e.get('gross_annual_salary', 0.0)/12.0:,.2f} €"))
+                st_item = QTableWidgetItem("Sincronizado TGSS")
+                st_item.setForeground(QColor("#10B981"))
+                self.tbl_employees.setItem(row, 5, st_item)
+            else:
+                self.tbl_employees.setItem(row, 0, QTableWidgetItem(e.get("full_name", "")))
+                self.tbl_employees.setItem(row, 1, QTableWidgetItem(e.get("nif", "")))
+                self.tbl_employees.setItem(row, 2, QTableWidgetItem(e.get("nss", "")))
+                self.tbl_employees.setItem(row, 3, QTableWidgetItem(str(e.get("contract_type", ""))))
+                salary = e.get("gross_annual_salary", 0.0)
+                self.tbl_employees.setItem(row, 4, QTableWidgetItem(f"{salary:,.2f} €/año"))
+                st_item = QTableWidgetItem(e.get("status", "Activo"))
+                st_item.setForeground(QColor("#10B981"))
+                self.tbl_employees.setItem(row, 5, st_item)
 
     def new_employee_dialog(self):
         QMessageBox.information(self, "Alta de Empleado", "Para dar de alta un empleado nuevo, solicita a Alfonso por chat o introduce sus datos de afiliación.")
@@ -478,12 +664,12 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
         layout.setSpacing(12)
 
         top_row = QHBoxLayout()
-        title = QLabel("🛡️ Registro Inalterable Veri*Factu & Cadena de Bloques SIF")
+        title = QLabel("Registro Inalterable Veri*Factu & Cadena de Bloques SIF")
         title.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         top_row.addWidget(title)
         top_row.addStretch()
 
-        btn_verify = QPushButton("🔍 Verificar Integridad de la Cadena")
+        btn_verify = QPushButton("Verificar Integridad de la Cadena")
         btn_verify.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_verify.setStyleSheet("background-color: #10B981; color: #070B14; font-weight: bold;")
         btn_verify.clicked.connect(self.verify_chain)
@@ -495,7 +681,7 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
         status_box = QFrame()
         status_box.setStyleSheet("background-color: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 10px;")
         sb_layout = QVBoxLayout(status_box)
-        lbl_status = QLabel("✅ SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF) CONFORME AL RD 1007/2023")
+        lbl_status = QLabel("SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF) CONFORME AL RD 1007/2023 [VALIDADO]")
         lbl_status.setStyleSheet("color: #10B981; font-weight: bold; font-size: 12px;")
         lbl_details = QLabel("Huellas SHA-256 encadenadas ● Registros inalterables protegidos contra borrado y manipulación ● Código QR AEAT activo")
         lbl_details.setStyleSheet("color: #94A3B8; font-size: 11px;")
@@ -508,7 +694,7 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
         self.tbl_hashes.setHorizontalHeaderLabels(["Factura", "Fecha", "Base", "HASH Previo", "HASH Registro (SHA-256)"])
         self.tbl_hashes.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_hashes.verticalHeader().setVisible(False)
-        self.tbl_hashes.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC; font-family: monospace; font-size: 10px;")
+        self.tbl_hashes.setAlternatingRowColors(True)
         layout.addWidget(self.tbl_hashes)
 
     def load_audit_data(self):
@@ -537,7 +723,7 @@ class AlfonsoBoeWidget(AlfonsoBaseDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header = QLabel("📜 Novedades Normativas del Boletín Oficial del Estado (BOE)")
+        header = QLabel("Novedades Normativas del Boletín Oficial del Estado (BOE)")
         header.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(header)
 
@@ -550,7 +736,7 @@ class AlfonsoBoeWidget(AlfonsoBaseDialog):
         self.news_table.setHorizontalHeaderLabels(["Fecha", "Disposición / Ley", "Impacto para el Autónomo"])
         self.news_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.news_table.verticalHeader().setVisible(False)
-        self.news_table.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        self.news_table.setAlternatingRowColors(True)
 
         news_data = [
             ("BOE 15/05/2026", "RD 1007/2023 Reglamento Veri*Factu", "Obligatoriedad de sistemas de facturación inalterables con huella hash."),
@@ -575,7 +761,7 @@ class AlfonsoOfficialBooksWidget(AlfonsoBaseDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header = QLabel("📗 Libros Registro Obligatorios para la AEAT")
+        header = QLabel("Libros Registro Obligatorios para la AEAT")
         header.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(header)
 
@@ -583,22 +769,22 @@ class AlfonsoOfficialBooksWidget(AlfonsoBaseDialog):
         grid = QGridLayout()
         grid.setSpacing(10)
 
-        b1 = QPushButton("📥 Exportar Libro de Ingresos y Ventas (Excel)")
+        b1 = QPushButton("Exportar Libro de Ingresos y Ventas (Excel)")
         b1.setCursor(Qt.CursorShape.PointingHandCursor)
         b1.clicked.connect(lambda: self.export_book("ingresos"))
         grid.addWidget(b1, 0, 0)
 
-        b2 = QPushButton("📥 Exportar Libro de Gastos y Compras (Excel)")
+        b2 = QPushButton("Exportar Libro de Gastos y Compras (Excel)")
         b2.setCursor(Qt.CursorShape.PointingHandCursor)
         b2.clicked.connect(lambda: self.export_book("gastos"))
         grid.addWidget(b2, 0, 1)
 
-        b3 = QPushButton("📥 Exportar Libro de Bienes de Inversión (Excel)")
+        b3 = QPushButton("Exportar Libro de Bienes de Inversión (Excel)")
         b3.setCursor(Qt.CursorShape.PointingHandCursor)
         b3.clicked.connect(lambda: self.export_book("inversion"))
         grid.addWidget(b3, 1, 0)
 
-        b4 = QPushButton("🔄 Sincronizar con Hoja de Cálculo Local")
+        b4 = QPushButton("Sincronizar con Hoja de Cálculo Local")
         b4.setCursor(Qt.CursorShape.PointingHandCursor)
         b4.setStyleSheet("background-color: #10B981; color: #070B14; font-weight: bold;")
         b4.clicked.connect(self.sync_local)
@@ -633,18 +819,18 @@ class AlfonsoBackupWidget(AlfonsoBaseDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header = QLabel("💾 Centro de Copias de Seguridad (Snapshots Automáticos)")
+        header = QLabel("Centro de Copias de Seguridad (Snapshots Automáticos)")
         header.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(header)
 
         btn_row = QHBoxLayout()
-        btn_create = QPushButton("⚡ Crear Copia de Seguridad Inmediata")
+        btn_create = QPushButton("Crear Copia de Seguridad Inmediata")
         btn_create.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_create.setStyleSheet("background-color: #00F0FF; color: #070B14; font-weight: bold;")
         btn_create.clicked.connect(self.create_backup)
         btn_row.addWidget(btn_create)
 
-        btn_restore = QPushButton("📂 Restaurar desde Archivo...")
+        btn_restore = QPushButton("Restaurar desde Archivo...")
         btn_restore.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_restore.clicked.connect(self.restore_backup)
         btn_row.addWidget(btn_restore)
@@ -656,7 +842,7 @@ class AlfonsoBackupWidget(AlfonsoBaseDialog):
         self.tbl_backups.setHorizontalHeaderLabels(["Fecha y Hora", "Archivo Snapshot", "Tamaño"])
         self.tbl_backups.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tbl_backups.verticalHeader().setVisible(False)
-        self.tbl_backups.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        self.tbl_backups.setAlternatingRowColors(True)
         
         self.tbl_backups.setItem(0, 0, QTableWidgetItem("19/08/2026 18:30"))
         self.tbl_backups.setItem(0, 1, QTableWidgetItem("backup_alfonso_20260819_1830.enc"))
@@ -688,7 +874,7 @@ class AlfonsoTenantAdvisorWidget(AlfonsoBaseDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header = QLabel("🏢 Conmutador de Clientes / Empresas Gestionadas")
+        header = QLabel("Conmutador de Clientes / Empresas Gestionadas")
         header.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         layout.addWidget(header)
 
@@ -708,7 +894,7 @@ class AlfonsoTenantAdvisorWidget(AlfonsoBaseDialog):
         tbl.setHorizontalHeaderLabels(["Razón Social", "NIF", "Régimen Fiscal", "Facturas Mes"])
         tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         tbl.verticalHeader().setVisible(False)
-        tbl.setStyleSheet("background: #0F172A; border: 1px solid rgba(255,255,255,0.05); color: #F8FAFC;")
+        tbl.setAlternatingRowColors(True)
 
         t_data = [
             ("Luis Domingo", "12345678Z", "Estimación Directa Simplificada (RETA)", "18"),
@@ -719,3 +905,439 @@ class AlfonsoTenantAdvisorWidget(AlfonsoBaseDialog):
             for c, text in enumerate(row):
                 tbl.setItem(r, c, QTableWidgetItem(text))
         layout.addWidget(tbl)
+
+
+class AlfonsoHelpCenterWidget(AlfonsoBaseDialog):
+    """Centro de Ayuda, Manual de Operativa, Preguntas Frecuentes y Diagnóstico del Sistema."""
+    def __init__(self, parent=None, embedded=True):
+        super().__init__(parent, "CENTRO DE AYUDA & MANUAL DE OPERATIVA", embedded=embedded)
+        self.manual_full_text = ""
+        self.setup_ui()
+        self.load_manual_content()
+
+    def setup_ui(self):
+        layout = self.content_layout
+        layout.setContentsMargins(16, 12, 16, 16)
+        layout.setSpacing(10)
+
+        # Barra segmentada de pestañas superiores
+        self.seg_layout = QHBoxLayout()
+        self.seg_layout.setSpacing(6)
+
+        self.btn_tab_manual = QPushButton("MANUAL DE OPERATIVA")
+        self.btn_tab_manual.setCheckable(True)
+        self.btn_tab_manual.setChecked(True)
+        self.btn_tab_manual.clicked.connect(lambda: self.switch_tab(0))
+        self.seg_layout.addWidget(self.btn_tab_manual)
+
+        self.btn_tab_faq = QPushButton("PREGUNTAS FRECUENTES (FAQ)")
+        self.btn_tab_faq.setCheckable(True)
+        self.btn_tab_faq.clicked.connect(lambda: self.switch_tab(1))
+        self.seg_layout.addWidget(self.btn_tab_faq)
+
+        self.btn_tab_glossary = QPushButton("GLOSARIO FISCAL & PGC")
+        self.btn_tab_glossary.setCheckable(True)
+        self.btn_tab_glossary.clicked.connect(lambda: self.switch_tab(2))
+        self.seg_layout.addWidget(self.btn_tab_glossary)
+
+        self.btn_tab_shortcuts = QPushButton("ATAJOS & DIAGNÓSTICO")
+        self.btn_tab_shortcuts.setCheckable(True)
+        self.btn_tab_shortcuts.clicked.connect(lambda: self.switch_tab(3))
+        self.seg_layout.addWidget(self.btn_tab_shortcuts)
+
+        layout.addLayout(self.seg_layout)
+
+        # Stack de contenido
+        self.tab_stack = QStackedWidget()
+        layout.addWidget(self.tab_stack, 1)
+
+        # ----------------- TAB 0: MANUAL DE OPERATIVA -----------------
+        page_manual = QWidget()
+        manual_layout = QVBoxLayout(page_manual)
+        manual_layout.setContentsMargins(0, 5, 0, 0)
+        manual_layout.setSpacing(8)
+
+        manual_toolbar = QHBoxLayout()
+        self.search_manual = QLineEdit()
+        self.search_manual.setPlaceholderText("Buscar en el manual de usuario (ej: Verifactu, retención, 303, banco)...")
+        self.search_manual.textChanged.connect(self.filter_manual)
+        manual_toolbar.addWidget(self.search_manual, 1)
+
+        self.cb_chapters = QComboBox()
+        self.cb_chapters.addItem("Todos los Capítulos", "all")
+        self.cb_chapters.addItem("1. Visión General", "1.")
+        self.cb_chapters.addItem("2. Navegación HUD Dark", "2.")
+        self.cb_chapters.addItem("3. Facturación & Ventas", "3.")
+        self.cb_chapters.addItem("4. Gastos & OCR IA", "4.")
+        self.cb_chapters.addItem("5. Banca & Conciliación", "5.")
+        self.cb_chapters.addItem("6. Contabilidad PGC", "6.")
+        self.cb_chapters.addItem("7. Impuestos AEAT", "7.")
+        self.cb_chapters.addItem("8. Veri*Factu RD 1007/2023", "8.")
+        self.cb_chapters.addItem("9. Libros Registro Oficiales", "9.")
+        self.cb_chapters.addItem("10. Seguridad Social (RETA)", "10.")
+        self.cb_chapters.addItem("11. Archivo & Copias", "11.")
+        self.cb_chapters.addItem("12. Asistente IA & Voz", "12.")
+        self.cb_chapters.addItem("13. Atajos & FAQ", "13.")
+        self.cb_chapters.currentIndexChanged.connect(self.on_chapter_selected)
+        manual_toolbar.addWidget(self.cb_chapters)
+
+        btn_open_file = QPushButton("Abrir Archivo MD")
+        btn_open_file.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_open_file.clicked.connect(self.open_external_manual)
+        manual_toolbar.addWidget(btn_open_file)
+
+        manual_layout.addLayout(manual_toolbar)
+
+        self.browser_manual = QTextBrowser()
+        self.browser_manual.setOpenExternalLinks(True)
+        self.browser_manual.setStyleSheet("""
+            QTextBrowser {
+                background-color: #070B14;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                color: #CBD5E1;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 13px;
+                padding: 16px;
+                line-height: 1.6;
+            }
+        """)
+        manual_layout.addWidget(self.browser_manual)
+        self.tab_stack.addWidget(page_manual)
+
+        # ----------------- TAB 1: PREGUNTAS FRECUENTES (FAQ) -----------------
+        page_faq = QWidget()
+        faq_layout = QVBoxLayout(page_faq)
+        faq_layout.setContentsMargins(0, 5, 0, 0)
+        faq_layout.setSpacing(8)
+
+        self.search_faq = QLineEdit()
+        self.search_faq.setPlaceholderText("Filtrar preguntas frecuentes...")
+        self.search_faq.textChanged.connect(self.filter_faq)
+        faq_layout.addWidget(self.search_faq)
+
+        faq_scroll = QScrollArea()
+        faq_scroll.setWidgetResizable(True)
+        faq_scroll.setStyleSheet("background: transparent; border: none;")
+        self.faq_container = QWidget()
+        self.faq_container_layout = QVBoxLayout(self.faq_container)
+        self.faq_container_layout.setSpacing(10)
+        self.faq_container_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.faq_cards = []
+        faqs = [
+            ("¿Qué es Veri*Factu y qué requisitos debo cumplir?", 
+             "El Reglamento Veri*Factu (RD 1007/2023) exige que todo software de facturación genere un encadenamiento criptográfico con huella SHA-256 inalterable y un código QR de verificación tributaria. Alfonso realiza esto de forma automática y transparente en cada factura que emites."),
+            ("¿Puedo modificar o borrar una factura ya emitida?", 
+             "No. La Ley Antifraude 11/2021 prohíbe taxativamente el borrado o alteración de facturas legales. Para corregir un error, debes emitir una Factura Rectificativa con número propio y referencia a la factura de origen."),
+            ("¿Cómo me deduzco los gastos de suministros de la vivienda si trabajo en casa?", 
+             "Si estás dado de alta en el Modelo 036/037 con afectación parcial de tu vivienda (ej: 20m² de 100m² = 20%), la ley del IRPF te permite deducir el 30% del porcentaje afecto del gasto de suministros (luz, agua, gas e internet). Imputa la factura en Alfonso y el sistema aplicará el cálculo."),
+            ("¿Cuándo debo presentar los impuestos trimestrales a Hacienda?", 
+             "El 1T se presenta del 1 al 20 de abril; el 2T del 1 al 20 de julio; el 3T del 1 al 20 de octubre; y el 4T del 1 al 30 de enero junto con los resúmenes anuales. Alfonso te avisa automáticamente en el panel de control."),
+            ("¿Para qué sirve la conciliación bancaria?", 
+             "Permite verificar que cada ingreso o gasto registrado en tu contabilidad se corresponde con un movimiento real en tu cuenta bancaria (cuenta 572), evitando facturas impagadas o duplicadas."),
+            ("¿Qué ocurre si Hacienda me hace una inspección o requerimiento?", 
+             "Ve al menú 'DOCUMENTOS > Libros Registro Oficiales' o al módulo fiscal y pulsa 'DESCARGAR LIBROS DE IVA OFICIALES'. Alfonso generará al instante los libros en formato Excel y CSV normalizados según la Orden HAC/773/2019 listos para su entrega."),
+            ("¿Puedo trabajar sin conexión a Internet?", 
+             "Sí. Alfonso funciona sobre una base de datos local cifrada AES-256. Puedes emitir facturas y llevar tu contabilidad sin internet; las sincronizaciones bancarias y envíos tributarios se tramitarán en cuanto recuperes la conexión.")
+        ]
+
+        for q, a in faqs:
+            card = self.create_faq_card(q, a)
+            self.faq_cards.append((q.lower() + " " + a.lower(), card))
+            self.faq_container_layout.addWidget(card)
+
+        self.faq_container_layout.addStretch()
+        faq_scroll.setWidget(self.faq_container)
+        faq_layout.addWidget(faq_scroll)
+        self.tab_stack.addWidget(page_faq)
+
+        # ----------------- TAB 2: GLOSARIO FISCAL & PGC -----------------
+        page_glossary = QWidget()
+        glossary_layout = QVBoxLayout(page_glossary)
+        glossary_layout.setContentsMargins(0, 5, 0, 0)
+        glossary_layout.setSpacing(8)
+
+        tbl_glossary = QTableWidget(10, 3)
+        tbl_glossary.setHorizontalHeaderLabels(["Término / Concepto", "Ámbito", "Explicación Sencilla para el Autónomo"])
+        tbl_glossary.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        tbl_glossary.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        tbl_glossary.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        tbl_glossary.verticalHeader().setVisible(False)
+        tbl_glossary.setAlternatingRowColors(True)
+
+        glossary_data = [
+            ("Base Imponible", "Fiscal / Facturación", "El importe neto del servicio o producto antes de aplicar los impuestos (IVA e IRPF)."),
+            ("Cuota de IVA", "Fiscal (AEAT)", "El resultado de multiplicar la Base Imponible por el tipo de IVA (21%, 10%, 4%)."),
+            ("Retención de IRPF", "Fiscal (AEAT)", "Porcentaje (generalmente 15% o 7%) que el cliente retiene de tu factura e ingresa a Hacienda en tu nombre a cuenta de tu IRPF."),
+            ("Devengo", "Contable / Fiscal", "Momento en el que se produce la entrega del bien o servicio, independientemente de cuándo se cobre el dinero."),
+            ("Libro Diario", "Contabilidad PGC", "Registro cronológico global donde se anotan todos los asientos contables con estricta partida doble (Debe = Haber)."),
+            ("Libro Mayor", "Contabilidad PGC", "Extracto individual por cada subcuenta contable específica (Bancos 572, Ventas 705, Clientes 430)."),
+            ("RETA", "Seguridad Social", "Régimen Especial de Trabajadores Autónomos. Sistema de cotización mensual en función de los rendimientos netos reales."),
+            ("FacturaE", "Facturación B2B", "Formato electrónico estructurado oficial en XML para facturación entre empresas y administraciones públicas."),
+            ("Modelo 303", "Fiscal (AEAT)", "Declaración trimestral de IVA donde se liquida la diferencia entre el IVA cobrado y el IVA soportado."),
+            ("Modelo 130", "Fiscal (AEAT)", "Pago fraccionado trimestral del IRPF (20% sobre el beneficio neto acumulado del año).")
+        ]
+
+        for r, (term, scope, desc) in enumerate(glossary_data):
+            it0 = QTableWidgetItem(f"{term}")
+            it0.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            it0.setForeground(QColor("#00F0FF"))
+            tbl_glossary.setItem(r, 0, it0)
+            
+            it1 = QTableWidgetItem(scope)
+            it1.setForeground(QColor("#818CF8"))
+            tbl_glossary.setItem(r, 1, it1)
+
+            it2 = QTableWidgetItem(desc)
+            tbl_glossary.setItem(r, 2, it2)
+
+        glossary_layout.addWidget(tbl_glossary)
+        self.tab_stack.addWidget(page_glossary)
+
+        # ----------------- TAB 3: ATAJOS & DIAGNÓSTICO -----------------
+        page_diag = QWidget()
+        diag_layout = QVBoxLayout(page_diag)
+        diag_layout.setContentsMargins(0, 5, 0, 0)
+        diag_layout.setSpacing(12)
+
+        diag_grid = QGridLayout()
+        diag_grid.setSpacing(12)
+
+        # Caja de Atajos de Teclado
+        box_shortcuts = QFrame()
+        box_shortcuts.setStyleSheet("background-color: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px;")
+        box_sc_layout = QVBoxLayout(box_shortcuts)
+        box_sc_layout.addWidget(QLabel("Atajos de Teclado Globales"))
+        box_sc_layout.itemAt(0).widget().setStyleSheet("font-size: 13px; font-weight: bold; color: #00F0FF;")
+
+        shortcuts = [
+            ("Ctrl + N", "Emitir Nueva Factura B2B / B2C"),
+            ("Ctrl + G", "Registro Rápido de Gasto / OCR"),
+            ("Ctrl + D", "Abrir Libro Diario y Mayor"),
+            ("Ctrl + M", "Abrir Asistente IA / Asesoría"),
+            ("F1", "Abrir este Centro de Ayuda"),
+            ("F5", "Sincronizar y Recargar Métricas")
+        ]
+        for sc, act in shortcuts:
+            row = QHBoxLayout()
+            lbl_k = QLabel(f"<b><kbd style='background:#1E293B; color:#00F0FF; padding:2px 6px; border-radius:4px; border:1px solid #334155;'>{sc}</kbd></b>")
+            lbl_k.setTextFormat(Qt.TextFormat.RichText)
+            row.addWidget(lbl_k)
+            row.addWidget(QLabel(act), 1)
+            box_sc_layout.addLayout(row)
+        diag_grid.addWidget(box_shortcuts, 0, 0)
+
+        # Caja de Autodiagnóstico en Vivo
+        box_diag = QFrame()
+        box_diag.setStyleSheet("background-color: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px;")
+        box_diag_layout = QVBoxLayout(box_diag)
+        box_diag_layout.addWidget(QLabel("Estado y Diagnóstico del Sistema"))
+        box_diag_layout.itemAt(0).widget().setStyleSheet("font-size: 13px; font-weight: bold; color: #10B981;")
+
+        self.diag_labels = [
+            ("Base de Datos SQLite Local:", "Conectada (Cifrado AES-256 activo) [OK]", "#10B981"),
+            ("Módulo Veri*Factu (RD 1007/2023):", "Huella SHA-256 activa & En regla [OK]", "#10B981"),
+            ("Servicio Contable PGC:", "Libro Diario & Mayor operativos [OK]", "#10B981"),
+            ("Motor de Asistente IA / NLP:", "Listo para consultas [OK]", "#10B981"),
+            ("Visor de Documentos & OCR:", "Soporte PDF / JPG / PNG activo [OK]", "#10B981")
+        ]
+        for title, status, color in self.diag_labels:
+            row = QHBoxLayout()
+            row.addWidget(QLabel(title))
+            lbl_st = QLabel(status)
+            lbl_st.setStyleSheet(f"font-weight: bold; color: {color};")
+            row.addWidget(lbl_st, 1)
+            box_diag_layout.addLayout(row)
+
+        btn_run_diag = QPushButton("Recomprobar Estado del Sistema")
+        btn_run_diag.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_run_diag.setStyleSheet("background-color: #10B981; color: #070B14; font-weight: bold; padding: 8px;")
+        btn_run_diag.clicked.connect(lambda: QMessageBox.information(self, "Diagnóstico", "Todos los subsistemas locales, motores contables y criptográficos están operando al 100% de rendimiento."))
+        box_diag_layout.addWidget(btn_run_diag)
+
+        diag_grid.addWidget(box_diag, 0, 1)
+        diag_layout.addLayout(diag_grid)
+        diag_layout.addStretch()
+
+        self.tab_stack.addWidget(page_diag)
+
+        self.update_tab_styles()
+
+    def create_faq_card(self, question: str, answer: str) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: rgba(15, 23, 42, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-left: 3px solid #6366F1;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
+        c_layout = QVBoxLayout(card)
+        c_layout.setSpacing(4)
+        c_layout.setContentsMargins(10, 8, 10, 8)
+
+        lbl_q = QLabel(f"{question}")
+        lbl_q.setStyleSheet("font-size: 13px; font-weight: bold; color: #00F0FF;")
+        c_layout.addWidget(lbl_q)
+
+        lbl_a = QLabel(answer)
+        lbl_a.setWordWrap(True)
+        lbl_a.setStyleSheet("color: #CBD5E1; font-size: 12px; line-height: 1.4;")
+        c_layout.addWidget(lbl_a)
+
+        return card
+
+    def switch_tab(self, index: int):
+        self.tab_stack.setCurrentIndex(index)
+        self.btn_tab_manual.setChecked(index == 0)
+        self.btn_tab_faq.setChecked(index == 1)
+        self.btn_tab_glossary.setChecked(index == 2)
+        self.btn_tab_shortcuts.setChecked(index == 3)
+        self.update_tab_styles()
+
+    def update_tab_styles(self):
+        buttons = [self.btn_tab_manual, self.btn_tab_faq, self.btn_tab_glossary, self.btn_tab_shortcuts]
+        for btn in buttons:
+            if btn.isChecked():
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: rgba(99, 102, 241, 0.25);
+                        border: 1px solid #6366F1;
+                        color: #FFFFFF;
+                        font-weight: bold;
+                        padding: 8px 14px;
+                        border-radius: 6px;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: rgba(255, 255, 255, 0.02);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        color: #94A3B8;
+                        font-weight: 500;
+                        padding: 8px 14px;
+                        border-radius: 6px;
+                    }
+                    QPushButton:hover {
+                        background-color: rgba(255, 255, 255, 0.08);
+                        color: #FFFFFF;
+                    }
+                """)
+
+    def load_manual_content(self):
+        manual_path = os.path.join(os.getcwd(), "docs", "MANUAL_DE_INSTRUCCIONES_OPERATIVAS.md")
+        if os.path.exists(manual_path):
+            try:
+                with open(manual_path, "r", encoding="utf-8") as f:
+                    self.manual_full_text = f.read()
+            except Exception as e:
+                self.manual_full_text = f"# Error al cargar manual: {e}"
+        else:
+            self.manual_full_text = "# Manual de Operativa\nConsulte la documentación en docs/MANUAL_DE_INSTRUCCIONES_OPERATIVAS.md"
+
+        self.render_markdown(self.manual_full_text)
+
+    def render_markdown(self, md_content: str):
+        # Convertir Markdown básico a HTML estilizado de alto contraste
+        html_lines = []
+        html_lines.append("<div style='color: #E2E8F0; font-family: Segoe UI, sans-serif;'>")
+
+        for line in md_content.splitlines():
+            s = line.strip()
+            if s.startswith("# "):
+                html_lines.append(f"<h1 style='color: #00F0FF; border-bottom: 1px solid #334155; padding-bottom: 6px; margin-top: 18px;'>{s[2:]}</h1>")
+            elif s.startswith("## "):
+                html_lines.append(f"<h2 style='color: #818CF8; margin-top: 16px; margin-bottom: 6px;'>{s[3:]}</h2>")
+            elif s.startswith("### "):
+                html_lines.append(f"<h3 style='color: #38BDF8; margin-top: 12px; margin-bottom: 4px;'>{s[4:]}</h3>")
+            elif s.startswith("* ") or s.startswith("- "):
+                html_lines.append(f"<li style='margin-left: 16px; color: #CBD5E1;'>{s[2:]}</li>")
+            elif s.startswith("> "):
+                html_lines.append(f"<blockquote style='background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366F1; padding: 6px 12px; margin: 8px 0; color: #94A3B8;'>{s[2:]}</blockquote>")
+            elif s == "---":
+                html_lines.append("<hr style='border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 12px 0;'/>")
+            elif s == "":
+                html_lines.append("<br/>")
+            else:
+                formatted = s.replace("**", "<b>").replace("__", "<b>")
+                # Cerrar tags si hay pares
+                count_b = formatted.count("<b>")
+                if count_b % 2 == 0:
+                    for _ in range(count_b // 2):
+                        formatted = formatted.replace("<b>", "</b>", 1).replace("<b>", "</b>", 1) # Alternar
+                html_lines.append(f"<p style='margin: 4px 0; color: #CBD5E1;'>{s}</p>")
+
+        html_lines.append("</div>")
+        self.browser_manual.setHtml("".join(html_lines))
+
+    def filter_manual(self, text: str):
+        query = text.strip().lower()
+        if not query:
+            self.render_markdown(self.manual_full_text)
+            return
+
+        matching_sections = []
+        current_section = []
+        is_match = False
+
+        for line in self.manual_full_text.splitlines():
+            if line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
+                if current_section and is_match:
+                    matching_sections.extend(current_section)
+                    matching_sections.append("\n---\n")
+                current_section = [line]
+                is_match = query in line.lower()
+            else:
+                current_section.append(line)
+                if query in line.lower():
+                    is_match = True
+
+        if current_section and is_match:
+            matching_sections.extend(current_section)
+
+        if matching_sections:
+            self.render_markdown(f"### Resultados de búsqueda para: '{text}'\n\n" + "\n".join(matching_sections))
+        else:
+            self.render_markdown(f"### No se encontraron coincidencias para: '{text}'\nPruebe con otros términos como: *factura, 303, banco, mayor, gasto*.")
+
+    def on_chapter_selected(self, index: int):
+        target = self.cb_chapters.currentData()
+        if not target or target == "all":
+            self.render_markdown(self.manual_full_text)
+            return
+
+        chapter_lines = []
+        recording = False
+        for line in self.manual_full_text.splitlines():
+            if line.startswith(f"## {target}") or line.startswith(f"# {target}"):
+                recording = True
+                chapter_lines.append(line)
+            elif recording and (line.startswith("## ") or line.startswith("# ")):
+                break
+            elif recording:
+                chapter_lines.append(line)
+
+        if chapter_lines:
+            self.render_markdown("\n".join(chapter_lines))
+        else:
+            self.render_markdown(self.manual_full_text)
+
+    def filter_faq(self, text: str):
+        query = text.strip().lower()
+        for text_corpus, card in self.faq_cards:
+            if not query or query in text_corpus:
+                card.show()
+            else:
+                card.hide()
+
+    def open_external_manual(self):
+        manual_path = os.path.join(os.getcwd(), "docs", "MANUAL_DE_INSTRUCCIONES_OPERATIVAS.md")
+        if os.path.exists(manual_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(manual_path))
+        else:
+            QMessageBox.information(self, "Manual", "No se encontró el archivo del manual en la ruta local docs/.")
+

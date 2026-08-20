@@ -142,8 +142,8 @@ def test_integration_verifactu_cryptographic_chaining():
     fac1 = {
         "invoice_number": "EMITIDA-001",
         "date_of_issue": "2026-08-01",
-        "issuer_nif": "B12345678",
-        "receiver_nif": "12345678Z",
+        "issuer_nif": "12345678Z",
+        "receiver_nif": "87654321A",
         "base_imponible": 500.0,
         "iva_amount": 105.0,
         "total_amount": 605.0
@@ -151,7 +151,7 @@ def test_integration_verifactu_cryptographic_chaining():
     fac2 = {
         "invoice_number": "EMITIDA-002",
         "date_of_issue": "2026-08-02",
-        "issuer_nif": "B12345678",
+        "issuer_nif": "12345678Z",
         "receiver_nif": "87654321A",
         "base_imponible": 800.0,
         "iva_amount": 168.0,
