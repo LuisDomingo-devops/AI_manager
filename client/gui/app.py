@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.*=false;qt.text.*=false"
 # Añadir la carpeta raíz del proyecto (alfonso_autonomo) y la carpeta client al PATH de Python
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent))

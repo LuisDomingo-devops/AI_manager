@@ -17,20 +17,16 @@ class AlfonsoAPI:
         self.session.headers.update({"X-API-Key": self.api_key})
 
     def ping(self) -> bool:
-        max_retries = 30
-        retry_delay = 3
-        print(f"[INFO] Verificando conexión con el backend ({self.base_url})...")
+        max_retries = 2
+        retry_delay = 1
         for i in range(max_retries):
             try:
-                r = self.session.get(f"{self.base_url}/health", timeout=5)
+                r = self.session.get(f"{self.base_url}/health", timeout=1.5)
                 if r.status_code == 200:
                     return True
             except Exception:
                 if i < max_retries - 1:
-                    print(f"[INFO] Servidor calentándose o iniciándose... Reintento {i+1}/{max_retries} en {retry_delay}s...")
                     time.sleep(retry_delay)
-                else:
-                    print("[ERROR] No se pudo conectar al servidor tras varios intentos.")
         return False
 
 

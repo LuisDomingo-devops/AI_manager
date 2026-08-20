@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     ALFONSO_BRIDGE_TOKEN: str = ""
     VERIFACTU_ACTIVE: bool = True
     ALFONSO_SIF_PRODUCER_NIF: str = "B12345678"
+    ALFONSO_AEAT_URL: str = ""
     ALFONSO_CLIENT_TOKENS: str = ""  # Formato JSON: {"client_id1": "token1", "client_id2": "token2"} o client1:token1,client2:token2
     ALFONSO_CLIENT_ROLES: str = ""   # Formato JSON: {"client_id1": "admin", "client_id2": "guest"} o client1:admin,client2:guest
 

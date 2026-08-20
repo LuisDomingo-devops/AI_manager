@@ -115,17 +115,51 @@ class VerifactuService:
                     except sqlite3.OperationalError:
                         pass
                 
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS sif_event_log (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_type      TEXT NOT NULL,
-                    description     TEXT NOT NULL,
-                    prev_event_hash TEXT,
-                    current_hash    TEXT NOT NULL,
-                    signature       TEXT NOT NULL,
-                    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sif_event_log'")
+            table_exists = cursor.fetchone() is not None
+
+            if not table_exists:
+                conn.execute("""
+                    CREATE TABLE sif_event_log (
+                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                        event_type      TEXT NOT NULL,
+                        description     TEXT NOT NULL,
+                        prev_event_hash TEXT,
+                        current_hash    TEXT NOT NULL,
+                        signature       TEXT NOT NULL,
+                        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+                    )
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(sif_event_log)")
+                existing_cols = {row[1] for row in cursor.fetchall()}
+                if "event_hash" in existing_cols or "timestamp" in existing_cols or "current_hash" not in existing_cols:
+                    desc_col = "description" if "description" in existing_cols else ("payload" if "payload" in existing_cols else "''")
+                    curr_col = "current_hash" if "current_hash" in existing_cols else ("event_hash" if "event_hash" in existing_cols else "''")
+                    prev_col = "prev_event_hash" if "prev_event_hash" in existing_cols else ("previous_hash" if "previous_hash" in existing_cols else "NULL")
+                    sig_col = "signature" if "signature" in existing_cols else "''"
+                    created_col = "created_at" if "created_at" in existing_cols else ("timestamp" if "timestamp" in existing_cols else "datetime('now')")
+
+                    conn.execute("""
+                        CREATE TABLE sif_event_log_new (
+                            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                            event_type      TEXT NOT NULL,
+                            description     TEXT NOT NULL,
+                            prev_event_hash TEXT,
+                            current_hash    TEXT NOT NULL,
+                            signature       TEXT NOT NULL,
+                            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+                        )
+                    """)
+                    conn.execute(f"""
+                        INSERT INTO sif_event_log_new (id, event_type, description, prev_event_hash, current_hash, signature, created_at)
+                        SELECT id, event_type, {desc_col}, {prev_col}, {curr_col}, {sig_col}, {created_col}
+                        FROM sif_event_log
+                    """)
+                    conn.execute("DROP TABLE sif_event_log")
+                    conn.execute("ALTER TABLE sif_event_log_new RENAME TO sif_event_log")
+
             conn.commit()
 
         # Iniciar worker de reintentos en segundo plano si no está corriendo
@@ -139,8 +173,6 @@ class VerifactuService:
                         cls.process_pending_deliveries()
                     except Exception:
                         pass
-            t = threading.Thread(target=run_worker, daemon=True)
-            t.start()
             t = threading.Thread(target=run_worker, daemon=True)
             t.start()
 
@@ -725,6 +757,15 @@ class VerifactuService:
                     result["status"] = "unknown_soap_status"
                     result["delivery_status"] = "RECHAZADO"
                     result["message"] = f"Respuesta SOAP inesperada o sin estado de registro claro."
+                elif http_status_code == 403:
+                    result["status"] = "rejected"
+                    result["delivery_status"] = "ERROR_AUTH"
+                    result["error"] = response_xml[:300] if response_xml else "Acceso denegado (403 Forbidden)"
+                    result["message"] = (
+                        "Rechazo de autenticación mTLS por la AEAT (403 Forbidden). "
+                        "El certificado digital presentado no está autorizado para este endpoint "
+                        "(los certificados de prueba de la FNMT requieren 'prewww10.aeat.es', mientras que 'prewww1.aeat.es' requiere certificados reales)."
+                    )
                 elif http_status_code >= 500:
                     result["status"] = "incident"
                     result["delivery_status"] = "INCIDENCIA_RED"
@@ -738,8 +779,8 @@ class VerifactuService:
 
         except Exception as e:
             app_logger.error(f"Error parseando respuesta SOAP de la AEAT: {e}")
-            result["status"] = "rejected" if http_status_code in (400, 500) else "incident"
-            result["delivery_status"] = "INCIDENCIA_RED" if http_status_code >= 500 else "ERROR"
+            result["status"] = "rejected" if http_status_code in (400, 403, 500) else "incident"
+            result["delivery_status"] = "ERROR_AUTH" if http_status_code == 403 else ("INCIDENCIA_RED" if http_status_code >= 500 else "ERROR")
             result["error_desc"] = str(e)
             result["error"] = response_xml if response_xml else str(e)
             result["message"] = f"Error interpretando XML SOAP devuelto por la AEAT: {str(e)}"
@@ -757,13 +798,8 @@ class VerifactuService:
         import tempfile
         from cryptography.hazmat.primitives.serialization import pkcs12
         from app.utils.encryption import encryptor
+        from app.config import settings
 
-        # Endpoints oficiales de la AEAT (VERIFACTU - Entorno de pruebas TIKE-CONT)
-        AEAT_URL = os.environ.get(
-            "ALFONSO_AEAT_URL",
-            "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
-        )
-        
         cert_path = None
         key_path = None
         cert_pem_file = None
@@ -818,6 +854,23 @@ class VerifactuService:
         if not cert_path and not key_path:
             cert_path = os.environ.get("ALFONSO_AEAT_CERT")
             key_path = os.environ.get("ALFONSO_AEAT_KEY")
+
+        # Determinación inteligente del Endpoint oficial de la AEAT
+        custom_url = os.environ.get("ALFONSO_AEAT_URL") or getattr(settings, "ALFONSO_AEAT_URL", "")
+        if custom_url and custom_url.strip():
+            AEAT_URL = custom_url.strip()
+        else:
+            # Si usamos certificados de prueba de la FNMT (eIDAS Test / data/certificados_prueba / NIF 99999972C),
+            # el endpoint Sandbox de la AEAT que confía en la CA de pruebas es prewww10.aeat.es.
+            # Para certificados reales en preproducción, se usa prewww1.aeat.es.
+            cert_check = (str(cert_path or "") + " " + str(cert_path_db or "")).lower()
+            nif_check = os.environ.get("ALFONSO_SIF_PRODUCER_NIF", "")
+            is_test_cert = "prueba" in cert_check or "test" in cert_check or nif_check.startswith("999999")
+
+            if is_test_cert:
+                AEAT_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+            else:
+                AEAT_URL = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
 
         # Envoltorio SOAP reglamentario Verifactu
         soap_envelope = f"""<?xml version="1.0" encoding="utf-8"?>

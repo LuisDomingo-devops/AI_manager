@@ -2,6 +2,9 @@ import sys
 import os
 from pathlib import Path
 
+# Suprimir advertencias internas de DPI y QPA de Qt en Windows
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.*=false;qt.text.*=false"
+
 # Redirigir a client/test_gui.py
 client_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client")
 sys.path.insert(0, client_dir)

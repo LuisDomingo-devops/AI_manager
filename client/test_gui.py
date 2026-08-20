@@ -1,6 +1,8 @@
 import sys
 import os
 from pathlib import Path
+
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.*=false;qt.text.*=false"
 sys.path.append(str(Path(__file__).parent))
 
 config = {
