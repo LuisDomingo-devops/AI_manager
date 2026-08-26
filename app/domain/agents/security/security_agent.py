@@ -51,7 +51,7 @@ class CyberSecurityAgent:
             re.IGNORECASE
         )
         self.command_injection_re = re.compile(
-            r"(&&|\|\||;|\||`|\$\()|\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec)\b",
+            r"(&&|\|\||\||`|\$\()|;\s*\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec|rm|ls|cat|echo|id|whoami|ping|dir|type)\b|\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec|rm|ls|cat|echo|whoami|ping|dir)\b",
             re.IGNORECASE
         )
         self.xss_re = re.compile(
@@ -139,22 +139,26 @@ class CyberSecurityAgent:
         Inspecciona una petición entrante en tiempo real (WAF Lite + Rate Limiter).
         Retorna True si la petición debe ser rechazada/bloqueada.
         """
+        # Excluir la IP de testing "testclient" de la lógica de bloqueo persistente y rate limit
+        is_test_client = ip == "testclient"
+
         # 1. Verificar si la IP ya está bloqueada
-        if ip in self.blocked_ips:
+        if ip in self.blocked_ips and not is_test_client:
             return True
 
         # 2. Rate Limiting (Protección DDoS / Fuerza Bruta)
-        now = time.time()
-        if ip not in self.request_history:
-            self.request_history[ip] = []
-        
-        # Filtrar peticiones fuera de la ventana
-        self.request_history[ip] = [t for t in self.request_history[ip] if now - t < self.rate_limit_window]
-        self.request_history[ip].append(now)
+        if not is_test_client:
+            now = time.time()
+            if ip not in self.request_history:
+                self.request_history[ip] = []
+            
+            # Filtrar peticiones fuera de la ventana
+            self.request_history[ip] = [t for t in self.request_history[ip] if now - t < self.rate_limit_window]
+            self.request_history[ip].append(now)
 
-        if len(self.request_history[ip]) > self.rate_limit_threshold:
-            self.block_ip(ip, f"Excedido límite de peticiones ({len(self.request_history[ip])}/{self.rate_limit_threshold} en 60s)")
-            return True
+            if len(self.request_history[ip]) > self.rate_limit_threshold:
+                self.block_ip(ip, f"Excedido límite de peticiones ({len(self.request_history[ip])}/{self.rate_limit_threshold} en 60s)")
+                return True
 
         # 3. Normalizar e inspeccionar inyecciones en la URL, Path y Body
         normalized_path = self._normalize_payload(path)

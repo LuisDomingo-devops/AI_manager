@@ -458,6 +458,16 @@ def _is_safe_command(command_parts: list[str]) -> bool:
             if pat in part:
                 return False
                 
+        # Bloquear ejecución de scripts creados en caliente en directorios de datos o temporales
+        if part_clean.endswith(".py") or any(sep in part_clean for sep in ["/", "\\"]):
+            try:
+                p = Path(part_clean).resolve()
+                forbidden_dirs = {"data", "logs", "scratch", "temp", "tmp"}
+                if any(folder in p.parts for folder in forbidden_dirs):
+                    return False
+            except Exception:
+                pass
+                
     return True
 
 

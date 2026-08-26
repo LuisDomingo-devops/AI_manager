@@ -289,17 +289,31 @@ class AlfonsoAgentLogic:
                     except Exception as e:
                         pass
 
-                resolved_command = self._resolve_app_path(command)
+                import shlex
+                cmd_parts = shlex.split(command)
+                if not cmd_parts:
+                    return {"id": command_id, "status": "error", "error": "Comando vacío o inválido"}
+                
+                app_exec = cmd_parts[0]
+                resolved_app = self._resolve_app_path(app_exec)
+                cmd_parts[0] = resolved_app
+
+                # Incorporar argumentos adicionales si se pasaron en params
+                extra_args = params.get("args", [])
+                if isinstance(extra_args, list):
+                    for arg in extra_args:
+                        if isinstance(arg, str) and arg not in cmd_parts:
+                            cmd_parts.append(arg)
+
                 if _IS_WINDOWS:
-                    use_shell = resolved_command.lower() in ["explorer.exe", "code"] or not resolved_command.endswith(".exe")
                     subprocess.Popen(
-                        resolved_command,
-                        shell=use_shell,
-                        creationflags=subprocess.CREATE_NO_WINDOW if not use_shell else 0
+                        cmd_parts,
+                        shell=False,
+                        creationflags=subprocess.CREATE_NO_WINDOW
                     )
                 else:
-                    subprocess.Popen(resolved_command, shell=False)
-                result = f"Aplicación '{command}' iniciada correctamente."
+                    subprocess.Popen(cmd_parts, shell=False)
+                result = f"Aplicación '{command}' iniciada correctamente con shell=False."
                 
             elif action == "close_app":
                 app_name = params.get("command", params.get("app_name", "")).strip()

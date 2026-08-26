@@ -436,19 +436,19 @@ class AlfonsoAgent:
                 app = self.agent_logic._resolve_app_path(app)
 
         try:
-            path = shutil.which(app) or app
-            use_shell = IS_WINDOWS and (path.lower() in ["explorer.exe", "code"] or not path.endswith(".exe"))
-            subprocess.Popen(path, shell=use_shell)
-            return {"result": f"{app} abierto"}
+            import shlex
+            cmd_parts = shlex.split(app)
+            if not cmd_parts:
+                return {"error": "Comando vacío o inválido"}
+            
+            app_exec = cmd_parts[0]
+            resolved_app = self.agent_logic._resolve_app_path(app_exec)
+            cmd_parts[0] = resolved_app
+
+            subprocess.Popen(cmd_parts, shell=False)
+            return {"result": f"{app} abierto de forma segura"}
         except Exception as e:
-            try:
-                if IS_WINDOWS:
-                    subprocess.Popen(app, shell=True)
-                    return {"result": f"{app} abierto (shell fallback)"}
-                else:
-                    raise
-            except Exception as ex:
-                return {"error": f"No se pudo abrir {app}: {ex}"}
+            return {"error": f"No se pudo abrir {app}: {e}"}
 
     def close_app(self, params):
         app = (params.get("command") or params.get("app") or "").strip()
@@ -887,7 +887,7 @@ class AlfonsoAgent:
                         try:
                             if platform.system() == "Windows":
                                 # Fallback nativo de Windows si no está psutil
-                                out = subprocess.check_output("wmic ComputerSystem get TotalPhysicalMemory", shell=True)
+                                out = subprocess.check_output(["wmic", "ComputerSystem", "get", "TotalPhysicalMemory"], shell=False)
                                 bytes_str = out.decode().split("\n")[1].strip()
                                 ram_total_gb = round(int(bytes_str) / (1024 ** 3), 2)
                         except Exception:

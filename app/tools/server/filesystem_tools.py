@@ -81,6 +81,17 @@ async def create_file(path: str, content: str):
     tool_logger.info(f"Intentando crear archivo: {path}")
     p = _resolve_path(path)
     
+    # Restricción en el servidor: prevenir la creación de archivos de script en directorios sensibles del core
+    if p.suffix.lower() in (".py", ".sh", ".bat", ".ps1", ".exe", ".cmd"):
+        p_abs = p.resolve()
+        forbidden_parents = {"app", "client", "data", "migrations"}
+        if any(folder in p_abs.parts for folder in forbidden_parents) or p_abs.parent == Path(__file__).resolve().parents[3]:
+            error_logger.warning(f"Intento de creación de script bloqueado en el servidor: {p_abs}")
+            return {
+                "status": "error",
+                "message": "Operación de seguridad bloqueada: no se permite la creación de scripts ejecutables en directorios del core en el servidor."
+            }
+    
     tool_logger.info(f"Ruta absoluta final: {p}")
     
     try:

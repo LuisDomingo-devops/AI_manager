@@ -145,7 +145,7 @@ def test_onboarding_wizard_full_flow(master_keypair):
     assert "CONTRATO DE LICENCIA DE USUARIO FINAL" in res_eula.json()["eula_text"]
 
     # 2. Consultar estado inicial
-    res_init = client.get("/api/v1/onboarding/status")
+    res_init = client.get("/api/v1/onboarding/status", headers={"X-API-Key": "test_api_key_default"})
     assert res_init.status_code == 200
     assert res_init.json()["machine_fingerprint"] == local_fp
 
@@ -158,7 +158,7 @@ def test_onboarding_wizard_full_flow(master_keypair):
         "irpf_rate_default": 15.0,
         "eula_accepted": False
     }
-    res_bad = client.post("/api/v1/onboarding/setup", json=bad_payload)
+    res_bad = client.post("/api/v1/onboarding/setup", json=bad_payload, headers={"X-API-Key": "test_api_key_default"})
     assert res_bad.status_code == 400
     assert "obligatorio aceptar los Términos y Condiciones" in res_bad.json()["detail"]
 
@@ -183,14 +183,14 @@ def test_onboarding_wizard_full_flow(master_keypair):
     }
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        res_good = client.post("/api/v1/onboarding/setup", json=good_payload)
+        res_good = client.post("/api/v1/onboarding/setup", json=good_payload, headers={"X-API-Key": "test_api_key_default"})
         assert res_good.status_code == 200
         data_good = res_good.json()
         assert data_good["status"] == "ok"
         assert "Configuración inicial completada" in data_good["message"]
 
         # 5. Comprobar que el status ahora marca onboarding completado
-        res_after = client.get("/api/v1/onboarding/status?client_id=test_onboarding_client")
+        res_after = client.get("/api/v1/onboarding/status?client_id=test_onboarding_client", headers={"X-API-Key": "test_api_key_default"})
         assert res_after.status_code == 200
         after_data = res_after.json()
         assert after_data["is_onboarding_completed"] is True

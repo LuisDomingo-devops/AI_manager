@@ -440,9 +440,9 @@ def is_tool_allowed_for_tier(tool_name: str, tier: Optional[str] = None) -> Tupl
     upgrade_msg = tier_info.get("upgrade_message") or "Esta funcionalidad requiere una membresía superior. Actualiza tu plan para desbloquearla."
     return False, f"La herramienta '{tool_name}' no está incluida en tu '{tier_info.get('name')}'. {upgrade_msg}"
 
-def is_premium_license_valid() -> bool:
-    """Compatibilidad: retorna True si la licencia local está operativa (activa o en período de gracia)."""
-    return check_license_status().is_operational
+def is_premium_license_valid(current_dt: Optional[datetime] = None) -> bool:
+    """Verifica si la licencia local actual es válida y el software está operativo."""
+    return check_license_status(current_dt=current_dt).is_operational
 
 def install_license(license_data: Dict[str, Any]) -> bool:
     """Guarda un nuevo archivo de licencia en el almacenamiento local."""

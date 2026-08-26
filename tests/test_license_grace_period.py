@@ -92,7 +92,7 @@ def test_license_grace_period_day_2(rsa_keypair):
         assert status.grace_days_remaining == 3
         assert "período de gracia" in status.message
         # Comprobar que a nivel de sistema se considera válida para operar
-        assert is_premium_license_valid() is True
+        assert is_premium_license_valid(current_dt=datetime(2026, 8, 17, 10, 0)) is True
 
 def test_license_expired_after_grace_period(rsa_keypair):
     """

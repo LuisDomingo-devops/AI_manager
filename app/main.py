@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import router
@@ -266,6 +267,15 @@ app = FastAPI(title="Alfonso Core — Fase 4", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Configuración de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 @app.middleware("http")
@@ -273,6 +283,36 @@ async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
     logger = attach_request_id(app_logger, request_id)
+
+    # 1. Obtener la IP y el cuerpo de forma segura para la inspección del CyberSecurityAgent (WAF)
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    body_str = ""
+    if request.method in ("POST", "PUT", "PATCH"):
+        try:
+            body_bytes = await request.body()
+            body_str = body_bytes.decode("utf-8", errors="ignore")
+            # Reinyectar bytes para que FastAPI pueda leer el cuerpo después
+            async def receive():
+                return {"type": "http.request", "body": body_bytes, "more_body": False}
+            request._receive = receive
+        except Exception:
+            pass
+
+    # 2. Inspección del WAF
+    headers_dict = {k: v for k, v in request.headers.items()}
+    if security_agent.inspect_request(
+        ip=client_ip,
+        path=request.url.path,
+        method=request.method,
+        headers=headers_dict,
+        body=body_str
+    ):
+        logger.warning(f"Petición bloqueada por CyberSecurityAgent WAF desde IP {client_ip}: {request.method} {request.url.path}")
+        increment_http_errors()
+        return JSONResponse(
+            status_code=403,
+            content={"status": "error", "request_id": request_id, "detail": "Petición bloqueada por el Firewall de Aplicación (WAF) por razones de seguridad."}
+        )
 
     # Extraer client_id de cabeceras o parámetros de consulta para aislamiento multi-tenant
     client_id = request.headers.get("X-Client-ID") or request.query_params.get("client_id") or "default"
@@ -285,7 +325,13 @@ async def request_id_middleware(request: Request, call_next):
         response = await call_next(request)
         duration = time.perf_counter() - start_time
 
+        # Cabeceras de seguridad HTTP globales
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
         increment_http_requests()
         record_http_latency(duration)
         return response

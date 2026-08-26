@@ -103,25 +103,46 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
     Aprovisiona automáticamente el tenant cuando el pago es confirmado.
     """
     body_bytes = await request.body()
-    try:
-        data = json.loads(body_bytes.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Cuerpo de webhook inválido")
+    endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-    event_type = data.get("type") or data.get("event_type")
+    if endpoint_secret:
+        if not stripe_signature:
+            logger.warning("Intento de petición a Stripe Webhook sin cabecera stripe-signature")
+            raise HTTPException(status_code=400, detail="Cabecera stripe-signature ausente")
+        try:
+            import stripe
+            event = stripe.Webhook.construct_event(
+                payload=body_bytes,
+                sig_header=stripe_signature,
+                secret=endpoint_secret
+            )
+            # Extraer data del evento validado
+            event_type = event.get("type")
+            stripe_obj = event.get("data", {}).get("object", {})
+        except Exception as e:
+            logger.error("Firma de webhook Stripe inválida: %s", str(e))
+            raise HTTPException(status_code=400, detail=f"Firma de webhook inválida: {str(e)}")
+    else:
+        logger.warning("STRIPE_WEBHOOK_SECRET no configurado en entorno. Procesando webhook de Stripe SIN firma criptográfica (SOLO MODO PRUEBAS).")
+        try:
+            raw_data = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Cuerpo de webhook inválido")
+        event_type = raw_data.get("type") or raw_data.get("event_type")
+        stripe_obj = raw_data.get("data", {}).get("object", raw_data)
+
     logger.info("Recibido evento de webhook Stripe: %s", event_type)
 
     if event_type in ("checkout.session.completed", "invoice.payment_succeeded"):
-        session_obj = data.get("data", {}).get("object", data)
-        metadata = session_obj.get("metadata", {})
+        metadata = stripe_obj.get("metadata", {})
         
-        client_id = metadata.get("client_id") or session_obj.get("client_id") or session_obj.get("client_reference_id", "default")
-        company_name = metadata.get("company_name") or session_obj.get("company_name", "Empresa Cliente")
-        nif = metadata.get("nif") or session_obj.get("nif", "B00000000")
-        email = session_obj.get("customer_email") or metadata.get("email") or session_obj.get("email", "cliente@ejemplo.com")
-        plan_tier = metadata.get("plan_tier") or session_obj.get("plan_tier", "pro")
-        customer_id = session_obj.get("customer") or session_obj.get("stripe_customer_id", "")
-        subscription_id = session_obj.get("subscription") or session_obj.get("stripe_subscription_id", "")
+        client_id = metadata.get("client_id") or stripe_obj.get("client_id") or stripe_obj.get("client_reference_id", "default")
+        company_name = metadata.get("company_name") or stripe_obj.get("company_name", "Empresa Cliente")
+        nif = metadata.get("nif") or stripe_obj.get("nif", "B00000000")
+        email = stripe_obj.get("customer_email") or metadata.get("email") or stripe_obj.get("email", "cliente@ejemplo.com")
+        plan_tier = metadata.get("plan_tier") or stripe_obj.get("plan_tier", "pro")
+        customer_id = stripe_obj.get("customer") or stripe_obj.get("stripe_customer_id", "")
+        subscription_id = stripe_obj.get("subscription") or stripe_obj.get("stripe_subscription_id", "")
 
         provision_result = TenantProvisioningService.provision_new_tenant(
             client_id=client_id,

@@ -378,14 +378,19 @@ def _get_connection(client_id: str = None) -> sqlite3.Connection:
     # Resolver client_id: usar tenant_context si no se pasa de forma explícita
     cid = (client_id or tenant_context.get()).strip().lower()
     
+    import re
+    sanitized_cid = re.sub(r"[^a-zA-Z0-9_-]", "", cid)
+    if not sanitized_cid:
+        sanitized_cid = "default"
+    
     # 1. Determinar el archivo de base de datos del Tenant
     if IS_TESTING:
-        if cid == "default":
+        if sanitized_cid == "default":
             target_path = DB_PATH
         else:
-            target_path = DB_PATH.parent / f"test_memory_{cid}.db"
+            target_path = DB_PATH.parent / f"test_memory_{sanitized_cid}.db"
     else:
-        target_path = DB_PATH.parent / f"memory_{cid}.db"
+        target_path = DB_PATH.parent / f"memory_{sanitized_cid}.db"
         
     if str(target_path) != ":memory:":
         target_path.parent.mkdir(parents=True, exist_ok=True)

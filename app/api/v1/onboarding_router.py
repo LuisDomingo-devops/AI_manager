@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.adapters.memory.memory import _get_connection, tenant_context
 from app.utils.license_validator import check_license_status, install_license, get_machine_fingerprint
 from app.domain.services.tenant_provisioner import TenantProvisioningService
+from app.api.routes import verify_api_key
 
 router = APIRouter(prefix="/onboarding")
 
@@ -25,7 +26,7 @@ class OnboardingSetupRequest(BaseModel):
     license_data: Optional[Dict[str, Any]] = Field(None, description="Archivo o payload de licencia firmado criptográficamente")
     eula_accepted: bool = Field(..., description="Aceptación explícita de los Términos y Condiciones y Exención de Responsabilidad")
 
-@router.get("/status", summary="Consultar estado del asistente de configuración inicial")
+@router.get("/status", summary="Consultar estado del asistente de configuración inicial", dependencies=[Depends(verify_api_key)])
 async def get_onboarding_status(client_id: Optional[str] = None):
     """
     Verifica si el cliente ha completado la configuración inicial del perfil fiscal,
@@ -39,13 +40,28 @@ async def get_onboarding_status(client_id: Optional[str] = None):
     profile_data = None
 
     try:
+        from app.utils.encryption import encryptor
         with _get_connection(cid) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT nif, razon_social, direccion FROM user_profile LIMIT 1")
             row = cursor.fetchone()
-            if row and row["nif"] and row["razon_social"] and not row["nif"].startswith("12345678Z"):
-                has_profile = True
-                profile_data = dict(row)
+            if row:
+                try:
+                    dec_nif = encryptor.decrypt(row["nif"])
+                    dec_rs = encryptor.decrypt(row["razon_social"])
+                    dec_dir = encryptor.decrypt(row["direccion"])
+                except Exception:
+                    dec_nif = row["nif"]
+                    dec_rs = row["razon_social"]
+                    dec_dir = row["direccion"]
+
+                if dec_nif and dec_rs and not dec_nif.startswith("12345678Z"):
+                    has_profile = True
+                    profile_data = {
+                        "nif": dec_nif,
+                        "razon_social": dec_rs,
+                        "direccion": dec_dir
+                    }
     except Exception:
         pass
 
@@ -62,7 +78,7 @@ async def get_onboarding_status(client_id: Optional[str] = None):
         "requires_wizard": not is_completed
     }
 
-@router.post("/setup", summary="Completar asistente de configuración inicial (Wizard 3 pasos)")
+@router.post("/setup", summary="Completar asistente de configuración inicial (Wizard 3 pasos)", dependencies=[Depends(verify_api_key)])
 async def complete_onboarding_setup(payload: OnboardingSetupRequest):
     """
     Ejecuta la configuración inicial en 3 pasos:
@@ -85,6 +101,7 @@ async def complete_onboarding_setup(payload: OnboardingSetupRequest):
             raise HTTPException(status_code=500, detail="No se pudo escribir el archivo de licencia local.")
 
     # 2. Inicializar o actualizar base de datos local y perfil fiscal
+    from app.utils.encryption import encryptor
     with _get_connection(cid) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM user_profile")
@@ -92,13 +109,21 @@ async def complete_onboarding_setup(payload: OnboardingSetupRequest):
             cursor.execute("""
                 INSERT INTO user_profile (user_type, nif, razon_social, direccion)
                 VALUES ('autonomo', ?, ?, ?)
-            """, (payload.nif, payload.razon_social, payload.direccion))
+            """, (
+                encryptor.encrypt(payload.nif),
+                encryptor.encrypt(payload.razon_social),
+                encryptor.encrypt(payload.direccion)
+            ))
         else:
             cursor.execute("""
                 UPDATE user_profile
                 SET nif = ?, razon_social = ?, direccion = ?, updated_at = datetime('now')
                 WHERE id = 1
-            """, (payload.nif, payload.razon_social, payload.direccion))
+            """, (
+                encryptor.encrypt(payload.nif),
+                encryptor.encrypt(payload.razon_social),
+                encryptor.encrypt(payload.direccion)
+            ))
         conn.commit()
 
     license_status = check_license_status()
