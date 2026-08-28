@@ -47,13 +47,25 @@ class AlfonsoAPI:
         except Exception:
             pass
 
+        client_id = None
+        try:
+            import os, json
+            from pathlib import Path
+            logs_dir = Path(__file__).resolve().parents[1] / "logs"
+            client_config_path = logs_dir / "client_config.json"
+            if client_config_path.exists():
+                client_id = json.loads(client_config_path.read_text(encoding="utf-8")).get("client_id")
+        except Exception:
+            pass
+
         try:
             r = self.session.post(
                 f"{self.base_url}/chat",
                 json={
                     "message": message,
                     "client_info": {
-                        "desktop_structure": desktop_structure
+                        "desktop_structure": desktop_structure,
+                        "client_id": client_id
                     }
                 },
                 headers={"X-Session-ID": session_id},
@@ -293,3 +305,29 @@ class AlfonsoAPI:
             return r.json()
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def get_document_customization(self) -> dict:
+        """Obtiene las preferencias de personalización de documentos para el inquilino."""
+        try:
+            r = self.session.get(f"{self.base_url}/billing/customization", timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {
+                "logo_base64": None,
+                "primary_color": "#1E293B",
+                "secondary_color": "#64748B",
+                "font_family": "Helvetica",
+                "layout_template": "classic",
+                "message": str(e)
+            }
+
+    def save_document_customization(self, data: dict) -> dict:
+        """Guarda las preferencias de personalización de documentos para el inquilino."""
+        try:
+            r = self.session.post(f"{self.base_url}/billing/customization", json=data, timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+

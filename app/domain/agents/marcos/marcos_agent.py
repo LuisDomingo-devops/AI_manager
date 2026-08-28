@@ -83,7 +83,7 @@ Por favor, redacta un borrador de correo electrónico formal de respuesta basán
             prompt += f"""[CONSULTA LEGAL DEL USUARIO]
 {query}
 
-Por favor, asesora y responde a esta consulta de forma rigurosa basándote en los artículos de ley anteriores.
+Por favor, asesora y responde a esta consulta de forma rigurosa, sumamente breve y directa al grano, basándote en los artículos de ley anteriores. Evita preámbulos, saludos, despedidas o introducciones formales.
 """
 
         # 3. Invocar al LLM

@@ -423,10 +423,12 @@ async def mail_classify_emails() -> dict:
                 category = "otros"
                 importance = "Baja"
                 summary = "Notificación automática del sistema o fallo de entrega de correo."
-            elif any(x in body_lower for x in ["juzgado", "judicial", "requerimiento", "citación", "notificación electrónica", "plazo de 10", "notaría", "notario", "plusvalía", "escritura", "abogado"]):
+            elif any(x in body_lower for x in ["juzgado", "judicial", "requerimiento", "citación", "notificación electrónica", "plazo de 10", "notaría", "notario", "plusvalía", "escritura", "abogado", "dehu", "redsara"]):
                 category = "legal"
                 importance = "Alta"
-                if "notificación" in body_lower or "requerimiento" in body_lower:
+                if "dehu" in body_lower or "redsara" in body_lower:
+                    summary = "Aviso de notificación electrónica en DEHú. Alfonso te asistirá en la descarga y análisis desde el portal."
+                elif "notificación" in body_lower or "requerimiento" in body_lower:
                     summary = "Notificación judicial obligatoria con requerimiento de comparecencia."
                 else:
                     summary = "Escritura o tema legal formal que requiere revisión."

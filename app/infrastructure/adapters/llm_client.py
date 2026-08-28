@@ -284,9 +284,16 @@ class OllamaClient(LLMPort):
                 "parts": system_instr_parts
             }
 
-        url = f"https://generativelanguage.googleapis.com/{settings.GEMINI_API_VERSION}/models/{settings.GEMINI_MODEL_NAME}:generateContent?key={settings.GEMINI_API_KEY}"
+        headers = {}
+        if settings.GEMINI_PROXY_URL:
+            url = settings.GEMINI_PROXY_URL
+            headers["X-Alfonso-License-Token"] = settings.ALFONSO_CLIENT_SECRET
+            payload["model"] = settings.GEMINI_MODEL_NAME
+            payload["apiVersion"] = settings.GEMINI_API_VERSION
+        else:
+            url = f"https://generativelanguage.googleapis.com/{settings.GEMINI_API_VERSION}/models/{settings.GEMINI_MODEL_NAME}:generateContent?key={settings.GEMINI_API_KEY}"
         
-        response = await client.post(url, json=payload)
+        response = await client.post(url, json=payload, headers=headers)
         if response.status_code != 200:
             raise RuntimeError(f"Gemini API Error {response.status_code}: {response.text}")
         
@@ -301,13 +308,31 @@ class OllamaClient(LLMPort):
         except (KeyError, IndexError) as e:
             raise ValueError(f"Respuesta inesperada de Gemini API: {res_data}")
 
+    async def chat(self, messages: list[dict[str, str]], **kwargs) -> str:
+        """Envía un listado completo de mensajes al modelo de lenguaje."""
+        anonymized_messages = []
+        mapping = {}
+        anonymizer = None
+
+        if settings.ANONYMIZE_LLM_CALLS:
+            from app.utils.anonymizer import DataAnonymizer
+            anonymizer = DataAnonymizer()
+            for msg in messages:
+                role = msg.get("role")
+                content = msg.get("content", "") or ""
+                anon_content, msg_map = anonymizer.anonymize(content)
+                mapping.update(msg_map)
+                anonymized_messages.append({"role": role, "content": anon_content})
+        else:
+            anonymized_messages = messages
+
         import time
         start_time = time.perf_counter()
         p_tok, c_tok = 0, 0
         model_name = settings.MODEL_NAME
 
-        # Si hay GEMINI_API_KEY configurada, usar Gemini
-        if settings.GEMINI_API_KEY:
+        # Si hay GEMINI_API_KEY o GEMINI_PROXY_URL configurada, usar Gemini
+        if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
             llm_logger.info("Utilizando la API de Gemini para chat (en la nube)")
             temp = kwargs.get("options", {}).get("temperature", 0.7)
             content, p_tok, c_tok = await self._call_gemini_api(anonymized_messages, temperature=temp)
@@ -388,6 +413,12 @@ class OllamaClient(LLMPort):
 
         system_prompt = get_system_prompt(mode, client_id=client_id)
 
+        if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
+            if mode == "tool":
+                from app.domain.prompt_generator import generate_tool_prompt
+                tool_template = generate_tool_prompt(client_id)
+                system_prompt = system_prompt + "\n\n" + tool_template
+
         messages = [{"role": "system", "content": system_prompt}]
 
         if memory:
@@ -429,7 +460,7 @@ class OllamaClient(LLMPort):
         model_name = settings.MODEL_NAME
 
         try:
-            if settings.GEMINI_API_KEY:
+            if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
                 logger.info("Utilizando la API de Gemini para generar (en la nube)")
                 content, p_tok, c_tok = await self._call_gemini_api(messages, temperature=options_payload["temperature"])
                 model_name = settings.GEMINI_MODEL_NAME

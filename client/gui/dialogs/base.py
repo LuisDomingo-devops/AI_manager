@@ -71,13 +71,13 @@ class AlfonsoBaseDialog(QDialog):
         # Importación tardía para evitar Circular Dependency
         from client.gui.app import AlfonsoWindowMinimizeButton, AlfonsoWindowCloseButton
         
-        self.btn_minimize = AlfonsoWindowMinimizeButton(self.title_bar)
-        self.btn_minimize.clicked.connect(self.showMinimized)
-        self.title_layout.addWidget(self.btn_minimize)
-
         self.btn_close = AlfonsoWindowCloseButton(self.title_bar)
         self.btn_close.clicked.connect(self.close)
         self.title_layout.addWidget(self.btn_close)
+
+        self.btn_minimize = AlfonsoWindowMinimizeButton(self.title_bar)
+        self.btn_minimize.clicked.connect(self.showMinimized)
+        self.title_layout.addWidget(self.btn_minimize)
 
         self.outer_layout.addWidget(self.title_bar)
 

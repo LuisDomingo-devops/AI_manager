@@ -52,8 +52,8 @@ from client.gui.dialogs import (
     AlfonsoOfficialBooksWidget,
     AlfonsoBackupWidget,
     AlfonsoTenantAdvisorWidget,
-    AlfonsoAIChatAssistantWidget,
-    AlfonsoHelpCenterWidget
+    AlfonsoHelpCenterWidget,
+    AlfonsoDocumentCustomizerWidget
 )
 
 
@@ -887,82 +887,88 @@ class AlfonsoSystemButton(QPushButton):
 
 
 class AlfonsoWindowCloseButton(AlfonsoSystemButton):
-    """Botón de cierre visible y rojo con cambios de estado."""
+    """Botón de cierre visible y rojo estilo Apple (macOS)."""
     def __init__(self, parent=None):
         super().__init__("X", parent)
         self.setObjectName("BtnClose")
-        self.setFixedSize(20, 20)
+        self.setFixedSize(14, 14)
         self.setStyleSheet("""
             QPushButton {
-                background-color: #DC2626;
+                background-color: #FF5F56;
                 border: none;
-                color: #FFFFFF;
+                color: transparent;
+                font-family: 'Arial', sans-serif;
+                font-size: 9px;
                 font-weight: bold;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 10px;
-                padding: 0px;
+                border-radius: 7px;
                 margin: 0px;
-                border-radius: 4px;
+                padding: 1px 0px 0px 0px;
             }
             QPushButton:hover {
-                background-color: #EF4444;
+                background-color: #FF726A;
+                color: #000000;
             }
             QPushButton:pressed {
-                background-color: #991B1B;
+                background-color: #E0443E;
+                color: #000000;
             }
         """)
 
 
 class AlfonsoWindowMinimizeButton(AlfonsoSystemButton):
-    """Botón de minimizar visible con cambios de estado."""
+    """Botón de minimizar visible y amarillo estilo Apple (macOS)."""
     def __init__(self, parent=None):
-        super().__init__("—", parent)
+        super().__init__("-", parent)
         self.setObjectName("BtnMinimize")
-        self.setFixedSize(20, 20)
+        self.setFixedSize(14, 14)
         self.setStyleSheet("""
             QPushButton {
-                background-color: #475569;
+                background-color: #FFBD2E;
                 border: none;
-                color: #FFFFFF;
+                color: transparent;
+                font-family: 'Arial', sans-serif;
+                font-size: 13px;
                 font-weight: bold;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 10px;
-                padding: 0px;
+                border-radius: 7px;
                 margin: 0px;
-                border-radius: 4px;
+                padding: 1px 0px 0px 0px;
             }
             QPushButton:hover {
-                background-color: #64748B;
+                background-color: #FFC74D;
+                color: #000000;
             }
             QPushButton:pressed {
-                background-color: #334155;
+                background-color: #DE9F1D;
+                color: #000000;
             }
         """)
 
 
 class AlfonsoWindowMaximizeButton(AlfonsoSystemButton):
-    """Botón de maximizar / pantalla completa con cambios de estado."""
+    """Botón de maximizar visible y verde estilo Apple (macOS)."""
     def __init__(self, parent=None):
-        super().__init__("□", parent)
+        super().__init__("+", parent)
         self.setObjectName("BtnMaximize")
-        self.setFixedSize(20, 20)
+        self.setFixedSize(14, 14)
         self.setStyleSheet("""
             QPushButton {
-                background-color: #475569;
+                background-color: #27C93F;
                 border: none;
-                color: #FFFFFF;
-                font-weight: bold;
-                font-family: 'Segoe UI', sans-serif;
+                color: transparent;
+                font-family: 'Arial', sans-serif;
                 font-size: 11px;
-                padding: 0px;
+                font-weight: bold;
+                border-radius: 7px;
                 margin: 0px;
-                border-radius: 4px;
+                padding: 1px 0px 0px 0px;
             }
             QPushButton:hover {
-                background-color: #0284C7;
+                background-color: #35E24D;
+                color: #000000;
             }
             QPushButton:pressed {
-                background-color: #0369A1;
+                background-color: #1AA32E;
+                color: #000000;
             }
         """)
 
@@ -1289,6 +1295,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             pass
             
         self.api_client = AlfonsoAPI(config.get('url', 'http://127.0.0.1:8000'), api_key)
+        self.api = self.api_client
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -1682,18 +1689,24 @@ class AlfonsoHUDDashboard(QMainWindow):
         user_pill.setStyleSheet("color: #E2E8F0; font-size: 11px; font-weight: 500; padding: 0 4px;")
         top_bar_layout.addWidget(user_pill)
 
-        # Botones de Control de Ventana (SIEMPRE VISIBLES Y GLOBALES)
-        self.btn_minimize = AlfonsoWindowMinimizeButton(self)
-        self.btn_minimize.clicked.connect(self.showMinimized)
-        top_bar_layout.addWidget(self.btn_minimize)
-
-        self.btn_maximize = AlfonsoWindowMaximizeButton(self)
-        self.btn_maximize.clicked.connect(self.toggle_maximize_restore)
-        top_bar_layout.addWidget(self.btn_maximize)
+        # Botones de Control de Ventana estilo Apple (macOS) agrupados
+        window_controls_lay = QHBoxLayout()
+        window_controls_lay.setSpacing(6)
+        window_controls_lay.setContentsMargins(6, 0, 6, 0)
 
         self.btn_shutdown = AlfonsoWindowCloseButton(self)
         self.btn_shutdown.clicked.connect(self.close_gui)
-        top_bar_layout.addWidget(self.btn_shutdown)
+        window_controls_lay.addWidget(self.btn_shutdown)
+
+        self.btn_minimize = AlfonsoWindowMinimizeButton(self)
+        self.btn_minimize.clicked.connect(self.showMinimized)
+        window_controls_lay.addWidget(self.btn_minimize)
+
+        self.btn_maximize = AlfonsoWindowMaximizeButton(self)
+        self.btn_maximize.clicked.connect(self.toggle_maximize_restore)
+        window_controls_lay.addWidget(self.btn_maximize)
+
+        top_bar_layout.addLayout(window_controls_lay)
 
         root_layout.addWidget(top_bar)
 
@@ -2185,53 +2198,49 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.view_official_books = AlfonsoOfficialBooksWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_official_books)
 
-        # 22: Asistente > Chat IA & Voz Alfonso
-        self.view_ai_chat = AlfonsoAIChatAssistantWidget(self, embedded=True)
-        self.central_stack.addWidget(self.view_ai_chat)
-
-        # 23: Asistente > Alfonso Mail Inteligente
+        # 22: Asistente > Alfonso Mail Inteligente
         self.view_mail = MailWidget(self.api_client, self, embedded=True)
         self.central_stack.addWidget(self.view_mail)
 
-        # 24: Asistente > Agenda & Citas Previas
+        # 23: Asistente > Agenda & Citas Previas
         self.view_agenda = CalendarWidget(self.api_client, self, embedded=True)
         self.central_stack.addWidget(self.view_agenda)
 
-        # 25: Asistente > Navegador de Proyectos
+        # 24: Asistente > Navegador de Proyectos
         self.view_projects = ProjectNavigatorDialog(self, embedded=True)
         self.central_stack.addWidget(self.view_projects)
 
-        # 26: Cumplimiento > Declaración Responsable SIF (RD 1007/2023)
+        # 25: Cumplimiento > Declaración Responsable SIF (RD 1007/2023)
         self.view_advisor = AlfonsoComplianceDialog(self, embedded=True)
         self.central_stack.addWidget(self.view_advisor)
 
-        # 27: Cumplimiento > Auditoría de Inmutabilidad
+        # 26: Cumplimiento > Auditoría de Inmutabilidad
         self.view_audit_ledger = AlfonsoVerifactuAuditWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_audit_ledger)
 
-        # 28: Cumplimiento > Panel Asesor / Gestoría
+        # 27: Cumplimiento > Panel Asesor / Gestoría
         self.view_tenant_advisor = AlfonsoTenantAdvisorWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_tenant_advisor)
 
-        # 29: Sistema > Perfil Fiscal del Autónomo
+        # 28: Sistema > Perfil Fiscal del Autónomo
         self.view_config = ConfigWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_config)
 
-        # 30: Sistema > IA, Voz & Dispositivos
-        self.view_voice_config = ConfigWidget(self, embedded=True)
-        self.central_stack.addWidget(self.view_voice_config)
-
-        # 31: Sistema > Copias de Seguridad & Restauración
+        # 29: Sistema > Copias de Seguridad & Restauración
         self.view_backups = AlfonsoBackupWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_backups)
 
-        # 32: Sistema > Suscripción & Licencia
+        # 30: Sistema > Suscripción & Licencia
         self.view_subscription = AlfonsoSubscriptionDialog(self, embedded=True)
         self.central_stack.addWidget(self.view_subscription)
 
-        # 33: Sistema > Centro de Ayuda & Manual
+        # 31: Sistema > Centro de Ayuda & Manual
         self.view_help_center = AlfonsoHelpCenterWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_help_center)
+
+        # 32: Documentos > Diseño y Maquetación Drag and Drop
+        self.view_document_customizer = AlfonsoDocumentCustomizerWidget(self, embedded=True)
+        self.central_stack.addWidget(self.view_document_customizer)
 
         main_layout.addWidget(self.central_stack, 1)
 
@@ -2404,8 +2413,8 @@ class AlfonsoHUDDashboard(QMainWindow):
         """)
         btn_send.clicked.connect(self.send_text_message)
 
-        chat_btn_layout.addWidget(self.btn_mode)
-        chat_btn_layout.addWidget(self.btn_clear)
+        self.btn_mode.hide()
+        self.btn_clear.hide()
         chat_btn_layout.addStretch()
         chat_btn_layout.addWidget(btn_send)
         chat_layout.addLayout(chat_btn_layout)
@@ -2606,25 +2615,24 @@ class AlfonsoHUDDashboard(QMainWindow):
             # Documentos & Archivo
             ("documentos", "archivo_fiscal"): (19, "DOCUMENTOS & ARCHIVO > ARCHIVO FISCAL DIGITAL", "documentos", "archivo_fiscal"),
             ("documentos", "visor_documental"): (20, "DOCUMENTOS & ARCHIVO > VISOR DOCUMENTAL CON IA", "documentos", "visor_documental"),
+            ("documentos", "diseno_maquetacion"): (32, "DOCUMENTOS & ARCHIVO > DISEÑO Y MAQUETACIÓN", "documentos", "diseno_maquetacion"),
             ("documentos", "libros_oficiales_aeat"): (21, "DOCUMENTOS & ARCHIVO > LIBROS OFICIALES AEAT", "documentos", "libros_oficiales_aeat"),
 
             # Asistente & Comunicación
-            ("comunicacion", "asistente_ia"): (22, "ASISTENTE & COMUNICACIÓN > CHAT IA & VOZ ALFONSO", "comunicacion", "asistente_ia"),
-            ("comunicacion", "correo_inteligente"): (23, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
-            ("comunicacion", "agenda_citas"): (24, "ASISTENTE & COMUNICACIÓN > AGENDA & CITAS PREVIAS", "comunicacion", "agenda_citas"),
-            ("comunicacion", "proyectos_sesiones"): (25, "ASISTENTE & COMUNICACIÓN > NAVEGADOR DE PROYECTOS", "comunicacion", "proyectos_sesiones"),
+            ("comunicacion", "correo_inteligente"): (22, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
+            ("comunicacion", "agenda_citas"): (23, "ASISTENTE & COMUNICACIÓN > AGENDA & CITAS PREVIAS", "comunicacion", "agenda_citas"),
+            ("comunicacion", "proyectos_sesiones"): (24, "ASISTENTE & COMUNICACIÓN > NAVEGADOR DE PROYECTOS", "comunicacion", "proyectos_sesiones"),
 
             # Auditoría & Asesoría
-            ("cumplimiento", "declaracion_sif"): (26, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
-            ("cumplimiento", "auditoria_inmutabilidad"): (27, "AUDITORÍA & ASESORÍA > AUDITORÍA DE INMUTABILIDAD", "cumplimiento", "auditoria_inmutabilidad"),
-            ("cumplimiento", "panel_asesor"): (28, "AUDITORÍA & ASESORÍA > PANEL GESTORÍA & MULTI-INQUILINO", "cumplimiento", "panel_asesor"),
+            ("cumplimiento", "declaracion_sif"): (25, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
+            ("cumplimiento", "auditoria_inmutabilidad"): (26, "AUDITORÍA & ASESORÍA > AUDITORÍA DE INMUTABILIDAD", "cumplimiento", "auditoria_inmutabilidad"),
+            ("cumplimiento", "panel_asesor"): (27, "AUDITORÍA & ASESORÍA > PANEL GESTORÍA & MULTI-INQUILINO", "cumplimiento", "panel_asesor"),
 
             # Sistema & Configuración
-            ("sistema", "perfil_fiscal"): (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
-            ("sistema", "voz_modelos_ia"): (30, "SISTEMA & CONFIGURACIÓN > IA, VOZ & DISPOSITIVOS", "sistema", "voz_modelos_ia"),
-            ("sistema", "copias_seguridad"): (31, "SISTEMA & CONFIGURACIÓN > COPIAS DE SEGURIDAD & RESTAURACIÓN", "sistema", "copias_seguridad"),
-            ("sistema", "suscripcion_licencia"): (32, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
-            ("sistema", "centro_ayuda"): (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
+            ("sistema", "perfil_fiscal"): (28, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
+            ("sistema", "copias_seguridad"): (29, "SISTEMA & CONFIGURACIÓN > COPIAS DE SEGURIDAD & RESTAURACIÓN", "sistema", "copias_seguridad"),
+            ("sistema", "suscripcion_licencia"): (30, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
+            ("sistema", "centro_ayuda"): (31, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
 
             # Legacy string aliases
             "Dashboard": (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
@@ -2633,12 +2641,12 @@ class AlfonsoHUDDashboard(QMainWindow):
             "Bancos": (9, "BANCA & TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
             "Impuestos": (12, "FISCALIDAD & AEAT > MODELOS TRIMESTRALES (303, 130)", "impuestos", "modelos_trimestrales"),
             "Documentos": (19, "DOCUMENTOS & ARCHIVO > ARCHIVO FISCAL DIGITAL", "documentos", "archivo_fiscal"),
-            "Correo": (23, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
+            "Correo": (22, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
             "Calendario": (14, "FISCALIDAD & AEAT > CALENDARIO FISCAL & VENCIMIENTOS", "impuestos", "calendario_fiscal"),
-            "Asesor": (26, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
-            "Configuración": (29, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
-            "Ayuda": (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
-            "Manual": (33, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda")
+            "Asesor": (25, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
+            "Configuración": (28, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
+            "Ayuda": (31, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
+            "Manual": (31, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda")
         }
 
         if isinstance(target, tuple):
@@ -2723,14 +2731,13 @@ class AlfonsoHUDDashboard(QMainWindow):
                     self.view_tgss.load_employees()
             elif idx == 19 and hasattr(self, 'view_docs') and hasattr(self.view_docs, 'refresh_file_list'):
                 self.view_docs.refresh_file_list()
-            elif idx == 23 and hasattr(self, 'view_mail') and hasattr(self.view_mail, 'load_emails'):
+            elif idx == 22 and hasattr(self, 'view_mail') and hasattr(self.view_mail, 'load_emails'):
                 self.view_mail.load_emails()
-            elif idx == 29 and hasattr(self, 'view_config'):
+            elif idx == 28 and hasattr(self, 'view_config'):
                 if hasattr(self.view_config, 'switch_tab'):
                     self.view_config.switch_tab(0)
-            elif idx == 30 and hasattr(self, 'view_voice_config'):
-                if hasattr(self.view_voice_config, 'switch_tab'):
-                    self.view_voice_config.switch_tab(1)
+            elif idx == 32 and hasattr(self, 'view_document_customizer') and hasattr(self.view_document_customizer, 'load_settings'):
+                self.view_document_customizer.load_settings()
         except Exception as e:
             print(f"Error actualizando vista {title_text}: {e}")
 
@@ -3210,12 +3217,8 @@ class AlfonsoHUDDashboard(QMainWindow):
         """Alterna entre pantalla completa (maximizado) y tamaño de ventana normal."""
         if self.isMaximized():
             self.showNormal()
-            if hasattr(self, 'btn_maximize'):
-                self.btn_maximize.setText("[ ]")
         else:
             self.showMaximized()
-            if hasattr(self, 'btn_maximize'):
-                self.btn_maximize.setText("[ ]")
 
     def open_kpi_dashboard(self):
         try:

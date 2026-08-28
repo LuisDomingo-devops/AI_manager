@@ -4,13 +4,91 @@ console.log("Alfonso Autónomo Guardián activado en esta página.");
 let socket = null;
 let buttonBlocked = true;
 
-// 1. Conexión WebSocket al Backend Local de Alfonso
+// 1. Inyección de script en el contexto de la página para capturar blobs de PDF descargados
+if (window.location.hostname.includes("dehu.redsara.es") || window.location.hostname.includes("redsara.es")) {
+    const script = document.createElement("script");
+    script.textContent = `
+        (function() {
+            const originalCreateObjectURL = URL.createObjectURL;
+            URL.createObjectURL = function(blob) {
+                if (blob instanceof Blob && blob.type === "application/pdf") {
+                    console.log("Alfonso Autónomo: Capturada notificación en PDF");
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        window.postMessage({
+                            source: 'alfonso-guardian',
+                            action: 'pdf-captured',
+                            dataUrl: reader.result,
+                            filename: blob.name || 'notificacion_dehu.pdf'
+                        }, '*');
+                    };
+                    reader.readAsDataURL(blob);
+                }
+                return originalCreateObjectURL.apply(this, arguments);
+            };
+        })();
+    `;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+}
+
+// Escuchar mensajes de la página web (desde el script inyectado)
+window.addEventListener("message", async (event) => {
+    if (event.data && event.data.source === 'alfonso-guardian' && event.data.action === 'pdf-captured') {
+        const dataUrl = event.data.dataUrl;
+        console.log("Alfonso Guardián: PDF recibido del script inyectado.");
+        try {
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
+            await uploadPDFToAlfonso(blob, event.data.filename);
+        } catch (e) {
+            console.error("Alfonso Guardián: Error al convertir y subir PDF:", e);
+        }
+    }
+});
+
+async function uploadPDFToAlfonso(blob, filename) {
+    showNotification("Enviando notificación de DEHú a Alfonso para su análisis...", "success");
+    const formData = new FormData();
+    formData.append("file", blob, filename);
+
+    try {
+        const response = await fetch("http://localhost:7860/api/v1/compliance/dehu/upload", {
+            method: "POST",
+            body: formData
+        });
+        if (response.ok) {
+            const result = await response.json();
+            console.log("Alfonso: Notificación procesada con éxito:", result);
+            showNotification(`¡Notificación analizada! Organismo: ${result.metadata.organismo}. Revisa Alfonso OS.`, "success");
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: "dehu_analyzed",
+                    metadata: result.metadata,
+                    dictamen: result.dictamen
+                }));
+            }
+        } else {
+            console.error("Alfonso: Error al subir PDF:", response.statusText);
+            showNotification("Error al enviar la notificación a Alfonso.", "error");
+        }
+    } catch (error) {
+        console.error("Alfonso: Error de red:", error);
+        showNotification("No se pudo conectar con Alfonso local.", "error");
+    }
+}
+
+// 2. Conexión WebSocket al Backend Local de Alfonso
 function connectWebSocket() {
     socket = new WebSocket("ws://localhost:7860/ws/guardian");
 
     socket.onopen = () => {
         console.log("Conectado con Alfonso Core local.");
-        updateBannerStatus("Conectado", "Alfonso está vigilando este trámite de forma segura en local.");
+        let statusMsg = "Alfonso está vigilando este trámite de forma segura en local.";
+        if (window.location.hostname.includes("dehu.redsara.es")) {
+            statusMsg = "Listo para capturar y analizar automáticamente la notificación cuando la descargues.";
+        }
+        updateBannerStatus("Conectado", statusMsg);
     };
 
     socket.onmessage = (event) => {

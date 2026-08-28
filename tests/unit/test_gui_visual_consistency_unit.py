@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 # Asegurar sys.path con root y client
-root_dir = str(Path(__file__).resolve().parents[1])
+root_dir = str(Path(__file__).resolve().parents[2])
 client_dir = os.path.join(root_dir, "client")
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 from PyQt6.QtCore import Qt
 
 from client.gui.dialogs.specialized_views import (
-    AlfonsoAIChatAssistantWidget,
     AlfonsoPayrollWidget,
     AlfonsoCashFlowWidget,
     AlfonsoInvoiceEmitterWidget,
@@ -42,24 +41,6 @@ def qapp():
     if app is None:
         app = QApplication(sys.argv)
     return app
-
-
-def test_ai_chat_assistant_widget_unit(qapp):
-    """Verifica la inicialización, tarjetas y despacho de órdenes de AlfonsoAIChatAssistantWidget."""
-    parent_widget = QWidget()
-    parent_widget.text_input = MagicMock()
-    parent_widget.send_text_message = MagicMock()
-
-    widget = AlfonsoAIChatAssistantWidget(parent=parent_widget, embedded=True)
-    widget.show()
-
-    assert widget.windowTitle() == "ASISTENTE IA & VOZ ALFONSO"
-    assert widget.findChild(QLabel) is not None
-
-    # Simular despacho de acción rápida al chat
-    widget.dispatch_prompt_to_chat("Emite una factura")
-    parent_widget.text_input.setPlainText.assert_called_with("Emite una factura")
-    parent_widget.send_text_message.assert_called_once()
 
 
 def test_payroll_widget_modes_unit(qapp):

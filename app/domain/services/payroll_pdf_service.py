@@ -9,8 +9,79 @@ from reportlab.pdfgen import canvas
 from app.config import settings
 from app.domain.services.payroll_engine import PayrollEngine
 
+import io
+import base64
+from reportlab.lib.utils import ImageReader
+from app.domain.services.document_customization_service import DocumentCustomizationService
+from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+
 DOCS_DIR = Path(__file__).resolve().parents[3] / "data" / "documentos_laborales"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+def _get_font_name(family: str, style: str = "Regular") -> str:
+    """Resuelve el nombre de la tipografía estándar según ReportLab."""
+    if family == "Times-Roman":
+        if style in ("Bold", "bold"):
+            return "Times-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Times-Italic"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Times-BoldItalic"
+        return "Times-Roman"
+    elif family == "Courier":
+        if style in ("Bold", "bold"):
+            return "Courier-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Courier-Oblique"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Courier-BoldOblique"
+        return "Courier"
+    else: # Helvetica por defecto
+        if style in ("Bold", "bold"):
+            return "Helvetica-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Helvetica-Oblique"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Helvetica-BoldOblique"
+        return "Helvetica"
+
+def _apply_pdf_customization(c, canvas_height: float = 841.89) -> dict:
+    """
+    Carga la personalización y dibuja el logo en el canvas.
+    Retorna un diccionario con los colores y la tipografía a aplicar.
+    """
+    try:
+        from app.adapters.memory.memory import tenant_context
+        cid = tenant_context.get() or "default"
+        service = DocumentCustomizationService(SqliteDocumentCustomizationAdapter())
+        custom = service.get_customization(cid)
+        
+        # Dibujar logo si existe
+        if custom.get("logo_base64"):
+            try:
+                logo_data = base64.b64decode(custom["logo_base64"])
+                logo_img = ImageReader(io.BytesIO(logo_data))
+                l_width = custom.get("logo_width", 110)
+                l_height = l_width * 40.0 / 110.0
+                # Dibujar logo arriba a la derecha con ancho dinámico
+                c.drawImage(logo_img, 550 - l_width, canvas_height - l_height - 35, width=l_width, height=l_height, mask='auto')
+            except Exception:
+                pass
+                
+        return {
+            "primary_rgb": service.hex_to_rgb(custom.get("primary_color")),
+            "secondary_rgb": service.hex_to_rgb(custom.get("secondary_color")),
+            "font_family": custom.get("font_family", "Helvetica"),
+            "layout_template": custom.get("layout_template", "classic")
+        }
+    except Exception:
+        return {
+            "primary_rgb": (0.12, 0.23, 0.35),
+            "secondary_rgb": (0.39, 0.45, 0.53),
+            "font_family": "Helvetica",
+            "layout_template": "classic"
+        }
+
 
 
 class PayrollPdfService:
@@ -26,6 +97,25 @@ class PayrollPdfService:
 
         c = canvas.Canvas(output_path, pagesize=A4)
         w, h = A4
+        cust = _apply_pdf_customization(c, canvas_height=h)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
+        
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
+        
+        # Aplicar colores corporativos al trazado de líneas y cajas
+        c.setStrokeColorRGB(*s_rgb)
+
 
         # 1. Cabecera
         c.setFont("Helvetica-Bold", 14)
@@ -145,6 +235,24 @@ class PayrollPdfService:
 
         c = canvas.Canvas(output_path, pagesize=A4)
         w, h = A4
+        cust = _apply_pdf_customization(c, canvas_height=h)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
+        
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
+        
+        # Aplicar colores corporativos al trazado de líneas y cajas
+        c.setStrokeColorRGB(*s_rgb)
 
         # Cabecera
         c.setFont("Helvetica-Bold", 14)
@@ -222,6 +330,24 @@ class PayrollPdfService:
 
         c = canvas.Canvas(output_path, pagesize=A4)
         w, h = A4
+        cust = _apply_pdf_customization(c, canvas_height=h)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
+        
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
+        
+        # Aplicar colores corporativos al trazado de líneas y cajas
+        c.setStrokeColorRGB(*s_rgb)
 
         # Cabecera
         c.setFont("Helvetica-Bold", 13)

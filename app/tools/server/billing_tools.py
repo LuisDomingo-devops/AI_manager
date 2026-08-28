@@ -17,6 +17,74 @@ from app.core.events import event_bus
 from app.utils.logger import tool_logger
 from app.utils.validators import validate_nif_nie_cif
 
+import io
+import base64
+from reportlab.lib.utils import ImageReader
+from app.domain.services.document_customization_service import DocumentCustomizationService
+from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+
+def _get_font_name(family: str, style: str = "Regular") -> str:
+    """Resuelve el nombre de la tipografía estándar según ReportLab."""
+    if family == "Times-Roman":
+        if style in ("Bold", "bold"):
+            return "Times-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Times-Italic"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Times-BoldItalic"
+        return "Times-Roman"
+    elif family == "Courier":
+        if style in ("Bold", "bold"):
+            return "Courier-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Courier-Oblique"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Courier-BoldOblique"
+        return "Courier"
+    else: # Helvetica por defecto
+        if style in ("Bold", "bold"):
+            return "Helvetica-Bold"
+        elif style in ("Italic", "italic", "Oblique", "oblique"):
+            return "Helvetica-Oblique"
+        elif style in ("BoldItalic", "BoldOblique"):
+            return "Helvetica-BoldOblique"
+        return "Helvetica"
+
+def _apply_pdf_customization(c, canvas_height: float = 792.0) -> dict:
+    """
+    Carga la personalización y dibuja el logo en el canvas.
+    Retorna un diccionario con los colores y la tipografía a aplicar.
+    """
+    try:
+        from app.adapters.memory.memory import tenant_context
+        cid = tenant_context.get() or "default"
+        service = DocumentCustomizationService(SqliteDocumentCustomizationAdapter())
+        custom = service.get_customization(cid)
+        
+        return {
+            "primary_rgb": service.hex_to_rgb(custom.get("primary_color")),
+            "secondary_rgb": service.hex_to_rgb(custom.get("secondary_color")),
+            "font_family": custom.get("font_family", "Helvetica"),
+            "layout_template": custom.get("layout_template", "classic"),
+            "logo_base64": custom.get("logo_base64"),
+            "elements_layout": custom.get("elements_layout"),
+            "quote_elements_layout": custom.get("quote_elements_layout"),
+            "logo_width": custom.get("logo_width", 110)
+        }
+    except Exception as e:
+        tool_logger.warning(f"Error cargando personalización de PDF: {e}")
+        return {
+            "primary_rgb": (0.12, 0.23, 0.35),
+            "secondary_rgb": (0.39, 0.45, 0.53),
+            "font_family": "Helvetica",
+            "layout_template": "classic",
+            "logo_base64": None,
+            "elements_layout": None,
+            "quote_elements_layout": None,
+            "logo_width": 110
+        }
+
+
 
 async def get_projects_wip() -> dict:
     """
@@ -439,72 +507,156 @@ async def create_quote(
 
         # Generar PDF
         c = canvas.Canvas(str(pdf_path), pagesize=letter)
-        c.setFillColorRGB(0.12, 0.35, 0.23) # Color institucional verde oscuro para diferenciar
-        c.rect(50, 720, 510, 40, fill=True, stroke=False)
+        cust = _apply_pdf_customization(c, canvas_height=792.0)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
         
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(65, 732, "PRESUPUESTO DE SERVICIOS")
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
         
-        c.setFillColorRGB(0.2, 0.2, 0.2)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(380, 735, f"Nro Presupuesto: {quote_id}")
-        c.drawString(380, 723, f"Fecha Emisión: {date_str}")
+        # Cargar orden del layout de elementos
+        elements_layout = None
+        if cust.get("quote_elements_layout"):
+            try:
+                import json
+                elements_layout = json.loads(cust["quote_elements_layout"])
+            except Exception:
+                pass
+        if not elements_layout or not isinstance(elements_layout, list):
+            elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
+
+        current_y = 750.0
         
-        c.setStrokeColorRGB(0.8, 0.8, 0.8)
-        c.line(50, 700, 560, 700)
-        
-        # Emisor
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(55, 675, "DATOS DEL EMISOR:")
-        c.setFont("Helvetica", 10)
-        c.drawString(55, 655, f"Razón Social: {emisor_name}")
-        c.drawString(55, 640, f"NIF/CIF: {emisor_nif}")
-        
-        # Receptor
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(320, 675, "DATOS DEL CLIENTE:")
-        c.setFont("Helvetica", 10)
-        c.drawString(320, 655, f"Razón Social: {client_name}")
-        c.drawString(320, 640, f"NIF/CIF: {client_nif}")
-        
-        c.line(50, 605, 560, 605)
-        
-        c.setFillColorRGB(0.9, 0.9, 0.9)
-        c.rect(50, 570, 510, 20, fill=True, stroke=False)
-        c.setFillColorRGB(0.2, 0.2, 0.2)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(60, 576, "Descripción / Concepto")
-        c.drawString(450, 576, "Importe Base")
-        
-        c.setFont("Helvetica", 10)
-        c.drawString(60, 545, concept)
-        c.drawString(450, 545, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-        
-        c.line(50, 520, 560, 520)
-        
-        y = 480
-        totals = [
-            ("Base Imponible:", amount),
-            (f"IVA (+{iva_rate:.1f}%):", iva_amount) if iva_rate > 0 else ("IVA (0%):", 0.0),
-            (f"Retención IRPF (-{irpf_rate:.1f}%):", irpf_amount) if irpf_rate > 0 else ("Retención IRPF (0%):", 0.0),
-        ]
-        
-        for label, val in totals:
-            c.setFont("Helvetica", 10)
-            c.drawString(340, y, label)
-            c.drawString(450, y, f"{val:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-            y -= 20
-            
-        c.line(340, y + 10, 560, y + 10)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(340, y - 5, "Total Presupuestado:")
-        c.drawString(450, y - 5, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-        
-        c.setFont("Helvetica-Oblique", 8)
-        c.drawString(55, 90, "Presupuesto válido por 30 días.")
-        status_text = "BORRADOR" if is_draft else "EMITIDO"
-        c.drawString(55, 75, f"Estado del Documento: {status_text}")
+        for elem in elements_layout:
+            if elem == "cabecera":
+                # Dibujar logo si existe
+                if cust.get("logo_base64"):
+                    try:
+                        import base64
+                        import io
+                        from reportlab.lib.utils import ImageReader
+                        logo_data = base64.b64decode(cust["logo_base64"])
+                        logo_img = ImageReader(io.BytesIO(logo_data))
+                        l_width = cust.get("logo_width", 110)
+                        l_height = l_width * 40.0 / 110.0
+                        c.drawImage(logo_img, 560 - l_width, current_y - l_height - 5, width=l_width, height=l_height, mask='auto')
+                    except Exception as le:
+                        tool_logger.warning(f"Error renderizando logo en PDF de presupuesto: {le}")
+                
+                if template == "minimalist":
+                    c.setFillColorRGB(*p_rgb)
+                    c.setFont("Helvetica-Bold", 16)
+                    c.drawString(50, current_y - 20, "PRESUPUESTO DE SERVICIOS")
+                    c.setStrokeColorRGB(*s_rgb)
+                    c.setLineWidth(1)
+                    c.line(50, current_y - 30, 560, current_y - 30)
+                elif template == "modern":
+                    c.setFillColorRGB(*p_rgb)
+                    c.rect(50, current_y - 5, 510, 5, fill=True, stroke=False)
+                    c.setFillColorRGB(0.1, 0.1, 0.1)
+                    c.setFont("Helvetica-Bold", 18)
+                    c.drawString(50, current_y - 25, "PRESUPUESTO DE SERVICIOS")
+                else: # classic
+                    c.setFillColorRGB(*p_rgb)
+                    c.rect(50, current_y - 35, 510, 35, fill=True, stroke=False)
+                    c.setFillColorRGB(1, 1, 1)
+                    c.setFont("Helvetica-Bold", 16)
+                    c.drawString(65, current_y - 23, "PRESUPUESTO DE SERVICIOS")
+                
+                c.setFillColorRGB(0.2, 0.2, 0.2)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(380, current_y - 20, f"Nro Presupuesto: {quote_id}")
+                c.drawString(380, current_y - 32, f"Fecha Emisión: {date_str}")
+                
+                current_y -= 85.0
+
+            elif elem == "emisor_receptor":
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(50, current_y, 560, current_y)
+                
+                # Emisor
+                c.setFont("Helvetica-Bold", 10)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(55, current_y - 20, "DATOS DEL EMISOR:")
+                c.setFont("Helvetica", 9)
+                c.setFillColorRGB(0.3, 0.3, 0.3)
+                c.drawString(55, current_y - 35, f"Razón Social: {emisor_name}")
+                c.drawString(55, current_y - 48, f"NIF/CIF: {emisor_nif}")
+                
+                # Receptor
+                c.setFont("Helvetica-Bold", 10)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(320, current_y - 20, "DATOS DEL CLIENTE:")
+                c.setFont("Helvetica", 9)
+                c.setFillColorRGB(0.3, 0.3, 0.3)
+                c.drawString(320, current_y - 35, f"Razón Social: {client_name if client_name else 'PENDIENTE DE ASIGNAR'}")
+                c.drawString(320, current_y - 48, f"NIF/CIF: {client_nif if client_nif else 'PENDIENTE DE ASIGNAR'}")
+                
+                c.line(50, current_y - 65, 560, current_y - 65)
+                
+                current_y -= 85.0
+
+            elif elem == "detalles":
+                c.setFillColorRGB(0.9, 0.9, 0.9)
+                c.rect(50, current_y - 20, 510, 20, fill=True, stroke=False)
+                c.setFillColorRGB(0.2, 0.2, 0.2)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(60, current_y - 14, "Descripción / Concepto")
+                c.drawString(450, current_y - 14, "Importe Base")
+                
+                c.setFont("Helvetica", 10)
+                c.drawString(60, current_y - 45, concept if concept else "Pendiente de definir concepto")
+                c.drawString(450, current_y - 45, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(50, current_y - 65, 560, current_y - 65)
+                
+                current_y -= 85.0
+
+            elif elem == "totales":
+                y_tot = current_y - 15
+                totals = [
+                    ("Base Imponible:", amount),
+                    (f"IVA (+{iva_rate:.1f}%):", iva_amount) if iva_rate > 0 else ("IVA (0%):", 0.0),
+                    (f"Retención IRPF (-{irpf_rate:.1f}%):", irpf_amount) if irpf_rate > 0 else ("Retención IRPF (0%):", 0.0),
+                ]
+                for label, val in totals:
+                    c.setFont("Helvetica", 9)
+                    c.setFillColorRGB(0.3, 0.3, 0.3)
+                    c.drawString(340, y_tot, label)
+                    c.drawString(450, y_tot, f"{val:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                    y_tot -= 15
+                    
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(340, y_tot + 5, 560, y_tot + 5)
+                c.setFont("Helvetica-Bold", 11)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(340, y_tot - 10, "Total Presupuestado:")
+                c.drawString(450, y_tot - 10, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                
+                current_y -= 85.0
+
+            elif elem == "pie_verifactu":
+                # Para presupuestos dibuja el pie legal
+                c.setFont("Helvetica-Oblique", 8)
+                c.setFillColorRGB(0.4, 0.4, 0.4)
+                c.drawString(55, current_y - 20, "Presupuesto válido por 30 días.")
+                status_text = "BORRADOR" if is_draft else "EMITIDO"
+                c.drawString(55, current_y - 35, f"Estado del Documento: {status_text}")
+                
+                current_y -= 50.0
+
         c.save()
 
         # Insertar en DB
@@ -810,99 +962,41 @@ async def generate_invoice_pdf(
 
         # 5. Generación del Canvas PDF
         c = canvas.Canvas(str(pdf_path), pagesize=letter)
+        cust = _apply_pdf_customization(c, canvas_height=792.0)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
         
-        # Estilo premium básico
-        c.setFillColorRGB(0.12, 0.23, 0.35) # Color institucional azul oscuro
-        c.rect(50, 720, 510, 40, fill=True, stroke=False)
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
         
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 16)
-        if is_draft:
-            c.drawString(65, 732, "BORRADOR DE FACTURA")
-        else:
-            c.drawString(65, 732, "FACTURA DE VENTA / INGRESO")
+        # Cargar orden del layout de elementos
+        elements_layout = None
+        if cust.get("elements_layout"):
+            try:
+                import json
+                elements_layout = json.loads(cust["elements_layout"])
+            except Exception:
+                pass
+        if not elements_layout or not isinstance(elements_layout, list):
+            elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
+
+        current_hash = ""
+        signature_base64 = ""
+        qr_temp_path = None
         
-        c.setFillColorRGB(0.2, 0.2, 0.2)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(380, 735, f"Nro Factura: {invoice_id}")
-        c.drawString(380, 723, f"Fecha Emisión: {date_str}")
-        
-        # Bloques de Emisor y Receptor
-        c.setStrokeColorRGB(0.8, 0.8, 0.8)
-        c.line(50, 700, 560, 700)
-        
-        # Emisor
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(55, 675, "DATOS DEL EMISOR:")
-        c.setFont("Helvetica", 10)
-        c.drawString(55, 655, f"Razón Social: {emisor_name}")
-        c.drawString(55, 640, f"NIF/CIF: {emisor_nif}")
-        c.drawString(55, 625, f"Dirección: {emisor_direccion}")
-        
-        # Receptor
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(320, 675, "DATOS DEL CLIENTE:")
-        c.setFont("Helvetica", 10)
-        c.drawString(320, 655, f"Razón Social: {client_name if client_name else 'PENDIENTE DE ASIGNAR'}")
-        c.drawString(320, 640, f"NIF/CIF: {client_nif if client_nif else 'PENDIENTE DE ASIGNAR'}")
-        
-        c.line(50, 605, 560, 605)
-        
-        # Línea de detalle / Conceptos
-        c.setFillColorRGB(0.9, 0.9, 0.9)
-        c.rect(50, 570, 510, 20, fill=True, stroke=False)
-        c.setFillColorRGB(0.2, 0.2, 0.2)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(60, 576, "Descripción / Concepto")
-        c.drawString(450, 576, "Importe Base")
-        
-        c.setFont("Helvetica", 10)
-        c.drawString(60, 545, concept if concept else "Pendiente de definir concepto")
-        c.drawString(450, 545, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-        
-        c.line(50, 520, 560, 520)
-        
-        # Resumen económico / Totales
-        y = 480
-        totals = [
-            ("Base Imponible:", amount),
-            (f"IVA (+{iva_rate:.1f}%):", iva_amount) if iva_rate > 0 else ("IVA (0%):", 0.0),
-            (f"Retención IRPF (-{irpf_rate:.1f}%):", irpf_amount) if irpf_rate > 0 else ("Retención IRPF (0%):", 0.0),
-        ]
-        
-        for label, val in totals:
-            c.setFont("Helvetica", 10)
-            c.drawString(340, y, label)
-            c.drawString(450, y, f"{val:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-            y -= 20
-            
-        c.line(340, y + 10, 560, y + 10)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(340, y - 5, "Total a Cobrar:")
-        c.drawString(450, y - 5, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
-        
-        if is_draft:
-            # Indicador visual muy visible de que es un borrador no fiscal
-            c.setFont("Helvetica-Bold", 14)
-            c.setFillColorRGB(0.8, 0.2, 0.2)
-            c.drawString(135, 165, "BORRADOR SIN VALIDEZ FISCAL")
-            c.setFont("Helvetica", 8)
-            c.setFillColorRGB(0.4, 0.4, 0.4)
-            c.drawString(135, 145, "Este documento provisional no se encuentra registrado ante la AEAT.")
-            c.drawString(135, 135, "Se requiere NIF, Razón Social e Importe para poder firmar y registrar.")
-            
-            c.setFont("Helvetica-Oblique", 8)
-            c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
-            c.drawString(55, 75, "Este documento provisional es un borrador y no es válido como factura definitiva.")
-            c.save()
-            
-            current_hash = ""
-            signature_base64 = ""
-        else:
+        if not is_draft:
             from app.config import settings
-            
             if settings.VERIFACTU_ACTIVE:
-                # 6. Registrar en el encadenamiento Verifactu (AEAT) si es una factura firme
+                # Registrar en el encadenamiento Verifactu (AEAT) si es una factura firme
                 verifactu_data = {
                     "invoice_number": invoice_id,
                     "date_of_issue": date_str,
@@ -921,7 +1015,7 @@ async def generate_invoice_pdf(
                 current_hash = verifactu_res["current_hash"]
                 signature_base64 = verifactu_res["signature"]
 
-                # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU (Orden HAC/1177/2024)
+                # Generar código QR oficial de verificación de la AEAT conforme a la normativa VERIFACTU
                 hash_snippet = current_hash[:16] if current_hash else ""
                 qr_url = f"https://sede.agenciatributaria.gob.es/qr/valide?nif={emisor_nif}&numserie={invoice_id}&fecha={date_str}&importe={total_amount:.2f}&huella={hash_snippet}"
                 qr = qrcode.QRCode(version=1, box_size=3, border=1)
@@ -932,43 +1026,174 @@ async def generate_invoice_pdf(
                 qr_temp_path = target_dir / f"qr_{invoice_id}.png"
                 qr_img.save(str(qr_temp_path))
 
-                # Dibujar QR en el Canvas PDF
-                c.drawImage(str(qr_temp_path), 55, 120, width=70, height=70)
-
-                # Añadir leyenda oficial imperativa de VERIFACTU y metadatos del XML firmado
-                c.setFont("Helvetica-Bold", 9)
-                c.setFillColorRGB(0.12, 0.23, 0.35)
-                c.drawString(135, 175, "VERIFACTU - FACTURA VERIFICABLE")
+        current_y = 750.0
+        
+        for elem in elements_layout:
+            if elem == "cabecera":
+                # Dibujar logo si existe
+                if cust.get("logo_base64"):
+                    try:
+                        logo_data = base64.b64decode(cust["logo_base64"])
+                        logo_img = ImageReader(io.BytesIO(logo_data))
+                        # Dibujar logo arriba a la derecha con ancho dinámico
+                        l_width = cust.get("logo_width", 110)
+                        l_height = l_width * 40.0 / 110.0
+                        c.drawImage(logo_img, 560 - l_width, current_y - l_height - 5, width=l_width, height=l_height, mask='auto')
+                    except Exception as le:
+                        tool_logger.warning(f"Error renderizando logo en PDF: {le}")
                 
-                c.setFont("Helvetica", 7)
+                # Estilo premium básico / Cabecera según plantilla
+                if template == "minimalist":
+                    c.setFillColorRGB(*p_rgb)
+                    c.setFont("Helvetica-Bold", 16)
+                    title_text = "BORRADOR DE FACTURA" if is_draft else "FACTURA DE VENTA / INGRESO"
+                    c.drawString(50, current_y - 20, title_text)
+                    c.setStrokeColorRGB(*s_rgb)
+                    c.setLineWidth(1)
+                    c.line(50, current_y - 30, 560, current_y - 30)
+                elif template == "modern":
+                    c.setFillColorRGB(*p_rgb)
+                    c.rect(50, current_y - 5, 510, 5, fill=True, stroke=False)
+                    c.setFillColorRGB(0.1, 0.1, 0.1)
+                    c.setFont("Helvetica-Bold", 18)
+                    title_text = "BORRADOR DE FACTURA" if is_draft else "FACTURA DE VENTA / INGRESO"
+                    c.drawString(50, current_y - 25, title_text)
+                else: # classic
+                    c.setFillColorRGB(*p_rgb)
+                    c.rect(50, current_y - 35, 510, 35, fill=True, stroke=False)
+                    c.setFillColorRGB(1, 1, 1)
+                    c.setFont("Helvetica-Bold", 16)
+                    title_text = "BORRADOR DE FACTURA" if is_draft else "FACTURA DE VENTA / INGRESO"
+                    c.drawString(65, current_y - 23, title_text)
+                
+                c.setFillColorRGB(0.2, 0.2, 0.2)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(380, current_y - 20, f"Nro Factura: {invoice_id}")
+                c.drawString(380, current_y - 32, f"Fecha Emisión: {date_str}")
+                
+                current_y -= 85.0
+
+            elif elem == "emisor_receptor":
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(50, current_y, 560, current_y)
+                
+                # Emisor
+                c.setFont("Helvetica-Bold", 10)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(55, current_y - 20, "DATOS DEL EMISOR:")
+                c.setFont("Helvetica", 9)
                 c.setFillColorRGB(0.3, 0.3, 0.3)
-                c.drawString(135, 163, "Factura verificable en la Sede electrónica de la AEAT")
-                c.drawString(135, 151, f"Huella de encadenamiento (SHA256): {current_hash}")
-                c.drawString(135, 140, "Este registro de facturación ha sido firmado digitalmente y enviado a la AEAT.")
-
-                # Limpiar QR temporal
-                if qr_temp_path.exists():
-                    os.remove(qr_temp_path)
-            else:
-                # Modo NO VERIFACTU (SIF estándar)
-                current_hash = ""
-                signature_base64 = ""
+                c.drawString(55, current_y - 35, f"Razón Social: {emisor_name}")
+                c.drawString(55, current_y - 48, f"NIF/CIF: {emisor_nif}")
+                c.drawString(55, current_y - 61, f"Dirección: {emisor_direccion}")
                 
-                c.setFont("Helvetica-Bold", 9)
-                c.setFillColorRGB(0.12, 0.23, 0.35)
-                c.drawString(55, 175, "SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF)")
-                
-                c.setFont("Helvetica", 7)
+                # Receptor
+                c.setFont("Helvetica-Bold", 10)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(320, current_y - 20, "DATOS DEL CLIENTE:")
+                c.setFont("Helvetica", 9)
                 c.setFillColorRGB(0.3, 0.3, 0.3)
-                c.drawString(55, 163, "Factura emitida de conformidad con los requisitos de integridad y conservación del Real Decreto 1007/2023.")
-                c.drawString(55, 151, "Conservación inalterable de registros de facturación local garantizada.")
+                c.drawString(320, current_y - 35, f"Razón Social: {client_name if client_name else 'PENDIENTE DE ASIGNAR'}")
+                c.drawString(320, current_y - 48, f"NIF/CIF: {client_nif if client_nif else 'PENDIENTE DE ASIGNAR'}")
+                
+                c.line(50, current_y - 75, 560, current_y - 75)
+                
+                current_y -= 95.0
 
-            # Notas finales
-            c.setFont("Helvetica-Oblique", 8)
-            c.drawString(55, 90, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
-            c.drawString(55, 75, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
-            
-            c.save()
+            elif elem == "detalles":
+                c.setFillColorRGB(0.9, 0.9, 0.9)
+                c.rect(50, current_y - 20, 510, 20, fill=True, stroke=False)
+                c.setFillColorRGB(0.2, 0.2, 0.2)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(60, current_y - 14, "Descripción / Concepto")
+                c.drawString(450, current_y - 14, "Importe Base")
+                
+                c.setFont("Helvetica", 10)
+                c.drawString(60, current_y - 45, concept if concept else "Pendiente de definir concepto")
+                c.drawString(450, current_y - 45, f"{amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(50, current_y - 65, 560, current_y - 65)
+                
+                current_y -= 85.0
+
+            elif elem == "totales":
+                y_tot = current_y - 15
+                totals = [
+                    ("Base Imponible:", amount),
+                    (f"IVA (+{iva_rate:.1f}%):", iva_amount) if iva_rate > 0 else ("IVA (0%):", 0.0),
+                    (f"Retención IRPF (-{irpf_rate:.1f}%):", irpf_amount) if irpf_rate > 0 else ("Retención IRPF (0%):", 0.0),
+                ]
+                for label, val in totals:
+                    c.setFont("Helvetica", 9)
+                    c.setFillColorRGB(0.3, 0.3, 0.3)
+                    c.drawString(340, y_tot, label)
+                    c.drawString(450, y_tot, f"{val:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                    y_tot -= 15
+                    
+                c.setStrokeColorRGB(*s_rgb)
+                c.setLineWidth(0.5)
+                c.line(340, y_tot + 5, 560, y_tot + 5)
+                c.setFont("Helvetica-Bold", 11)
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+                c.drawString(340, y_tot - 10, "Total a Cobrar:")
+                c.drawString(450, y_tot - 10, f"{total_amount:,.2f} EUR".replace(",", "X").replace(".", ",").replace("X", "."))
+                
+                current_y -= 85.0
+
+            elif elem == "pie_verifactu":
+                if is_draft:
+                    c.setFont("Helvetica-Bold", 12)
+                    c.setFillColorRGB(0.8, 0.2, 0.2)
+                    c.drawString(135, current_y - 20, "BORRADOR SIN VALIDEZ FISCAL")
+                    c.setFont("Helvetica", 8)
+                    c.setFillColorRGB(0.4, 0.4, 0.4)
+                    c.drawString(135, current_y - 35, "Este documento provisional no se encuentra registrado ante la AEAT.")
+                    c.drawString(135, current_y - 45, "Se requiere NIF, Razón Social e Importe para poder firmar y registrar.")
+                    c.setFont("Helvetica-Oblique", 8)
+                    c.drawString(55, current_y - 75, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
+                    c.drawString(55, current_y - 85, "Este documento provisional es un borrador y no es válido como factura definitiva.")
+                else:
+                    from app.config import settings
+                    if settings.VERIFACTU_ACTIVE:
+                        if qr_temp_path and os.path.exists(str(qr_temp_path)):
+                            c.drawImage(str(qr_temp_path), 55, current_y - 85, width=70, height=70)
+                        
+                        c.setFont("Helvetica-Bold", 9)
+                        c.setFillColorRGB(0.12, 0.23, 0.35)
+                        c.drawString(135, current_y - 20, "VERIFACTU - FACTURA VERIFICABLE")
+                        
+                        c.setFont("Helvetica", 7)
+                        c.setFillColorRGB(0.3, 0.3, 0.3)
+                        c.drawString(135, current_y - 32, "Factura verificable en la Sede electrónica de la AEAT")
+                        c.drawString(135, current_y - 44, f"Huella de encadenamiento (SHA256): {current_hash}")
+                        c.drawString(135, current_y - 56, "Este registro de facturación ha sido firmado digitalmente y enviado a la AEAT.")
+                    else:
+                        c.setFont("Helvetica-Bold", 9)
+                        c.setFillColorRGB(0.12, 0.23, 0.35)
+                        c.drawString(55, current_y - 20, "SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF)")
+                        
+                        c.setFont("Helvetica", 7)
+                        c.setFillColorRGB(0.3, 0.3, 0.3)
+                        c.drawString(55, current_y - 32, "Factura emitida de conformidad con los requisitos de integridad y conservación del Real Decreto 1007/2023.")
+                        c.drawString(55, current_y - 44, "Conservación inalterable de registros de facturación local garantizada.")
+                        
+                    c.setFont("Helvetica-Oblique", 8)
+                    c.setFillColorRGB(0.4, 0.4, 0.4)
+                    c.drawString(55, current_y - 95, "Forma de Pago: Transferencia bancaria a la cuenta indicada.")
+                    c.drawString(55, current_y - 105, "Esta factura se emite bajo el régimen de autónomos de la Agencia Tributaria Española.")
+                
+                current_y -= 115.0
+
+        c.save()
+        
+        # Limpiar QR temporal
+        if qr_temp_path and os.path.exists(str(qr_temp_path)):
+            try:
+                os.remove(qr_temp_path)
+            except Exception:
+                pass
 
         # Si el archivo PDF viejo existe y el nombre/ruta cambió, lo borramos
         if existing_file_path and existing_file_path != str(pdf_path):
@@ -1633,20 +1858,50 @@ async def create_rectificativa_invoice(
 
         # Generar Canvas PDF
         c = canvas.Canvas(str(pdf_path), pagesize=letter)
-        c.setFillColorRGB(0.55, 0.15, 0.15) # Granate institucional para diferenciar rectificativas
-        c.rect(50, 720, 510, 40, fill=True, stroke=False)
+        cust = _apply_pdf_customization(c, canvas_height=792.0)
+        p_rgb = cust["primary_rgb"]
+        s_rgb = cust["secondary_rgb"]
+        font = cust["font_family"]
+        template = cust["layout_template"]
         
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 15)
+        orig_setFont = c.setFont
+        def custom_setFont(font_name, size, *args, **kwargs):
+            if font_name.startswith("Helvetica"):
+                style = font_name.replace("Helvetica", "").lstrip("-")
+                resolved = _get_font_name(font, style or "Regular")
+                orig_setFont(resolved, size, *args, **kwargs)
+            else:
+                orig_setFont(font_name, size, *args, **kwargs)
+        c.setFont = custom_setFont
+        
         title_text = f"BORRADOR FACTURA RECTIFICATIVA ({rectificativa_type})" if is_draft else f"FACTURA RECTIFICATIVA ({rectificativa_type})"
-        c.drawString(65, 732, title_text)
+        
+        if template == "minimalist":
+            c.setFillColorRGB(*p_rgb)
+            c.setFont("Helvetica-Bold", 15)
+            c.drawString(50, 735, title_text)
+            c.setStrokeColorRGB(*s_rgb)
+            c.setLineWidth(1)
+            c.line(50, 725, 560, 725)
+        elif template == "modern":
+            c.setFillColorRGB(*p_rgb)
+            c.rect(50, 755, 510, 5, fill=True, stroke=False)
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold", 15)
+            c.drawString(50, 732, title_text)
+        else: # classic
+            c.setFillColorRGB(*p_rgb)
+            c.rect(50, 720, 510, 40, fill=True, stroke=False)
+            c.setFillColorRGB(1, 1, 1)
+            c.setFont("Helvetica-Bold", 15)
+            c.drawString(65, 732, title_text)
         
         c.setFillColorRGB(0.2, 0.2, 0.2)
         c.setFont("Helvetica-Bold", 10)
         c.drawString(380, 735, f"Nro Factura: {rect_id}")
         c.drawString(380, 723, f"Fecha Emisión: {date_str}")
         
-        c.setStrokeColorRGB(0.8, 0.8, 0.8)
+        c.setStrokeColorRGB(*s_rgb)
         c.line(50, 700, 560, 700)
         
         # Emisor

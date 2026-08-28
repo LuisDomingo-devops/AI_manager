@@ -155,6 +155,8 @@ def generate_tool_prompt(client_id: str | None = None) -> str:
             arg_names = [
                 name for name, p in params.items()
                 if p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                and name not in ("client_id", "request_id", "session_id")
+                and not name.startswith("_")
             ]
         except (TypeError, ValueError):
             arg_names = []

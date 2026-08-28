@@ -57,7 +57,7 @@ def test_invoice_cancellation_flow():
         assert rows[1]["prev_hash"] == hash_alta
         
     # 4. Validar el XML de anulación generado
-    xml_dir = Path(__file__).resolve().parents[1] / "data" / "xml_invoices"
+    xml_dir = Path(__file__).resolve().parents[2] / "data" / "xml_invoices"
     xml_file = xml_dir / "FAC-ANUL-001_anulacion_verifactu.xml"
     assert xml_file.exists()
     

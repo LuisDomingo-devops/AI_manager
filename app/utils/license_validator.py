@@ -46,7 +46,14 @@ COMMON_ASSISTANT_TOOLS = {
     # Memoria y utilidades
     "save_user_preference", "forget_user_fact", "get_user_profile",
     "parse_invoice", "parse_tax_model", "get_quarterly_aggregates", "get_cash_flow_forecast",
-    "cancel_invoice", "no_op", "get_current_time", "get_current_datetime"
+    "cancel_invoice", "no_op", "get_current_time", "get_current_datetime",
+    # Herramientas del navegador e interacción con el sistema (Computer Use)
+    "browser_navigate", "browser_click", "browser_fill", "browser_screenshot",
+    "browser_get_text", "browser_inspect", "browser_search", "browser_close",
+    "system_info", "open_application", "close_application", "open_url", "screenshot",
+    "mouse_move", "mouse_click", "mouse_drag", "keyboard_type", "keyboard_hotkey",
+    "ocr_screenshot", "ocr_image", "find_on_screen", "window_list", "window_focus",
+    "window_close", "run_command"
 }
 
 BASIC_ALLOWED_TOOLS = COMMON_ASSISTANT_TOOLS | {
@@ -235,7 +242,8 @@ def check_license_status(
     # 1. Bypass para desarrollo explícito
     if not ignore_dev_bypass:
         dev_bypass = os.getenv("ALFONSO_DEV_PREMIUM_BYPASS")
-        if dev_bypass == "AlfonsoDevelopmentToken2026!":
+        is_testing_disabled = os.getenv("ALFONSO_IS_TESTING") == "False"
+        if dev_bypass == "AlfonsoDevelopmentToken2026!" and not is_testing_disabled:
             return LicenseStatusResult(
                 status="active",
                 is_operational=True,

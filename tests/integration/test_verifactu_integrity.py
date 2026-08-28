@@ -40,7 +40,7 @@ def test_xml_structure_xsd_compliance():
     assert res["status"] == "success"
     
     # 2. Localizar el archivo XML generado
-    xml_dir = Path(__file__).resolve().parents[1] / "data" / "xml_invoices"
+    xml_dir = Path(__file__).resolve().parents[2] / "data" / "xml_invoices"
     xml_file = xml_dir / "FAC-XSD-0001_verifactu.xml"
     assert xml_file.exists()
     

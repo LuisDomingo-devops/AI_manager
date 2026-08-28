@@ -111,7 +111,7 @@ SIDEBAR_CATEGORIES = [
             },
             {
                 "id": "transferencias_pagos",
-                "title": "Emisión de Pagos",
+                "title": "Realizar Pagos",
                 "icon": "",
                 "desc": "Transferencias a proveedores y remesas SEPA"
             }
@@ -194,6 +194,12 @@ SIDEBAR_CATEGORIES = [
                 "desc": "Previsualización con metadatos contables extraídos"
             },
             {
+                "id": "diseno_maquetacion",
+                "title": "Diseño y Maquetación",
+                "icon": "",
+                "desc": "Editor Drag-and-Drop de plantillas y personalización"
+            },
+            {
                 "id": "libros_oficiales_aeat",
                 "title": "Libros Registro Oficiales",
                 "icon": "",
@@ -207,12 +213,6 @@ SIDEBAR_CATEGORIES = [
         "icon": "",
         "badge": "AI 2.0",
         "subcategories": [
-            {
-                "id": "asistente_ia",
-                "title": "Chat IA & Voz Alfonso",
-                "icon": "",
-                "desc": "Asistente conversacional, órdenes y comandos"
-            },
             {
                 "id": "correo_inteligente",
                 "title": "Alfonso Mail",
@@ -270,12 +270,6 @@ SIDEBAR_CATEGORIES = [
                 "title": "Perfil del Autónomo",
                 "icon": "",
                 "desc": "NIF, actividad IAE, tipo IRPF y domicilio fiscal"
-            },
-            {
-                "id": "voz_modelos_ia",
-                "title": "IA & Dispositivos",
-                "icon": "",
-                "desc": "Configuración de audio, Whisper y modelo de IA"
             },
             {
                 "id": "copias_seguridad",

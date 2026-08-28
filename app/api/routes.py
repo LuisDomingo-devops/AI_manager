@@ -1312,6 +1312,9 @@ router.include_router(router_mail)
 router.include_router(router_security)
 router.include_router(router_tax)
 
+from app.api.v1.billing_router import router as billing_router
+router.include_router(billing_router)
+
 
 # ── WebSocket de Alfonso Guardián ───────────────────────────────────────────
 from fastapi import WebSocket, WebSocketDisconnect

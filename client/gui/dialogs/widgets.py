@@ -387,17 +387,11 @@ class ConfigWidget(AlfonsoBaseDialog):
         self.tabs_layout.addWidget(self.btn_tab_email)
         self.tab_buttons.append(self.btn_tab_email)
         
-        self.btn_tab_voice = QPushButton("VOZ Y AUDIO")
-        self.btn_tab_voice.setCheckable(True)
-        self.btn_tab_voice.clicked.connect(lambda: self.switch_tab(1))
-        self.tabs_layout.addWidget(self.btn_tab_voice)
-        self.tab_buttons.append(self.btn_tab_voice)
-        
-        self.btn_tab_server = QPushButton("SERVIDOR")
-        self.btn_tab_server.setCheckable(True)
-        self.btn_tab_server.clicked.connect(lambda: self.switch_tab(2))
-        self.tabs_layout.addWidget(self.btn_tab_server)
-        self.tab_buttons.append(self.btn_tab_server)
+        self.btn_tab_branding = QPushButton("DISEÑO Y LOGO")
+        self.btn_tab_branding.setCheckable(True)
+        self.btn_tab_branding.clicked.connect(lambda: self.switch_tab(1))
+        self.tabs_layout.addWidget(self.btn_tab_branding)
+        self.tab_buttons.append(self.btn_tab_branding)
         
         self.content_layout.addLayout(self.tabs_layout)
         
@@ -419,36 +413,59 @@ class ConfigWidget(AlfonsoBaseDialog):
         email_form.addRow(QLabel("Clave de App:"), self.input_pass)
         self.stack.addWidget(self.page_email)
         
-        self.page_voice = QWidget()
-        voice_form = QFormLayout(self.page_voice)
-        voice_form.setVerticalSpacing(12)
-        voice_form.setContentsMargins(10, 10, 10, 10)
+
         
-        self.input_keyword = QLineEdit()
-        self.combo_model = QComboBox()
-        self.combo_model.addItems(["tiny", "base", "small", "medium", "large"])
+        self.page_branding = QWidget()
+        branding_form = QFormLayout(self.page_branding)
+        branding_form.setVerticalSpacing(12)
+        branding_form.setContentsMargins(10, 10, 10, 10)
         
-        self.spin_device = QSpinBox()
-        self.spin_device.setRange(0, 32)
+        self.logo_base64 = None
+        self.lbl_logo_preview = QLabel("Sin logotipo seleccionado")
+        self.lbl_logo_preview.setFixedSize(120, 60)
+        self.lbl_logo_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_logo_preview.setStyleSheet("border: 1px dashed rgba(255, 255, 255, 0.2); background-color: rgba(255, 255, 255, 0.02); color: #94A3B8; font-size: 9px;")
         
-        self.spin_threshold = QDoubleSpinBox()
-        self.spin_threshold.setRange(0.0, 1.0)
-        self.spin_threshold.setSingleStep(0.01)
+        logo_btns = QHBoxLayout()
+        self.btn_select_logo = QPushButton("Subir...")
+        self.btn_select_logo.clicked.connect(self.select_logo)
+        self.btn_remove_logo = QPushButton("Quitar")
+        self.btn_remove_logo.clicked.connect(self.remove_logo)
+        logo_btns.addWidget(self.btn_select_logo)
+        logo_btns.addWidget(self.btn_remove_logo)
         
-        voice_form.addRow(QLabel("Palabra Clave (Voz):"), self.input_keyword)
-        voice_form.addRow(QLabel("Modelo de Voz:"), self.combo_model)
-        voice_form.addRow(QLabel("ID Micrófono:"), self.spin_device)
-        voice_form.addRow(QLabel("Umbral Ruido:"), self.spin_threshold)
-        self.stack.addWidget(self.page_voice)
+        branding_form.addRow(QLabel("Logotipo comercial:"), self.lbl_logo_preview)
+        branding_form.addRow(QLabel(""), logo_btns)
         
-        self.page_server = QWidget()
-        server_form = QFormLayout(self.page_server)
-        server_form.setVerticalSpacing(15)
-        server_form.setContentsMargins(10, 10, 10, 10)
+        # Color principal
+        primary_layout = QHBoxLayout()
+        self.input_primary_color = QLineEdit("#1E293B")
+        self.btn_pick_primary = QPushButton("Elegir...")
+        self.btn_pick_primary.clicked.connect(self.pick_primary_color)
+        primary_layout.addWidget(self.input_primary_color)
+        primary_layout.addWidget(self.btn_pick_primary)
+        branding_form.addRow(QLabel("Color Principal (Hex):"), primary_layout)
         
-        self.input_url = QLineEdit()
-        server_form.addRow(QLabel("URL Servidor:"), self.input_url)
-        self.stack.addWidget(self.page_server)
+        # Color secundario
+        secondary_layout = QHBoxLayout()
+        self.input_secondary_color = QLineEdit("#64748B")
+        self.btn_pick_secondary = QPushButton("Elegir...")
+        self.btn_pick_secondary.clicked.connect(self.pick_secondary_color)
+        secondary_layout.addWidget(self.input_secondary_color)
+        secondary_layout.addWidget(self.btn_pick_secondary)
+        branding_form.addRow(QLabel("Color Secundario (Hex):"), secondary_layout)
+        
+        # Tipografía
+        self.combo_font = QComboBox()
+        self.combo_font.addItems(["Helvetica", "Times-Roman", "Courier"])
+        branding_form.addRow(QLabel("Tipografía PDF:"), self.combo_font)
+        
+        # Plantilla
+        self.combo_template = QComboBox()
+        self.combo_template.addItems(["classic", "modern", "minimalist"])
+        branding_form.addRow(QLabel("Plantilla de Diseño:"), self.combo_template)
+        
+        self.stack.addWidget(self.page_branding)
         
         actions_layout = QHBoxLayout()
         actions_layout.addStretch()
@@ -500,17 +517,7 @@ class ConfigWidget(AlfonsoBaseDialog):
 
     def load_values(self):
         c = self.dashboard.config
-        self.input_url.setText(c.get('url', "http://localhost:8000"))
-        self.input_keyword.setText(c.get('keyword', "alfonso"))
-        
-        model_val = c.get('model', "tiny")
-        idx = self.combo_model.findText(model_val)
-        if idx >= 0:
-            self.combo_model.setCurrentIndex(idx)
-            
-        dev_val = c.get('device')
-        self.spin_device.setValue(dev_val if dev_val is not None else 8)
-        self.spin_threshold.setValue(c.get('threshold') if c.get('threshold') is not None else 0.03)
+
 
         gmail_email = ""
         gmail_pass = ""
@@ -531,14 +538,33 @@ class ConfigWidget(AlfonsoBaseDialog):
             
         self.input_email.setText(gmail_email)
         self.input_pass.setText(gmail_pass)
+        
+        # Cargar personalización de documentos
+        try:
+            custom = self.dashboard.api.get_document_customization()
+            self.logo_base64 = custom.get("logo_base64")
+            self.input_primary_color.setText(custom.get("primary_color", "#1E293B"))
+            self.input_secondary_color.setText(custom.get("secondary_color", "#64748B"))
+            
+            idx_font = self.combo_font.findText(custom.get("font_family", "Helvetica"))
+            if idx_font >= 0:
+                self.combo_font.setCurrentIndex(idx_font)
+                
+            idx_template = self.combo_template.findText(custom.get("layout_template", "classic"))
+            if idx_template >= 0:
+                self.combo_template.setCurrentIndex(idx_template)
+                
+            self.update_logo_preview()
+        except Exception as e:
+            print(f"[ERROR] No se pudo cargar la personalización del documento: {e}")
 
     def save_values(self):
         c = self.dashboard.config
-        c['url'] = self.input_url.text().strip()
-        c['keyword'] = self.input_keyword.text().strip()
-        c['model'] = self.combo_model.currentText()
-        c['device'] = self.spin_device.value()
-        c['threshold'] = self.spin_threshold.value()
+        c['url'] = c.get('url', "http://127.0.0.1:8000")
+        c['keyword'] = "alfonso"
+        c['model'] = "tiny"
+        c['device'] = 8
+        c['threshold'] = 0.03
 
         try:
             gui_dir = os.path.dirname(os.path.abspath(__file__))
@@ -575,6 +601,21 @@ class ConfigWidget(AlfonsoBaseDialog):
             os.environ["GMAIL_APP_PASSWORD"] = gmail_pass
         except Exception as e:
             print(f"Error saving env/keyring credentials: {e}")
+            
+        # Guardar personalización de documentos
+        custom_data = {
+            "logo_base64": self.logo_base64,
+            "primary_color": self.input_primary_color.text().strip(),
+            "secondary_color": self.input_secondary_color.text().strip(),
+            "font_family": self.combo_font.currentText(),
+            "layout_template": self.combo_template.currentText()
+        }
+        try:
+            res_cust = self.dashboard.api.save_document_customization(custom_data)
+            if res_cust.get("status") != "ok":
+                QMessageBox.warning(self, "Advertencia", f"No se pudo guardar la personalización de diseño: {res_cust.get('message')}")
+        except Exception as e:
+            print(f"[ERROR] No se pudo guardar la personalización del documento: {e}")
 
         QMessageBox.information(
             self, 
@@ -582,6 +623,64 @@ class ConfigWidget(AlfonsoBaseDialog):
             "Los parámetros del sistema operativo Alfonso OS han sido actualizados con éxito."
         )
         self.close()
+
+    def select_logo(self):
+        from PyQt6.QtWidgets import QFileDialog
+        import base64
+        file_path, _ = QFileDialog.getOpenFileName(self, "Seleccionar Logotipo", "", "Imágenes (*.png *.jpg *.jpeg)")
+        if file_path:
+            try:
+                with open(file_path, "rb") as f:
+                    data = f.read()
+                    self.logo_base64 = base64.b64encode(data).decode("utf-8")
+                self.update_logo_preview()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"No se pudo cargar la imagen: {e}")
+
+    def remove_logo(self):
+        self.logo_base64 = None
+        self.update_logo_preview()
+
+    def update_logo_preview(self):
+        from PyQt6.QtGui import QPixmap
+        from PyQt6.QtCore import QByteArray
+        if self.logo_base64:
+            try:
+                pixmap = QPixmap()
+                pixmap.loadFromData(QByteArray.fromBase64(self.logo_base64.encode("utf-8")))
+                self.lbl_logo_preview.setPixmap(pixmap.scaled(
+                    self.lbl_logo_preview.size(), 
+                    Qt.AspectRatioMode.KeepAspectRatio, 
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+            except Exception:
+                self.lbl_logo_preview.setText("Error al renderizar")
+        else:
+            self.lbl_logo_preview.clear()
+            self.lbl_logo_preview.setText("Sin logotipo seleccionado")
+
+    def pick_primary_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        from PyQt6.QtGui import QColor
+        try:
+            initial = QColor(self.input_primary_color.text().strip())
+        except Exception:
+            initial = QColor("#1E293B")
+        color = QColorDialog.getColor(initial, self, "Seleccionar Color Principal")
+        if color.isValid():
+            self.input_primary_color.setText(color.name().upper())
+
+    def pick_secondary_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        from PyQt6.QtGui import QColor
+        try:
+            initial = QColor(self.input_secondary_color.text().strip())
+        except Exception:
+            initial = QColor("#64748B")
+        color = QColorDialog.getColor(initial, self, "Seleccionar Color Secundario")
+        if color.isValid():
+            self.input_secondary_color.setText(color.name().upper())
+
 
 
 class AlertsWidget(AlfonsoBaseDialog):
@@ -1414,6 +1513,8 @@ class AlfonsoOnboardingWizard(AlfonsoBaseDialog):
     def __init__(self, parent=None, api_client=None):
         self.api = api_client
         super().__init__(parent, "ASISTENTE DE CONFIGURACIÓN CONTABLE (ONBOARDING)")
+        if hasattr(self, 'btn_minimize') and self.btn_minimize:
+            self.btn_minimize.hide()
         self.setMinimumSize(500, 450)
         self.setup_wizard_ui()
 
@@ -3588,6 +3689,12 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
         self.btn_up.setStyleSheet("font-weight: bold; background-color: rgba(255, 255, 255, 0.05); color: #E2E8F0;")
         self.btn_up.clicked.connect(self.navigate_up)
         top_bar.addWidget(self.btn_up)
+
+        self.btn_delete_file = QPushButton("ELIMINAR")
+        self.btn_delete_file.setEnabled(False)
+        self.btn_delete_file.setStyleSheet("background-color: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #F87171; font-weight: bold;")
+        self.btn_delete_file.clicked.connect(self.delete_selected_file)
+        top_bar.addWidget(self.btn_delete_file)
         
         top_bar.addStretch()
         
@@ -3707,54 +3814,8 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
         self.list_widget.itemDoubleClicked.connect(self.open_selected_file)
         grid_main_layout.addWidget(self.list_widget)
         self.main_splitter.addWidget(self.grid_container)
-
-        self.inspector_panel = QWidget()
-        self.inspector_panel.setStyleSheet("background-color: rgba(15, 23, 42, 0.2); border-left: 1px solid rgba(255, 255, 255, 0.05);")
-        inspector_layout = QVBoxLayout(self.inspector_panel)
-        inspector_layout.setContentsMargins(15, 15, 15, 15)
-        inspector_layout.setSpacing(12)
-
-        lbl_inspector_title = QLabel("INSPECTOR")
-        lbl_inspector_title.setStyleSheet("font-weight: bold; font-size: 9px; color: #6366F1; letter-spacing: 0.5px;")
-        inspector_layout.addWidget(lbl_inspector_title)
-
-        self.lbl_big_icon = QLabel("[DOC]")
-        self.lbl_big_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_big_icon.setStyleSheet("font-size: 24px; font-weight: bold; color: #6366F1; margin-top: 15px; margin-bottom: 10px;")
-        inspector_layout.addWidget(self.lbl_big_icon)
-
-        self.lbl_file_name = QLabel("Selecciona un archivo")
-        self.lbl_file_name.setWordWrap(True)
-        self.lbl_file_name.setStyleSheet("font-weight: bold; font-size: 12px; color: #FFFFFF; qproperty-alignment: AlignCenter;")
-        self.lbl_file_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        inspector_layout.addWidget(self.lbl_file_name)
-
-        self.lbl_file_size = QLabel("-")
-        self.lbl_file_size.setStyleSheet("font-size: 11px; color: #94A3B8;")
-        self.lbl_file_size.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        inspector_layout.addWidget(self.lbl_file_size)
-
-        self.lbl_file_date = QLabel("-")
-        self.lbl_file_date.setStyleSheet("font-size: 11px; color: #94A3B8;")
-        self.lbl_file_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        inspector_layout.addWidget(self.lbl_file_date)
-
-        inspector_layout.addStretch()
-
-        self.btn_open_file = QPushButton("ABRIR DOCUMENTO")
-        self.btn_open_file.setEnabled(False)
-        self.btn_open_file.clicked.connect(self.open_selected_file)
-        inspector_layout.addWidget(self.btn_open_file)
-
-        self.btn_delete_file = QPushButton("ELIMINAR")
-        self.btn_delete_file.setEnabled(False)
-        self.btn_delete_file.setStyleSheet("background-color: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #F87171;")
-        self.btn_delete_file.clicked.connect(self.delete_selected_file)
-        inspector_layout.addWidget(self.btn_delete_file)
-
-        self.main_splitter.addWidget(self.inspector_panel)
         
-        self.main_splitter.setSizes([160, 480, 210])
+        self.main_splitter.setSizes([180, 820])
         self.content_layout.addWidget(self.main_splitter)
 
         self.load_files()
@@ -3789,7 +3850,8 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                 full_path = os.path.join(self.current_dir, dname)
                 item = QListWidgetItem()
                 item.setText(dname)
-                item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+                from client.gui.widgets import create_professional_icon
+                item.setIcon(create_professional_icon("archive", "#818CF8", size=64))
                 item.setData(Qt.ItemDataRole.UserRole, full_path)
                 item.setData(Qt.ItemDataRole.UserRole + 1, True)
                 self.list_widget.addItem(item)
@@ -3822,7 +3884,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                 if ext == ".pdf":
                     item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                 elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp"):
-                    item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogImageIcon))
+                    item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                 else:
                     item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                     
@@ -3910,7 +3972,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                         if ext == ".pdf":
                             item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                         elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp"):
-                            item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogImageIcon))
+                            item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                         else:
                             item.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
                             
@@ -3925,59 +3987,13 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
             return
             
         file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
-        is_dir = selected_items[0].data(Qt.ItemDataRole.UserRole + 1)
-        filename = os.path.basename(file_path)
-            
         if not file_path or not os.path.exists(file_path):
             self.reset_inspector()
             return
             
-        try:
-            if is_dir:
-                self.lbl_big_icon.setText("[DIR]")
-                self.lbl_file_name.setText(filename)
-                self.lbl_file_size.setText("Carpeta de archivos")
-                self.lbl_file_date.setText("-")
-                self.btn_open_file.setText("ENTRAR")
-                self.btn_open_file.setEnabled(True)
-                self.btn_delete_file.setEnabled(True)
-            else:
-                size_bytes = os.path.getsize(file_path)
-                if size_bytes < 1024:
-                    size_str = f"{size_bytes} Bytes"
-                elif size_bytes < 1024 * 1024:
-                    size_str = f"{size_bytes / 1024:.2f} KB"
-                else:
-                    size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
-                    
-                mtime = os.path.getmtime(file_path)
-                date_str = datetime.datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-                
-                ext = os.path.splitext(filename)[1].lower()
-                if ext == ".pdf":
-                    self.lbl_big_icon.setText("[PDF]")
-                elif ext in (".png", ".jpg", ".jpeg", ".gif"):
-                    self.lbl_big_icon.setText("[IMG]")
-                else:
-                    self.lbl_big_icon.setText("[DOC]")
-                    
-                self.lbl_file_name.setText(filename)
-                self.lbl_file_size.setText(f"Tamaño: {size_str}")
-                self.lbl_file_date.setText(f"Modificado: {date_str}")
-                
-                self.btn_open_file.setText("ABRIR DOCUMENTO")
-                self.btn_open_file.setEnabled(True)
-                self.btn_delete_file.setEnabled(True)
-        except Exception as e:
-            print(f"Error reading file details: {e}")
+        self.btn_delete_file.setEnabled(True)
 
     def reset_inspector(self):
-        self.lbl_big_icon.setText("[DOC]")
-        self.lbl_file_name.setText("Selecciona un archivo")
-        self.lbl_file_size.setText("-")
-        self.lbl_file_date.setText("-")
-        self.btn_open_file.setText("ABRIR DOCUMENTO")
-        self.btn_open_file.setEnabled(False)
         self.btn_delete_file.setEnabled(False)
 
     def open_selected_file(self):

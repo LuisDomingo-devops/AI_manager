@@ -162,7 +162,19 @@ class CyberSecurityAgent:
 
         # 3. Normalizar e inspeccionar inyecciones en la URL, Path y Body
         normalized_path = self._normalize_payload(path)
-        normalized_body = self._normalize_payload(body)
+        
+        inspected_body = body
+        if body and "customization" in path:
+            try:
+                import json
+                data = json.loads(body)
+                if isinstance(data, dict) and "logo_base64" in data:
+                    data["logo_base64"] = ""
+                    inspected_body = json.dumps(data)
+            except Exception:
+                pass
+
+        normalized_body = self._normalize_payload(inspected_body)
         payloads = [normalized_path, normalized_body]
         
         for payload in payloads:

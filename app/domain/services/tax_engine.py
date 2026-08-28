@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Dict, Any
 from app.utils.logger import app_logger
+from app.domain.services.tax_territory_factory import TaxTerritoryFactory
 
 # Expresiones regulares para NIF español (A1234567B, 12345678Z, etc.)
 NIF_REGEX = re.compile(r'\b[A-HJ-NP-SUVWXY\d]\d{7}[A-Z\d]\b', re.IGNORECASE)
@@ -159,30 +160,38 @@ class TaxEngine:
     @classmethod
     def resolve_rates_with_confidence(cls, text: str) -> Dict[str, Any]:
         """
-        Busca tasas de IVA e IRPF y evalúa la confianza de la extracción.
-        No asume un tipo de IVA al 21% por defecto si no está explícito en el documento,
-        marcando requires_manual_confirmation para evitar sanciones del art. 191 LGT por deducciones indebidas.
+        Busca tasas de IVA/IGIC e IRPF y evalúa la confianza de la extracción.
+        Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones de tasas soportadas.
         """
         text_lower = text.lower()
         iva_rate = None
         is_iva_inferred = False
         confidence = 1.0
+        requires_manual_confirmation = False
 
-        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.)[^0-9%]*?(\d+(?:[.,]\d+)?)\s*%', text_lower)
+        territory = TaxTerritoryFactory.get_current_territory()
+        supported_rates = territory.get_supported_iva_rates()
+
+        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.|igic|i\.g\.i\.c\.)[^0-9%]*?(\d+(?:[.,]\d+)?)\s*%', text_lower)
         if iva_rate_match:
             try:
                 iva_rate = float(iva_rate_match.group(1).replace(",", "."))
+                if iva_rate not in supported_rates:
+                    # La tasa extraída no pertenece al territorio fiscal actual
+                    requires_manual_confirmation = True
+                    confidence = 0.50
             except Exception:
-                iva_rate = 21.0
+                iva_rate = territory.get_default_iva_rate()
+                requires_manual_confirmation = True
         else:
             # Buscar menciones de exención o régimen especial
             if any(term in text_lower for term in ["exento", "exenta", "art. 20", "artículo 20", "inversión del sujeto pasivo", "0%"]):
                 iva_rate = 0.0
             else:
-                rules = cls.load_rules()
-                iva_rate = rules.get("iva_general_rate", 21.0)
+                iva_rate = territory.get_default_iva_rate()
                 is_iva_inferred = True
                 confidence = 0.60
+                requires_manual_confirmation = True
 
         irpf_rate = 0.0
         irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+(?:[.,]\d+)?)\s*%', text_lower)
@@ -197,7 +206,7 @@ class TaxEngine:
             "irpf_rate": irpf_rate,
             "is_iva_inferred": is_iva_inferred,
             "confidence_score": confidence,
-            "requires_manual_confirmation": is_iva_inferred
+            "requires_manual_confirmation": requires_manual_confirmation
         }
 
     @classmethod

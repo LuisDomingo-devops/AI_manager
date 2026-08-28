@@ -211,14 +211,20 @@ class SpecializedAgentRouter:
     async def route_if_applicable(self, user_message: str, session_id: str | None, client_id: str | None, logger) -> dict | None:
         msg_lower = user_message.lower()
         
-        is_marcos_query = "marcos" in msg_lower or any(kw in msg_lower for kw in [
+        is_calculation_or_personal = any(kw in msg_lower for kw in [
+            "cuanto", "cuánto", "saldo", "calcular", "calcula", "estimar", "estima", "llevo", 
+            "mi iva", "mis ivas", "mi irpf", "mi contabilidad", "mis cuentas", "mi factura", "mis facturas",
+            "cuanto llevo", "cuánto llevo"
+        ])
+
+        is_marcos_query = ("marcos" in msg_lower or any(kw in msg_lower for kw in [
             "codigo civil", "código civil", "codigo penal", "código penal",
             "constitucion española", "constitucion espanola", "constitución española",
             "asesoria legal", "asesoría legal", "consulta juridica", "consulta jurídica",
             "iva", "irpf", "impuesto", "impuestos", "tributo", "tributaria", "tributos",
             "hacienda", "aeat", "declaración de la renta", "declaracion de la renta",
             "deducción", "deduccion", "deducciones", "jurisprudencia", "sentencia", "fiscal"
-        ])
+        ])) and not is_calculation_or_personal
         is_security_query = any(kw in msg_lower for kw in [
             "ciberseguridad", "cybersecurity", "seguridad", "security", "vulnerabilidad", 
             "vulnerabilities", "auditoría de seguridad", "auditoria de seguridad", "hack",
@@ -316,6 +322,9 @@ class ToolExecutionEngine:
 
                 if client_meta:
                     role = client_meta.get("role", "guest")
+                    if role == "guest":
+                        from app.config import settings
+                        role = settings.get_client_role(client_id)
                 else:
                     from app.config import settings
                     role = settings.get_client_role(client_id)

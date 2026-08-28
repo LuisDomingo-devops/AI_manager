@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 # Asegurar sys.path con root y client
-root_dir = str(Path(__file__).resolve().parents[1])
+root_dir = str(Path(__file__).resolve().parents[2])
 client_dir = os.path.join(root_dir, "client")
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
@@ -151,16 +151,16 @@ def test_legacy_view_methods_compatibility(qapp, mock_dashboard_config):
         assert dashboard.central_stack.currentIndex() == 19
 
         dashboard.show_mail()
-        assert dashboard.central_stack.currentIndex() == 23
+        assert dashboard.central_stack.currentIndex() == 22
 
         dashboard.show_calendar()
         assert dashboard.central_stack.currentIndex() == 14
 
         dashboard.show_compliance()
-        assert dashboard.central_stack.currentIndex() == 26
+        assert dashboard.central_stack.currentIndex() == 25
 
         dashboard.show_config()
-        assert dashboard.central_stack.currentIndex() == 29
+        assert dashboard.central_stack.currentIndex() == 28
 
 
 def test_specialized_cash_flow_widget_integration(qapp):
@@ -229,9 +229,9 @@ def test_specialized_auxiliary_widgets_integration(qapp):
     assert tenant.cb_tenants.count() >= 1
 
 
-def test_ai_assistant_and_subscription_routing_integration(qapp, mock_dashboard_config):
-    """Verifica que el índice 22 monta AlfonsoAIChatAssistantWidget y la suscripción redirige al índice 32."""
-    from client.gui.dialogs.specialized_views import AlfonsoAIChatAssistantWidget
+def test_mail_and_subscription_routing_integration(qapp, mock_dashboard_config):
+    """Verifica que el índice 22 monta MailWidget y la suscripción redirige al índice 31."""
+    from client.gui.dialogs import MailWidget
     with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
          patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
          patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
@@ -239,17 +239,17 @@ def test_ai_assistant_and_subscription_routing_integration(qapp, mock_dashboard_
         dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
         dashboard.show()
 
-        # Verificar índice 22 es AlfonsoAIChatAssistantWidget
+        # Verificar índice 22 es MailWidget
         widget_22 = dashboard.central_stack.widget(22)
-        assert isinstance(widget_22, AlfonsoAIChatAssistantWidget)
+        assert isinstance(widget_22, MailWidget)
 
-        # Probar switch_to_view a Asistente IA
-        dashboard.switch_to_view(("comunicacion", "asistente_ia"))
+        # Probar switch_to_view a Correo
+        dashboard.switch_to_view(("comunicacion", "correo_inteligente"))
         assert dashboard.central_stack.currentIndex() == 22
 
-        # Probar navegación a suscripción
+        # Probar navegación a suscripción (ahora índice 30)
         dashboard.show_subscription_dialog()
-        assert dashboard.central_stack.currentIndex() == 32
+        assert dashboard.central_stack.currentIndex() == 30
 
 
 def test_subview_mode_propagation_integration(qapp, mock_dashboard_config):
@@ -283,14 +283,10 @@ def test_subview_mode_propagation_integration(qapp, mock_dashboard_config):
         assert dashboard.central_stack.currentIndex() == 13
         assert dashboard.view_aeat_auto.stack.currentIndex() == 1
 
-        # 3. Configuración: perfil fiscal (29), voz/IA (30)
+        # 3. Configuración: perfil fiscal (28)
         dashboard.switch_to_view(("sistema", "perfil_fiscal"))
-        assert dashboard.central_stack.currentIndex() == 29
+        assert dashboard.central_stack.currentIndex() == 28
         assert dashboard.view_config.stack.currentIndex() == 0
-
-        dashboard.switch_to_view(("sistema", "voz_modelos_ia"))
-        assert dashboard.central_stack.currentIndex() == 30
-        assert dashboard.view_voice_config.stack.currentIndex() == 1
 
 
 def test_central_stack_tables_integration(qapp, mock_dashboard_config):
@@ -331,6 +327,22 @@ def test_central_stack_tables_integration(qapp, mock_dashboard_config):
 
 def test_ledger_navigation_and_mayor_population_integration(qapp, mock_dashboard_config):
     """Verifica la integración completa del Libro Diario y Mayor desde el Dashboard."""
+    # Asegurar base de datos inicializada y con asientos contables de prueba en 'default'
+    from app.adapters.memory.memory import _get_connection, _init_db_schema
+    from app.domain.services.ledger_service import LedgerService
+    
+    with _get_connection("default") as conn:
+        _init_db_schema(conn)
+        conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('57200001', 'Bancos', 'activo')")
+        conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('70500000', 'Servicios', 'ingreso')")
+        conn.commit()
+
+    apuntes = [
+        {"account_code": "57200001", "debe": 100.0, "haber": 0.0},
+        {"account_code": "70500000", "debe": 0.0, "haber": 100.0}
+    ]
+    LedgerService.record_manual_entry("15/05/2026", "Asiento de prueba GUI", apuntes)
+
     with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
          patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
          patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
@@ -371,7 +383,7 @@ def test_help_center_navigation_and_shortcuts_integration(qapp, mock_dashboard_c
 
         # 1. Navegación directa vía switch_to_view tupla
         dashboard.switch_to_view(("sistema", "centro_ayuda"))
-        assert dashboard.central_stack.currentIndex() == 33
+        assert dashboard.central_stack.currentIndex() == 31
         assert "CENTRO DE AYUDA" in dashboard.lbl_view_title.text()
         assert dashboard.sidebar.current_subcat_id == "centro_ayuda"
 
@@ -379,11 +391,11 @@ def test_help_center_navigation_and_shortcuts_integration(qapp, mock_dashboard_c
         dashboard.switch_to_view("Dashboard")
         assert dashboard.central_stack.currentIndex() == 0
         dashboard.show_help()
-        assert dashboard.central_stack.currentIndex() == 33
+        assert dashboard.central_stack.currentIndex() == 31
 
         # 3. Navegación vía alias de cadena "Ayuda"
         dashboard.switch_to_view("Ayuda")
-        assert dashboard.central_stack.currentIndex() == 33
+        assert dashboard.central_stack.currentIndex() == 31
 
         # 4. Verificar que el widget interno de ayuda está montado correctamente
         hc = dashboard.view_help_center

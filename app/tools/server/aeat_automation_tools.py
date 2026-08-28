@@ -10,6 +10,10 @@ from typing import Optional, Dict, Any
 from app.domain.services.tax_parser_service import TaxParserService
 from app.utils.logger import tool_logger
 import os
+from app.core.websocket_manager import guardian_ws_manager
+from app.domain.services.annual_tax_service import AnnualTaxAggregatorService
+from app.infrastructure.database.asset_repository_db import SqliteAssetRepositoryAdapter
+from app.domain.services.depreciation_service import DepreciationService
 
 # Selectores para el Modelo 303 en la web de la AEAT (sujetos a cambios por la AEAT)
 SELECTORS_303 = {
@@ -198,6 +202,72 @@ async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = F
         return {"status": "error", "message": str(e)}
 
 
+async def fill_modelo_303_guardian(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
+    """
+    Rellena el borrador del Modelo 303 en la sesión del navegador abierta por el usuario a través de la extensión Guardián.
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a rellenar automáticamente el borrador del Modelo 303 del trimestre Q{quarter} {year} a través del Guardián en tu navegador. ¿Deseas continuar?"
+        }
+
+    try:
+        data = await get_aeat_aggregated_data(year, quarter)
+        
+        income_base = data["income"]["base"]
+        income_iva = data["income"]["iva"]
+        expense_base = data["expense"]["base"]
+        expense_iva = data["expense"]["iva"]
+
+        # Verificar conexiones activas en el manager
+        if not guardian_ws_manager.active_connections:
+            return {
+                "status": "error",
+                "message": "No hay ningún navegador con la extensión Guardián activa conectada. Por favor, abre la sede electrónica de la AEAT e inicia la extensión."
+            }
+
+        # Generar payload de campos
+        fields = {
+            "input[id$='C01']": str(income_base),
+            "input[id$='C02']": "21",
+            "input[id$='C03']": str(income_iva),
+            "input[id$='C28']": str(expense_base),
+            "input[id$='C29']": str(expense_iva)
+        }
+
+        # Transmitir a la extensión por WebSocket
+        await guardian_ws_manager.send_json({
+            "action": "guardian.autofill",
+            "params": {
+                "fields": fields
+            }
+        })
+
+        # Enviar alerta/toast a la extensión
+        await guardian_ws_manager.send_json({
+            "action": "guardian.alert",
+            "params": {
+                "message": f"Alfonso Autónomo: Rellenado automático del Modelo 303 Q{quarter} {year} completado.",
+                "type": "success"
+            }
+        })
+
+        return {
+            "status": "ok",
+            "message": "Datos de autocompletado enviados con éxito a la extensión del navegador.",
+            "data_used": {
+                "income_base": income_base,
+                "income_iva": income_iva,
+                "expense_base": expense_base,
+                "expense_iva": expense_iva
+            }
+        }
+    except Exception as e:
+        tool_logger.exception("Error al rellenar Modelo 303 con Guardián")
+        return {"status": "error", "message": str(e)}
+
+
 async def generate_modelo_130_autofill_script(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
     """
     Genera un script de JavaScript para autocompletar el borrador del Modelo 130 (IRPF autónomos)
@@ -309,6 +379,72 @@ async def fill_modelo_130_playwright(year: int, quarter: int, headless: bool = F
         }
     except Exception as e:
         tool_logger.exception("Error en fill_modelo_130_playwright")
+        return {"status": "error", "message": str(e)}
+
+
+async def fill_modelo_130_guardian(year: int, quarter: int, confirmed_by_user: bool = False) -> dict:
+    """
+    Rellena el borrador del Modelo 130 (IRPF autónomos) en la sesión del navegador abierta a través de la extensión Guardián.
+    """
+    if not confirmed_by_user:
+        return {
+            "status": "pending_confirmation",
+            "message": f"Se va a rellenar automáticamente el borrador del Modelo 130 del trimestre Q{quarter} {year} a través del Guardián en tu navegador. ¿Deseas continuar?"
+        }
+
+    try:
+        data = await get_aeat_aggregated_data(year, quarter)
+        income_base = data["income"]["base"]
+        expense_base = data["expense"]["base"]
+        net_result = data["net_result"]
+        
+        pago_fraccionado = max(0.0, net_result * 0.20)
+
+        # Verificar conexiones activas en el manager
+        if not guardian_ws_manager.active_connections:
+            return {
+                "status": "error",
+                "message": "No hay ningún navegador con la extensión Guardián activa conectada. Por favor, abre la sede electrónica de la AEAT e inicia la extensión."
+            }
+
+        # Generar payload de campos
+        fields = {
+            "input[id$='C01']": str(income_base),
+            "input[id$='C02']": str(expense_base),
+            "input[id$='C03']": str(net_result),
+            "input[id$='C04']": str(pago_fraccionado),
+            "input[id$='C19']": str(pago_fraccionado)
+        }
+
+        # Transmitir a la extensión por WebSocket
+        await guardian_ws_manager.send_json({
+            "action": "guardian.autofill",
+            "params": {
+                "fields": fields
+            }
+        })
+
+        # Enviar alerta/toast a la extensión
+        await guardian_ws_manager.send_json({
+            "action": "guardian.alert",
+            "params": {
+                "message": f"Alfonso Autónomo: Rellenado automático del Modelo 130 Q{quarter} {year} completado.",
+                "type": "success"
+            }
+        })
+
+        return {
+            "status": "ok",
+            "message": "Datos de autocompletado enviados con éxito a la extensión del navegador.",
+            "data_used": {
+                "income_base": income_base,
+                "expense_base": expense_base,
+                "net_result": net_result,
+                "pago_fraccionado": pago_fraccionado
+            }
+        }
+    except Exception as e:
+        tool_logger.exception("Error al rellenar Modelo 130 con Guardián")
         return {"status": "error", "message": str(e)}
 
 
@@ -680,19 +816,154 @@ async def generate_modelo_347_summary(year: int) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+async def generate_modelo_390_summary(year: int) -> dict:
+    """
+    Genera el resumen contable anual de IVA (Modelo 390) consolidando ingresos y gastos.
+    """
+    try:
+        data = AnnualTaxAggregatorService.get_modelo_390_data(year)
+        return {
+            "status": "ok",
+            "year": year,
+            "summary": data
+        }
+    except Exception as e:
+        tool_logger.exception("Error al generar resumen del Modelo 390")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_modelo_190_summary(year: int) -> dict:
+    """
+    Genera el resumen anual de retenciones de IRPF sobre el trabajo y profesionales (Modelo 190).
+    """
+    try:
+        data = AnnualTaxAggregatorService.get_modelo_190_data(year)
+        return {
+            "status": "ok",
+            "year": year,
+            "summary": data
+        }
+    except Exception as e:
+        tool_logger.exception("Error al generar resumen del Modelo 190")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_modelo_180_summary(year: int) -> dict:
+    """
+    Genera el resumen anual de retenciones de IRPF por alquileres comerciales (Modelo 180).
+    """
+    try:
+        data = AnnualTaxAggregatorService.get_modelo_180_data(year)
+        return {
+            "status": "ok",
+            "year": year,
+            "summary": data
+        }
+    except Exception as e:
+        tool_logger.exception("Error al generar resumen del Modelo 180")
+        return {"status": "error", "message": str(e)}
+
+
+async def register_asset_tool(
+    name: str,
+    purchase_date: str,
+    cost: float,
+    useful_life_years: int,
+    salvage_value: float = 0.0,
+    category: str = None
+) -> dict:
+    """
+    Registra un nuevo bien de inversión/activo para el autónomo (Fase 1 de amortizaciones).
+    La fecha de compra debe estar en formato YYYY-MM-DD.
+    """
+    try:
+        adapter = SqliteAssetRepositoryAdapter()
+        asset_data = {
+            "name": name,
+            "purchase_date": purchase_date,
+            "cost": float(cost),
+            "useful_life_years": int(useful_life_years),
+            "salvage_value": float(salvage_value),
+            "category": category
+        }
+        asset_id = adapter.save_asset("default", asset_data)
+        return {
+            "status": "ok",
+            "asset_id": asset_id,
+            "message": f"Activo '{name}' registrado con éxito. ID asignado: {asset_id}."
+        }
+    except Exception as e:
+        tool_logger.exception("Error al registrar activo")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_depreciation_proposal_tool(year: int, confirmed_by_user: bool = False) -> dict:
+    """
+    Genera la propuesta de cuotas y asientos de amortización anual de activos.
+    Si se confirma por el usuario (confirmed_by_user=True), inserta los asientos en el diario contable.
+    """
+    try:
+        adapter = SqliteAssetRepositoryAdapter()
+        service = DepreciationService(adapter)
+        proposal = service.calculate_depreciation_proposal("default", year)
+
+        if not confirmed_by_user:
+            return {
+                "status": "pending_confirmation",
+                "message": f"Se va a calcular la propuesta de amortización de activos del año {year} para tu revisión.",
+                "proposal": proposal
+            }
+
+        if not proposal:
+            return {
+                "status": "ok",
+                "message": "No hay activos pendientes de amortizar para este año."
+            }
+
+        from app.domain.services.ledger_service import LedgerService
+        
+        registered_count = 0
+        for line in proposal:
+            apuntes = [
+                {"account_code": line["account_debe"], "debe": line["amount"], "haber": 0.0},
+                {"account_code": line["account_haber"], "debe": 0.0, "haber": line["amount"]}
+            ]
+            LedgerService._insert_journal_and_ledger(
+                date_str=f"31/12/{year}",
+                concept=line["concept"],
+                apuntes=apuntes
+            )
+            registered_count += 1
+
+        return {
+            "status": "ok",
+            "message": f"Se han registrado con éxito {registered_count} asientos contables de amortización anual para el ejercicio {year}.",
+            "proposal_applied": proposal
+        }
+    except Exception as e:
+        tool_logger.exception("Error al generar propuesta de amortizaciones")
+        return {"status": "error", "message": str(e)}
+
+
 # Registro de herramientas del plugin
 TOOLS = {
     "generate_modelo_303_autofill_script": generate_modelo_303_autofill_script,
     "fill_modelo_303_playwright": fill_modelo_303_playwright,
+    "fill_modelo_303_guardian": fill_modelo_303_guardian,
     "generate_modelo_130_autofill_script": generate_modelo_130_autofill_script,
     "fill_modelo_130_playwright": fill_modelo_130_playwright,
+    "fill_modelo_130_guardian": fill_modelo_130_guardian,
     "generate_modelo_111_autofill_script": generate_modelo_111_autofill_script,
     "fill_modelo_111_playwright": fill_modelo_111_playwright,
     "generate_modelo_390_summary": generate_modelo_390_summary,
+    "generate_modelo_190_summary": generate_modelo_190_summary,
+    "generate_modelo_180_summary": generate_modelo_180_summary,
     "generate_modelo_115_autofill_script": generate_modelo_115_autofill_script,
     "fill_modelo_115_playwright": fill_modelo_115_playwright,
     "generate_modelo_200_summary": generate_modelo_200_summary,
     "fill_modelo_200_playwright": fill_modelo_200_playwright,
     "generate_modelo_202_autofill_script": generate_modelo_202_autofill_script,
     "generate_modelo_347_summary": generate_modelo_347_summary,
+    "register_asset_tool": register_asset_tool,
+    "generate_depreciation_proposal_tool": generate_depreciation_proposal_tool,
 }

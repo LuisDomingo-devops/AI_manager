@@ -19,6 +19,12 @@ from app.tools.server.billing_tools import (
 
 router = APIRouter(prefix="/billing", dependencies=[Depends(verify_api_key)])
 
+from app.domain.services.document_customization_service import DocumentCustomizationService
+from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+from app.adapters.memory.memory import tenant_context
+
+customization_service = DocumentCustomizationService(SqliteDocumentCustomizationAdapter())
+
 class InvoiceCreateRequest(BaseModel):
     client_name: str
     client_nif: str
@@ -112,3 +118,33 @@ async def list_clients_endpoint(include_deleted: bool = False):
 async def list_products_endpoint(include_deleted: bool = False):
     """Lista los productos y servicios del catálogo activos (Soft Delete)."""
     return await get_products(include_deleted=include_deleted)
+
+
+class CustomizationUpdateRequest(BaseModel):
+    logo_base64: Optional[str] = None
+    primary_color: str = Field("#1E293B")
+    secondary_color: str = Field("#64748B")
+    font_family: str = Field("Helvetica")
+    layout_template: str = Field("classic")
+    elements_layout: Optional[str] = None
+    quote_elements_layout: Optional[str] = None
+    logo_width: Optional[int] = 110
+
+
+@router.get("/customization")
+async def get_customization_endpoint():
+    """Obtiene los datos de personalización de documentos para el inquilino."""
+    cid = tenant_context.get() or "default"
+    return customization_service.get_customization(cid)
+
+
+@router.post("/customization")
+async def update_customization_endpoint(req: CustomizationUpdateRequest):
+    """Actualiza la personalización de documentos para el inquilino."""
+    cid = tenant_context.get() or "default"
+    try:
+        customization_service.save_customization(cid, req.model_dump())
+        return {"status": "ok", "message": "Personalización de documentos guardada correctamente."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

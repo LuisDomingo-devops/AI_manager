@@ -1,0 +1,9 @@
+name = "alfonso-llm-proxy"
+main = "index.js"
+compatibility_date = "2024-03-01"
+
+# NOTA: 
+# Las variables sensibles (secrets) no deben definirse aquí por seguridad.
+# Deben establecerse en la consola de Cloudflare o mediante línea de comandos:
+#   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler secret put ALFONSO_CLIENT_SECRET

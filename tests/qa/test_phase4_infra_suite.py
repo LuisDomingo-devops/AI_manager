@@ -24,10 +24,14 @@ def test_migrations_runner_lifecycle():
     assert "003" in applied_first
     assert "004" in applied_first
     assert "005" in applied_first
+    assert "006" in applied_first
+    assert "007" in applied_first
+    assert "008" in applied_first
+    assert "009" in applied_first
 
     # 2. Verificar que se registraron en schema_migrations
     applied_in_db = MigrationRunner.get_applied_migrations(conn)
-    assert set(applied_in_db) == {"001", "002", "003", "004", "005"}
+    assert set(applied_in_db) == {"001", "002", "003", "004", "005", "006", "007", "008", "009"}
 
     # 3. Idempotencia: segunda ejecución consecutiva no debe reaplicar nada
     applied_second = MigrationRunner.run_pending_migrations(conn)
@@ -84,7 +88,7 @@ def test_docker_and_ci_files_exist():
     """
     Verifica que los artefactos de infraestructura, CI/CD y despliegue existan y contengan directivas clave.
     """
-    root_dir = Path(__file__).resolve().parents[1]
+    root_dir = Path(__file__).resolve().parents[2]
     
     dockerfile = root_dir / "Dockerfile"
     docker_compose = root_dir / "docker-compose.yml"

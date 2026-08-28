@@ -97,7 +97,7 @@ def test_non_ascii_characters_resilience():
     assert res["status"] == "success"
     
     # Verificar que el archivo XML se escribió en disco usando codificación utf-8 correctamente sin fallar
-    xml_dir = Path(__file__).resolve().parents[1] / "data" / "xml_invoices"
+    xml_dir = Path(__file__).resolve().parents[2] / "data" / "xml_invoices"
     xml_file = xml_dir / "FAC-Ñ-2026_verifactu.xml"
     assert xml_file.exists()
     

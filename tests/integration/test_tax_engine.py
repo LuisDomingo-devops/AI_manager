@@ -57,7 +57,7 @@ def test_extract_financials_and_recalculate():
     assert total == 121.0
 
 def test_update_tax_rules_workflow():
-    rules_path = Path(__file__).resolve().parents[1] / "app" / "domain" / "services" / "tax_rules.json"
+    rules_path = Path(__file__).resolve().parents[2] / "app" / "domain" / "services" / "tax_rules.json"
     
     # Hacer backup de las reglas actuales
     backup = {}
@@ -66,6 +66,15 @@ def test_update_tax_rules_workflow():
             backup = json.load(f)
 
     try:
+        # Inicializar en un estado predeterminado conocido para la prueba
+        with open(rules_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "iva_general_rate": 21.0,
+                "irpf_profesionales_rate": 15.0,
+                "last_updated": "2026-08-13",
+                "boe_reference": "Default Seed Fallback"
+            }, f, indent=2, ensure_ascii=False)
+
         # 1. Intentar actualizar sin boe_link o boe_section
         res_fail = TaxEngine.update_tax_rules({"iva_general_rate": 22.0}, boe_link="", boe_section="Art 1")
         assert res_fail["status"] == "error"

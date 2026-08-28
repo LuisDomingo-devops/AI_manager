@@ -13,6 +13,7 @@ MAPPING = {
     "app.adapters.metrics": "app.infrastructure.monitoring.metrics",
     "app.adapters.tool_base": "app.infrastructure.adapters.tool_base",
     "app.adapters.tool_registry": "app.infrastructure.adapters.tool_registry",
+    "app.adapters.document_customization": "app.infrastructure.database.document_customization_db",
 }
 
 class RedirectingLoader:

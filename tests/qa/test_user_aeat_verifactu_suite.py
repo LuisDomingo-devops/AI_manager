@@ -22,7 +22,7 @@ from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.adapters.mail_db import create_email
 
 # 1. Configuración de rutas de certificados de prueba
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CERT_PATH = str(PROJECT_ROOT / "data" / "certificados_prueba" / "certificado_pruebas.pem")
 KEY_PATH = str(PROJECT_ROOT / "data" / "certificados_prueba" / "clave_pruebas.pem")
 

@@ -488,8 +488,11 @@ class BankService:
                 mov_id = mov["id"]
                 mov_date_str = mov["movement_date"]
                 mov_amount = mov["amount"]
-                mov_concept = encryptor.decrypt(mov["concept"]).lower()
-                mov_ref = encryptor.decrypt(mov["reference"]).lower()
+                mov_concept_dec = encryptor.decrypt(mov["concept"])
+                mov_concept = mov_concept_dec.lower() if mov_concept_dec else ""
+                mov_ref_dec = encryptor.decrypt(mov["reference"])
+                mov_ref = mov_ref_dec.lower() if mov_ref_dec else ""
+
 
                 try:
                     mov_date = datetime.strptime(mov_date_str, "%d/%m/%Y")

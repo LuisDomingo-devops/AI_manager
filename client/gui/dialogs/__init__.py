@@ -32,6 +32,7 @@ from client.gui.dialogs.specialized_views import (
     AlfonsoOfficialBooksWidget,
     AlfonsoBackupWidget,
     AlfonsoTenantAdvisorWidget,
-    AlfonsoAIChatAssistantWidget,
     AlfonsoHelpCenterWidget
 )
+from client.gui.dialogs.document_customizer import AlfonsoDocumentCustomizerWidget
+
