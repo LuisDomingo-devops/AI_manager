@@ -8,7 +8,7 @@ from app.utils.logger import app_logger
 from app.domain.services.tax_territory_factory import TaxTerritoryFactory
 
 # Expresiones regulares para NIF español (A1234567B, 12345678Z, etc.)
-NIF_REGEX = re.compile(r'\b[A-HJ-NP-SUVWXY\d]\d{7}[A-Z\d]\b', re.IGNORECASE)
+NIF_REGEX = re.compile(r'\b([A-HJ-NP-SUVWXY]\d{7}[A-Z\d]|\d{8}[A-Z])\b', re.IGNORECASE)
 
 # Expresiones regulares para fechas comunes
 DATE_REGEX = re.compile(r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b')
@@ -135,17 +135,32 @@ class TaxEngine:
         date_str = None
         now = datetime.now()
         
-        iso_match = DATE_ISO_REGEX.search(text)
-        if iso_match:
-            yyyy, mm, dd = iso_match.groups()
-            date_str = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+        # 1. Intentar buscar fecha de emisión explícita primero
+        emision_match = re.search(r'(?:fecha(?:\s+de)?\s+(?:emisi[oó]n|factura|cargo)|fecha)[\s:]*(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b', text, re.IGNORECASE)
+        if emision_match:
+            d, m, y = emision_match.groups()
+            if len(y) == 2:
+                y = "20" + y
+            date_str = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
         else:
-            std_match = DATE_REGEX.search(text)
-            if std_match:
-                d, m, y = std_match.groups()
-                if len(y) == 2:
-                    y = "20" + y
-                date_str = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+            emision_iso_match = re.search(r'(?:fecha(?:\s+de)?\s+(?:emisi[oó]n|factura|cargo)|fecha)[\s:]*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b', text, re.IGNORECASE)
+            if emision_iso_match:
+                yyyy, mm, dd = emision_iso_match.groups()
+                date_str = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # 2. Fallback heurístico a la primera fecha libre
+        if not date_str:
+            iso_match = DATE_ISO_REGEX.search(text)
+            if iso_match:
+                yyyy, mm, dd = iso_match.groups()
+                date_str = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+            else:
+                std_match = DATE_REGEX.search(text)
+                if std_match:
+                    d, m, y = std_match.groups()
+                    if len(y) == 2:
+                        y = "20" + y
+                    date_str = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
 
         if date_str:
             try:
@@ -172,7 +187,7 @@ class TaxEngine:
         territory = TaxTerritoryFactory.get_current_territory()
         supported_rates = territory.get_supported_iva_rates()
 
-        iva_rate_match = re.search(r'(?:iva|i\.v\.a\.|igic|i\.g\.i\.c\.)[^0-9%]*?(\d+(?:[.,]\d+)?)\s*%', text_lower)
+        iva_rate_match = re.search(r'\b(?:iva|i\.v\.a\.|igic|i\.g\.i\.c\.)\b.{0,30}?(\d+(?:[.,]\d+)?)\s*%', text_lower)
         if iva_rate_match:
             try:
                 iva_rate = float(iva_rate_match.group(1).replace(",", "."))
@@ -226,7 +241,7 @@ class TaxEngine:
         total_amount = 0.0
 
         # Buscar total de forma prioritaria
-        total_matches = re.findall(r'(?:total|importe total|a pagar|total factura)\s*(?:[a-z\s]+)?[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
+        total_matches = re.findall(r'\b(?:total|importe total|a pagar|total factura)\b\s*(?:[a-z\s]{0,12})?[\s:]*([0-9.,]+)\s*(?:€|eur|usd|\b)', text_lower)
         if total_matches:
             for m in reversed(total_matches):
                 val = cls.parse_number(m)
@@ -235,7 +250,7 @@ class TaxEngine:
                     break
 
         # Buscar base imponible
-        base_matches = re.findall(r'(?:base imponible|subtotal|base|neto)[\s:]*([0-9.,\s]+(?:€|\b))', text_lower)
+        base_matches = re.findall(r'\b(?:base imponible|subtotal|base|neto)\b\s*(?:[a-z\s]{0,12})?[\s:]*([0-9.,]+)\s*(?:€|eur|usd|\b)', text_lower)
         if base_matches:
             for m in reversed(base_matches):
                 val = cls.parse_number(m)

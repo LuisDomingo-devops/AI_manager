@@ -369,6 +369,8 @@ class ConfigWidget(AlfonsoBaseDialog):
         self.dashboard = parent_dashboard
         if not embedded:
             self.setMinimumSize(450, 480)
+        if hasattr(self, 'btn_minimize'):
+            self.btn_minimize.hide()
 
         self.setup_ui()
         self.load_values()
@@ -1513,9 +1515,9 @@ class AlfonsoOnboardingWizard(AlfonsoBaseDialog):
     def __init__(self, parent=None, api_client=None):
         self.api = api_client
         super().__init__(parent, "ASISTENTE DE CONFIGURACIÓN CONTABLE (ONBOARDING)")
-        if hasattr(self, 'btn_minimize') and self.btn_minimize:
-            self.btn_minimize.hide()
         self.setMinimumSize(500, 450)
+        if hasattr(self, 'btn_minimize'):
+            self.btn_minimize.hide()
         self.setup_wizard_ui()
 
     def setup_wizard_ui(self):

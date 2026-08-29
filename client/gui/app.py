@@ -1749,14 +1749,14 @@ class AlfonsoHUDDashboard(QMainWindow):
         card1.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c1_layout = QVBoxLayout(card1)
         c1_layout.setContentsMargins(14, 10, 14, 0)
-        c1_title = QLabel("Ingresos  <span style='color: #10B981;'>▲ +18.6%</span>")
-        c1_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        self.lbl_kpi_ingresos_title = QLabel("Ingresos  <span style='color: #10B981;'>▲ +18.6%</span>")
+        self.lbl_kpi_ingresos_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
         self.lbl_kpi_ingresos = QLabel("12.430,50 €")
         self.lbl_kpi_ingresos.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
-        c1_spark = SparklineWidget("#00F0FF", [10, 14, 12, 19, 15, 22, 25, 28, 32])
-        c1_layout.addWidget(c1_title)
+        self.c1_spark = SparklineWidget("#00F0FF", [10, 14, 12, 19, 15, 22, 25, 28, 32])
+        c1_layout.addWidget(self.lbl_kpi_ingresos_title)
         c1_layout.addWidget(self.lbl_kpi_ingresos)
-        c1_layout.addWidget(c1_spark)
+        c1_layout.addWidget(self.c1_spark)
         kpi_row.addWidget(card1)
 
         # Tarjeta 2: Gastos
@@ -1764,14 +1764,14 @@ class AlfonsoHUDDashboard(QMainWindow):
         card2.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c2_layout = QVBoxLayout(card2)
         c2_layout.setContentsMargins(14, 10, 14, 0)
-        c2_title = QLabel("Gastos  <span style='color: #F59E0B;'>▼ -7.3%</span>")
-        c2_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        self.lbl_kpi_gastos_title = QLabel("Gastos  <span style='color: #F59E0B;'>▼ -7.3%</span>")
+        self.lbl_kpi_gastos_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
         self.lbl_kpi_gastos = QLabel("6.256,90 €")
         self.lbl_kpi_gastos.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
-        c2_spark = SparklineWidget("#F59E0B", [22, 18, 19, 15, 17, 12, 14, 11, 8])
-        c2_layout.addWidget(c2_title)
+        self.c2_spark = SparklineWidget("#F59E0B", [22, 18, 19, 15, 17, 12, 14, 11, 8])
+        c2_layout.addWidget(self.lbl_kpi_gastos_title)
         c2_layout.addWidget(self.lbl_kpi_gastos)
-        c2_layout.addWidget(c2_spark)
+        c2_layout.addWidget(self.c2_spark)
         kpi_row.addWidget(card2)
 
         # Tarjeta 3: Beneficio Neto
@@ -1779,14 +1779,14 @@ class AlfonsoHUDDashboard(QMainWindow):
         card3.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c3_layout = QVBoxLayout(card3)
         c3_layout.setContentsMargins(14, 10, 14, 0)
-        c3_title = QLabel("Beneficio Neto  <span style='color: #10B981;'>▲ +29.8%</span>")
-        c3_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        self.lbl_kpi_beneficio_title = QLabel("Beneficio Neto  <span style='color: #10B981;'>▲ +29.8%</span>")
+        self.lbl_kpi_beneficio_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
         self.lbl_kpi_beneficio = QLabel("6.173,60 €")
         self.lbl_kpi_beneficio.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
-        c3_spark = SparklineWidget("#10B981", [8, 12, 11, 16, 14, 19, 21, 23, 26])
-        c3_layout.addWidget(c3_title)
+        self.c3_spark = SparklineWidget("#10B981", [8, 12, 11, 16, 14, 19, 21, 23, 26])
+        c3_layout.addWidget(self.lbl_kpi_beneficio_title)
         c3_layout.addWidget(self.lbl_kpi_beneficio)
-        c3_layout.addWidget(c3_spark)
+        c3_layout.addWidget(self.c3_spark)
         kpi_row.addWidget(card3)
 
         # Tarjeta 4: IVA Soportado
@@ -1794,14 +1794,14 @@ class AlfonsoHUDDashboard(QMainWindow):
         card4.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c4_layout = QVBoxLayout(card4)
         c4_layout.setContentsMargins(14, 10, 14, 0)
-        c4_title = QLabel("IVA Soportado  <span style='color: #8B5CF6;'>23 facturas</span>")
-        c4_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
+        self.lbl_kpi_iva_title = QLabel("IVA Soportado  <span style='color: #8B5CF6;'>23 facturas</span>")
+        self.lbl_kpi_iva_title.setStyleSheet("font-size: 11px; color: #94A3B8;")
         self.lbl_kpi_iva = QLabel("1.356,78 €")
         self.lbl_kpi_iva.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
-        c4_spark = SparklineWidget("#8B5CF6", [5, 8, 12, 6, 9, 14, 10, 11, 15], is_bar=True)
-        c4_layout.addWidget(c4_title)
+        self.c4_spark = SparklineWidget("#8B5CF6", [5, 8, 12, 6, 9, 14, 10, 11, 15], is_bar=True)
+        c4_layout.addWidget(self.lbl_kpi_iva_title)
         c4_layout.addWidget(self.lbl_kpi_iva)
-        c4_layout.addWidget(c4_spark)
+        c4_layout.addWidget(self.c4_spark)
         kpi_row.addWidget(card4)
 
         content_layout.addLayout(kpi_row)
@@ -1860,8 +1860,8 @@ class AlfonsoHUDDashboard(QMainWindow):
         ap_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #94A3B8; letter-spacing: 0.5px; text-transform: uppercase;")
         ap_layout.addWidget(ap_title)
 
-        alert1 = QPushButton("Modelo 303 (IVA 2T) vence en 12 días")
-        alert1.setStyleSheet("""
+        self.alert_aeat = QPushButton("Modelo 303 (IVA 2T) vence en 12 días")
+        self.alert_aeat.setStyleSheet("""
             QPushButton {
                 background-color: rgba(245, 158, 11, 0.1);
                 border: 1px solid rgba(245, 158, 11, 0.3);
@@ -1873,10 +1873,10 @@ class AlfonsoHUDDashboard(QMainWindow):
             }
             QPushButton:hover { background-color: rgba(245, 158, 11, 0.2); }
         """)
-        alert1.clicked.connect(self.show_aeat)
+        self.alert_aeat.clicked.connect(self.show_aeat)
 
-        alert2 = QPushButton("4 movimientos bancarios sin conciliar")
-        alert2.setStyleSheet("""
+        self.alert_reconcile = QPushButton("4 movimientos bancarios sin conciliar")
+        self.alert_reconcile.setStyleSheet("""
             QPushButton {
                 background-color: rgba(0, 240, 255, 0.08);
                 border: 1px solid rgba(0, 240, 255, 0.2);
@@ -1888,10 +1888,10 @@ class AlfonsoHUDDashboard(QMainWindow):
             }
             QPushButton:hover { background-color: rgba(0, 240, 255, 0.15); }
         """)
-        alert2.clicked.connect(self.show_reconcile)
+        self.alert_reconcile.clicked.connect(self.show_reconcile)
 
-        alert3 = QPushButton("SIF Veri*Factu: Cadena HASH válida y auditada")
-        alert3.setStyleSheet("""
+        self.alert_verifactu = QPushButton("SIF Veri*Factu: Cadena HASH válida y auditada")
+        self.alert_verifactu.setStyleSheet("""
             QPushButton {
                 background-color: rgba(16, 185, 129, 0.08);
                 border: 1px solid rgba(16, 185, 129, 0.2);
@@ -1903,11 +1903,11 @@ class AlfonsoHUDDashboard(QMainWindow):
             }
             QPushButton:hover { background-color: rgba(16, 185, 129, 0.15); }
         """)
-        alert3.clicked.connect(self.show_compliance)
+        self.alert_verifactu.clicked.connect(self.show_compliance)
 
-        ap_layout.addWidget(alert1)
-        ap_layout.addWidget(alert2)
-        ap_layout.addWidget(alert3)
+        ap_layout.addWidget(self.alert_aeat)
+        ap_layout.addWidget(self.alert_reconcile)
+        ap_layout.addWidget(self.alert_verifactu)
         ap_layout.addStretch()
         middle_grid.addWidget(alerts_panel, 2)
 
@@ -3106,11 +3106,19 @@ class AlfonsoHUDDashboard(QMainWindow):
             rechazadas = 0
             iva_soportado = 0.0
             recent_invoices_data = []
+            
+            # Datos agrupados por mes para los sparklines (meses 1 a 12 del año en curso)
+            monthly_incomes = [0.0] * 12
+            monthly_expenses = [0.0] * 12
+            monthly_iva = [0.0] * 12
 
-            with _get_connection() as conn:
+            unreconciled_count = 0
+
+            conn = _get_connection()
+            try:
                 cursor = conn.cursor()
                 
-                # 1. Calcular Saldo Bancario
+                # 1. Calcular Saldo Bancario y Movimientos sin conciliar
                 try:
                     cursor.execute("SELECT SUM(amount) FROM bank_movements")
                     row_bank = cursor.fetchone()
@@ -3118,8 +3126,16 @@ class AlfonsoHUDDashboard(QMainWindow):
                         saldo = float(row_bank[0])
                 except Exception:
                     pass
+
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM bank_movements WHERE invoice_id IS NULL OR invoice_id = ''")
+                    row_unrec = cursor.fetchone()
+                    if row_unrec and row_unrec[0] is not None:
+                        unreconciled_count = int(row_unrec[0])
+                except Exception:
+                    pass
                     
-                # 2. Calcular Ingresos, Gastos e IVA Soportado
+                # 2. Calcular Ingresos, Gastos, IVA Soportado e Históricos Mensuales
                 try:
                     cursor.execute("SELECT invoice_id, date, issuer_name, receiver_name, concept, base_imponible, category, quarter, status, iva_amount, total_amount, year FROM invoices WHERE year = ?", (now_dt.year,))
                     invs = cursor.fetchall()
@@ -3127,6 +3143,18 @@ class AlfonsoHUDDashboard(QMainWindow):
                         try:
                             base = float(encryptor.decrypt(inv["base_imponible"]))
                             total_facturas += 1
+                            
+                            # Extraer mes del documento
+                            dec_date = encryptor.decrypt(inv["date"]) if inv.get("date") else ""
+                            month_idx = now_dt.month - 1  # Por defecto mes actual
+                            if dec_date:
+                                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                                    try:
+                                        dt_parsed = datetime.datetime.strptime(dec_date, fmt)
+                                        month_idx = dt_parsed.month - 1
+                                        break
+                                    except Exception:
+                                        pass
                             
                             # Conteo por estado de pago
                             inv_status = str(inv.get("status", "")).lower()
@@ -3141,15 +3169,24 @@ class AlfonsoHUDDashboard(QMainWindow):
                             is_income = inv["category"] in ("ingreso", "income")
                             if is_income:
                                 ingresos += base
+                                if 0 <= month_idx < 12:
+                                    monthly_incomes[month_idx] += base
                             elif inv["category"] in ("gasto", "expense"):
                                 gastos += base
+                                if 0 <= month_idx < 12:
+                                    monthly_expenses[month_idx] += base
                                 if inv.get("iva_amount"):
                                     try:
-                                        iva_soportado += float(encryptor.decrypt(inv["iva_amount"]))
+                                        iva_val = float(encryptor.decrypt(inv["iva_amount"]))
+                                        iva_soportado += iva_val
+                                        if 0 <= month_idx < 12:
+                                            monthly_iva[month_idx] += iva_val
                                     except Exception:
                                         pass
                             else:
                                 gastos += base
+                                if 0 <= month_idx < 12:
+                                    monthly_expenses[month_idx] += base
                                 
                             # Filtrar trimestre actual
                             if inv["quarter"] == current_quarter:
@@ -3159,15 +3196,16 @@ class AlfonsoHUDDashboard(QMainWindow):
                                     gastos_trim += base
 
                             # Guardar para tabla de movimientos recientes
-                            dec_date = encryptor.decrypt(inv["date"]) if inv.get("date") else "—"
                             dec_client = encryptor.decrypt(inv["receiver_name"]) if is_income else (encryptor.decrypt(inv["issuer_name"]) if inv.get("issuer_name") else "Proveedor")
                             dec_concept = encryptor.decrypt(inv["concept"]) if inv.get("concept") else ("Factura Emitida" if is_income else "Gasto Deducible")
                             sign = "+" if is_income else "-"
-                            recent_invoices_data.append((dec_date, f"{dec_concept} ({dec_client})", "Factura Emitida" if is_income else "Gasto Deducible", f"{sign}{base:,.2f} €"))
+                            recent_invoices_data.append((dec_date or "—", f"{dec_concept} ({dec_client})", "Factura Emitida" if is_income else "Gasto Deducible", f"{sign}{base:,.2f} €"))
                         except Exception:
                             pass
                 except Exception:
                     pass
+            finally:
+                conn.close()
                         
             # Tarjetas de KPIs superiores
             if hasattr(self, 'lbl_kpi_ingresos') and self.lbl_kpi_ingresos:
@@ -3178,38 +3216,112 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.lbl_kpi_beneficio.setText(f"{(ingresos - gastos):,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
             if hasattr(self, 'lbl_kpi_iva') and self.lbl_kpi_iva:
                 self.lbl_kpi_iva.setText(f"{iva_soportado:,.2f} €".replace(",", "X").replace(".", ",").replace("X", "."))
+
+            # Actualizar títulos con metadata real
+            if hasattr(self, 'lbl_kpi_ingresos_title') and self.lbl_kpi_ingresos_title:
+                self.lbl_kpi_ingresos_title.setText(f"Ingresos  <span style='color: #10B981;'>({pagadas} cobradas)</span>" if total_facturas else "Ingresos")
+            if hasattr(self, 'lbl_kpi_gastos_title') and self.lbl_kpi_gastos_title:
+                self.lbl_kpi_gastos_title.setText(f"Gastos  <span style='color: #F59E0B;'>({pendientes} pendientes)</span>" if total_facturas else "Gastos")
+            if hasattr(self, 'lbl_kpi_iva_title') and self.lbl_kpi_iva_title:
+                self.lbl_kpi_iva_title.setText(f"IVA Soportado  <span style='color: #8B5CF6;'>({total_facturas} facturas)</span>" if total_facturas else "IVA Soportado")
+
+            # Actualizar Sparklines con datos históricos reales (últimos 9 meses o plano a 0)
+            if hasattr(self, 'c1_spark') and self.c1_spark:
+                self.c1_spark.set_points(monthly_incomes[-9:])
+            if hasattr(self, 'c2_spark') and self.c2_spark:
+                self.c2_spark.set_points(monthly_expenses[-9:])
+            if hasattr(self, 'c3_spark') and self.c3_spark:
+                monthly_profits = [i - g for i, g in zip(monthly_incomes, monthly_expenses)]
+                self.c3_spark.set_points(monthly_profits[-9:])
+            if hasattr(self, 'c4_spark') and self.c4_spark:
+                self.c4_spark.set_points(monthly_iva[-9:])
             
             # Actualizar el gráfico circular donut dinámicamente con los estados reales
             if hasattr(self, 'donut_chart') and self.donut_chart:
-                if total_facturas > 0:
-                    self.donut_chart.set_values(total_facturas, pagadas, pendientes, rechazadas)
-                else:
-                    self.donut_chart.set_values(18, 14, 3, 1)
+                self.donut_chart.set_values(total_facturas, pagadas, pendientes, rechazadas)
+                self.donut_chart.update()
             if hasattr(self, 'leg1') and self.leg1:
-                self.leg1.setText(f"● Pagadas ({pagadas if total_facturas > 0 else 14})")
+                self.leg1.setText(f"● Pagadas ({pagadas})")
             if hasattr(self, 'leg2') and self.leg2:
-                self.leg2.setText(f"● Pendientes ({pendientes if total_facturas > 0 else 3})")
+                self.leg2.setText(f"● Pendientes ({pendientes})")
             if hasattr(self, 'leg3') and self.leg3:
-                self.leg3.setText(f"● Rechazadas ({rechazadas if total_facturas > 0 else 1})")
+                self.leg3.setText(f"● Rechazadas ({rechazadas})")
             
             # Actualizar el gráfico de barras del trimestre
             if hasattr(self, 'bar_chart') and self.bar_chart:
-                self.bar_chart.update_data(ingresos_trim if ingresos_trim > 0 else 12430.50, gastos_trim if gastos_trim > 0 else 6256.90)
+                self.bar_chart.update_data(ingresos_trim, gastos_trim)
+                self.bar_chart.update()
 
-            # Actualizar tabla de últimos movimientos con datos reales si existen
-            if recent_invoices_data and hasattr(self, 'tbl_recent_invoices') and self.tbl_recent_invoices:
-                self.tbl_recent_invoices.setRowCount(min(4, len(recent_invoices_data)))
-                for row_idx, row in enumerate(recent_invoices_data[:4]):
-                    for col_idx, text in enumerate(row):
-                        item = QTableWidgetItem(text)
-                        if col_idx == 3:
-                            if text.startswith("+"):
-                                item.setForeground(QColor("#10B981"))
-                            else:
-                                item.setForeground(QColor("#EF4444"))
-                            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                        self.tbl_recent_invoices.setItem(row_idx, col_idx, item)
+            # Actualizar tabla de últimos movimientos con datos reales ordenados por fecha
+            if hasattr(self, 'tbl_recent_invoices') and self.tbl_recent_invoices:
+                if recent_invoices_data:
+                    # Ordenar por fecha descendente
+                    recent_invoices_data.sort(key=lambda x: x[0], reverse=True)
+                    self.tbl_recent_invoices.setRowCount(min(4, len(recent_invoices_data)))
+                    for row_idx, row in enumerate(recent_invoices_data[:4]):
+                        for col_idx, text in enumerate(row):
+                            item = QTableWidgetItem(text)
+                            if col_idx == 3:
+                                if text.startswith("+"):
+                                    item.setForeground(QColor("#10B981"))
+                                else:
+                                    item.setForeground(QColor("#EF4444"))
+                                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                            self.tbl_recent_invoices.setItem(row_idx, col_idx, item)
+                else:
+                    self.tbl_recent_invoices.setRowCount(0)
 
+            # 3. Actualizar Alertas y Avisos AEAT dinámicas
+            # Alerta 1: Calendario Fiscal AEAT Real
+            if hasattr(self, 'alert_aeat') and self.alert_aeat:
+                today = datetime.date.today()
+                quarter_deadlines = {
+                    1: datetime.date(today.year, 4, 20),
+                    2: datetime.date(today.year, 7, 20),
+                    3: datetime.date(today.year, 10, 20),
+                    4: datetime.date(today.year + 1, 1, 30)
+                }
+                deadline = quarter_deadlines.get(current_quarter)
+                days_left = (deadline - today).days
+                if days_left < 0:
+                    # Si ya pasó, mostrar el del trimestre siguiente
+                    next_q = (current_quarter % 4) + 1
+                    deadline = quarter_deadlines.get(next_q)
+                    days_left = (deadline - today).days
+                    self.alert_aeat.setText(f"Modelo 303 (IVA {next_q}T) vence en {days_left} días")
+                else:
+                    self.alert_aeat.setText(f"Modelo 303 (IVA {current_quarter}T) vence en {days_left} días")
+
+            # Alerta 2: Conciliación Bancaria Real
+            if hasattr(self, 'alert_reconcile') and self.alert_reconcile:
+                if unreconciled_count > 0:
+                    self.alert_reconcile.setText(f"{unreconciled_count} movimientos bancarios sin conciliar")
+                    self.alert_reconcile.setStyleSheet("""
+                        QPushButton {
+                            background-color: rgba(0, 240, 255, 0.08);
+                            border: 1px solid rgba(0, 240, 255, 0.2);
+                            border-radius: 8px;
+                            color: #00F0FF;
+                            text-align: left;
+                            padding: 12px 14px;
+                            font-size: 12px;
+                        }
+                        QPushButton:hover { background-color: rgba(0, 240, 255, 0.15); }
+                    """)
+                else:
+                    self.alert_reconcile.setText("Cuentas bancarias totalmente conciliadas")
+                    self.alert_reconcile.setStyleSheet("""
+                        QPushButton {
+                            background-color: rgba(16, 185, 129, 0.08);
+                            border: 1px solid rgba(16, 185, 129, 0.2);
+                            border-radius: 8px;
+                            color: #10B981;
+                            text-align: left;
+                            padding: 12px 14px;
+                            font-size: 12px;
+                        }
+                        QPushButton:hover { background-color: rgba(16, 185, 129, 0.15); }
+                    """)
         except Exception as e:
             print(f"Error updating business telemetry: {e}")
 
@@ -3256,9 +3368,14 @@ class AlfonsoHUDDashboard(QMainWindow):
 
 
 from client.gui.dialogs import *
+from client.gui.theme import apply_theme
 
 def launch(config):
     app = QApplication(sys.argv)
+    
+    # Aplicar tema global y tipografía normalizada
+    apply_theme(app)
+    
     dashboard = AlfonsoHUDDashboard(config)
     dashboard.show()
     dashboard.raise_()

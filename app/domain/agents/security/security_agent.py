@@ -51,7 +51,7 @@ class CyberSecurityAgent:
             re.IGNORECASE
         )
         self.command_injection_re = re.compile(
-            r"(&&|\|\||\||`|\$\()|;\s*\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec|rm|ls|cat|echo|id|whoami|ping|dir|type)\b|\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec|rm|ls|cat|echo|whoami|ping|dir)\b",
+            r"(&&|\|\||\||`|\$\(|;\s*|>\s*|<\s*|\n\s*)\b(bash|sh|cmd|powershell|wget|curl|nc|netcat|ncat|eval|exec|rm|ls|cat|echo|id|whoami|ping|dir|type)\b",
             re.IGNORECASE
         )
         self.xss_re = re.compile(
@@ -130,9 +130,12 @@ class CyberSecurityAgent:
 
     def block_ip(self, ip: str, reason: str):
         """Bloquea inmediatamente una IP y emite una alerta crítica."""
-        if ip not in self.blocked_ips:
+        is_loopback = ip in ("127.0.0.1", "::1", "localhost")
+        if ip not in self.blocked_ips and not is_loopback:
             self.blocked_ips.add(ip)
             self.add_alert("HIGH", "IP_BLOCKED", f"IP {ip} bloqueada permanentemente en caliente. Razón: {reason}")
+        elif is_loopback:
+            self.add_alert("WARNING", "LOOPBACK_ALERT", f"Sospecha de ataque detectada desde IP local {ip}. No se bloquea loopback por razones operativas. Detalle: {reason}")
 
     def inspect_request(self, ip: str, path: str, method: str, headers: Dict[str, str], body: str) -> bool:
         """
@@ -141,9 +144,10 @@ class CyberSecurityAgent:
         """
         # Excluir la IP de testing "testclient" de la lógica de bloqueo persistente y rate limit
         is_test_client = ip == "testclient"
+        is_loopback = ip in ("127.0.0.1", "::1", "localhost")
 
         # 1. Verificar si la IP ya está bloqueada
-        if ip in self.blocked_ips and not is_test_client:
+        if ip in self.blocked_ips and not is_test_client and not is_loopback:
             return True
 
         # 2. Rate Limiting (Protección DDoS / Fuerza Bruta)

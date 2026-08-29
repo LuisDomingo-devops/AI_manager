@@ -308,7 +308,7 @@ class SubcategoryButton(QPushButton):
         desc = subcat_data.get("desc", "")
         title = subcat_data.get("title", "")
         if desc:
-            tooltip_html = f"<div style='font-family: Segoe UI, sans-serif; padding: 2px;'><b style='color: #00F0FF; font-size: 11px;'>{title}</b><br/><span style='color: #CBD5E1; font-size: 10px;'>{desc}</span></div>"
+            tooltip_html = f"<div style='padding: 2px;'><b style='color: #00F0FF; font-size: 11px;'>{title}</b><br/><span style='color: #CBD5E1; font-size: 10px;'>{desc}</span></div>"
             self.setToolTip(tooltip_html)
         else:
             self.setToolTip(f"{title}")
@@ -397,31 +397,10 @@ class CategoryGroupWidget(QWidget):
 
         if self.category_data.get("badge"):
             badge = QLabel(self.category_data["badge"])
-            badge.setStyleSheet("""
-                QLabel {
-                    background-color: rgba(99, 102, 241, 0.15);
-                    color: #818CF8;
-                    border: 1px solid rgba(99, 102, 241, 0.3);
-                    border-radius: 3px;
-                    padding: 1px 4px;
-                    font-size: 8px;
-                    font-weight: bold;
-                }
-            """)
+            badge.setProperty("class", "SidebarBadge")
             header_layout.addWidget(badge)
 
-        self.header_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.02);
-                border: 1px solid rgba(255, 255, 255, 0.04);
-                border-radius: 6px;
-                text-align: left;
-            }
-            QPushButton:hover {
-                background-color: rgba(99, 102, 241, 0.08);
-                border-color: rgba(99, 102, 241, 0.2);
-            }
-        """)
+        self.header_btn.setProperty("class", "SidebarCategory")
 
         self.main_layout.addWidget(self.header_btn)
 
@@ -507,74 +486,32 @@ class AlfonsoSidebarWidget(QFrame):
         self.setup_ui()
 
     def setup_ui(self):
-        self.setStyleSheet("""
-            #Sidebar {
-                background-color: #070B14;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-            }
-            QToolTip {
-                background-color: #0F172A;
-                color: #F8FAFC;
-                border: 1px solid rgba(0, 240, 255, 0.5);
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 11px;
-            }
-        """)
-
+        # El estilo principal está en theme.py
+        
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 12, 10, 12)
         layout.setSpacing(8)
 
         # 1. Buscador rápido de módulos
         search_box = QFrame()
-        search_box.setStyleSheet("""
-            QFrame {
-                background-color: #0F172A;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 8px;
-            }
-            QFrame:focus-within {
-                border: 1px solid #00F0FF;
-            }
-        """)
+        search_box.setProperty("class", "SearchBox")
+        
         search_layout = QHBoxLayout(search_box)
         search_layout.setContentsMargins(8, 4, 8, 4)
         search_layout.setSpacing(6)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Buscar módulo o función...")
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background: transparent;
-                border: none;
-                color: #FFFFFF;
-                font-size: 11px;
-                padding: 2px 6px;
-            }
-        """)
+        self.search_input.setProperty("class", "SearchInput")
+        
         self.search_input.textChanged.connect(self.on_search_text_changed)
 
         self.btn_clear_search = QPushButton("X")
         self.btn_clear_search.setFixedSize(16, 16)
         self.btn_clear_search.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear_search.setVisible(False)
-        self.btn_clear_search.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.1);
-                border: none;
-                border-radius: 8px;
-                color: #94A3B8;
-                font-size: 9px;
-                font-weight: bold;
-                padding: 0;
-            }
-            QPushButton:hover {
-                background: rgba(239, 68, 68, 0.3);
-                color: #FFFFFF;
-            }
-        """)
+        self.btn_clear_search.setProperty("class", "ClearSearchBtn")
+        
         self.btn_clear_search.clicked.connect(self.search_input.clear)
 
         search_layout.addWidget(self.search_input, 1)
@@ -584,30 +521,8 @@ class AlfonsoSidebarWidget(QFrame):
         # 2. Área de scroll con las categorías
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: rgba(15, 23, 42, 0.3);
-                width: 5px;
-                margin: 0px;
-                border-radius: 2px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(99, 102, 241, 0.4);
-                min-height: 15px;
-                border-radius: 2px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #00F0FF;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
+        # Scrollbars are managed by global QSS
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -646,16 +561,8 @@ class AlfonsoSidebarWidget(QFrame):
             pass
 
         plan_card = QFrame()
-        plan_card.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(245, 158, 11, 0.08),
-                    stop:1 rgba(99, 102, 241, 0.08));
-                border: 1px solid rgba(245, 158, 11, 0.25);
-                border-radius: 8px;
-                padding: 6px;
-            }
-        """)
+        plan_card.setProperty("class", "PlanCard")
+        
         plan_layout = QVBoxLayout(plan_card)
         plan_layout.setContentsMargins(6, 6, 6, 6)
         plan_layout.setSpacing(2)
@@ -669,20 +576,8 @@ class AlfonsoSidebarWidget(QFrame):
         btn_plan.setFixedHeight(22)
         btn_plan.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_plan.clicked.connect(self.plan_clicked.emit)
-        btn_plan.setStyleSheet("""
-            QPushButton {
-                background: rgba(245, 158, 11, 0.15);
-                border: 1px solid rgba(245, 158, 11, 0.4);
-                border-radius: 4px;
-                color: #FFB800;
-                font-size: 9px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(245, 158, 11, 0.25);
-                color: #FFFFFF;
-            }
-        """)
+        btn_plan.setProperty("class", "PlanButton")
+
         plan_layout.addWidget(self.lbl_plan_title)
         plan_layout.addWidget(self.lbl_plan_sub)
         plan_layout.addWidget(btn_plan)

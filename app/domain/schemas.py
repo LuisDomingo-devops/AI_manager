@@ -41,17 +41,27 @@ class InvoiceSchema(BaseModel):
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: str) -> str:
+        v = v.strip()
+        # Convertir formato DD/MM/YYYY o DD-MM-YYYY a YYYY-MM-DD
+        if re.match(r"^\d{2}/\d{2}/\d{4}$", v):
+            parts = v.split("/")
+            v = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        elif re.match(r"^\d{2}-\d{2}-\d{4}$", v):
+            parts = v.split("-")
+            v = f"{parts[2]}-{parts[1]}-{parts[0]}"
+            
         # Validar formato de fecha YYYY-MM-DD
         pattern = r"^\d{4}-\d{2}-\d{2}$"
         if not re.match(pattern, v):
-            raise ValueError("La fecha debe tener el formato YYYY-MM-DD")
+            raise ValueError(f"La fecha '{v}' debe tener el formato YYYY-MM-DD")
         return v
 
     @field_validator("issuer_nif", "receiver_nif")
     @classmethod
     def validate_nifs(cls, v: str) -> str:
-        v = v.strip().upper()
-        pattern = r"^[A-Z0-9][0-9]{7,8}[A-Z0-9]$"
+        v = v.strip().upper().replace(" ", "").replace("-", "")
+        # NIF, CIF, o VAT internacional (ej. EU372009659)
+        pattern = r"^[A-Z]{0,2}[A-Z0-9]{7,15}$"
         if not re.match(pattern, v):
             raise ValueError(f"El NIF '{v}' no tiene un formato válido.")
         return v

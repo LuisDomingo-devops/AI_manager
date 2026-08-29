@@ -142,6 +142,22 @@ def extract_json_robust(raw: str) -> dict | None:
     except Exception:
         pass
 
+    # 0.1. Fix robusto para "no_op" con comillas sin escapar en el mensaje
+    if "no_op" in raw and "message" in raw:
+        try:
+            m_msg = re.search(r'"message"\s*:\s*"(.*)"\s*\}\s*\}\s*$', raw, re.DOTALL)
+            if not m_msg:
+                m_msg = re.search(r'"message"\s*:\s*"(.*)"\s*\}\s*$', raw, re.DOTALL)
+            if m_msg:
+                return {
+                    "tool": "no_op",
+                    "args": {
+                        "message": m_msg.group(1).strip()
+                    }
+                }
+        except Exception:
+            pass
+
     # 0.5. Si hay múltiples líneas (ej. múltiples herramientas generadas), probar línea por línea
     if "\n" in raw:
         for line in raw.split("\n"):
@@ -293,9 +309,17 @@ class OllamaClient(LLMPort):
         else:
             url = f"https://generativelanguage.googleapis.com/{settings.GEMINI_API_VERSION}/models/{settings.GEMINI_MODEL_NAME}:generateContent?key={settings.GEMINI_API_KEY}"
         
-        response = await client.post(url, json=payload, headers=headers)
-        if response.status_code != 200:
-            raise RuntimeError(f"Gemini API Error {response.status_code}: {response.text}")
+        import asyncio
+        for attempt in range(4):
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code == 429 and attempt < 3:
+                import time
+                app_logger.warning(f"Rate limit en chat/LLM (429), intento {attempt+1}. Esperando 30s...")
+                await asyncio.sleep(30)
+                continue
+            elif response.status_code != 200:
+                raise RuntimeError(f"Gemini API Error {response.status_code}: {response.text}")
+            break
         
         res_data = response.json()
         usage = res_data.get("usageMetadata", {})

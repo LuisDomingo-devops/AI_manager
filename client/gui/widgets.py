@@ -88,6 +88,11 @@ class SparklineWidget(QWidget):
         self.is_bar = is_bar
         self.setFixedHeight(30)
 
+    def set_points(self, points):
+        if points:
+            self.points = points
+            self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

@@ -31,11 +31,32 @@ async def parse_invoice(file_path: str) -> dict:
             }
             
         data = TaxParserService.parse_invoice_text(text)
-        invoice_db_id = TaxParserService.save_invoice_to_db(data, file_path=file_path)
+        
+        try:
+            invoice_db_id = TaxParserService.save_invoice_to_db(data, file_path=file_path)
+            message = "Factura procesada y guardada correctamente."
+            already_existed = False
+        except ValueError as ve:
+            if "Factura duplicada detectada" in str(ve):
+                already_existed = True
+                message = f"La factura ya estaba registrada en el sistema. {str(ve)}"
+                try:
+                    from app.domain.services.invoice_repository import InvoiceRepository
+                    existing_invoice = InvoiceRepository.find_invoice_by_id(data.get("invoice_id", ""))
+                    if existing_invoice and existing_invoice.get("invoice_id") != "[CORRUPTED_DATA]":
+                        invoice_db_id = existing_invoice.get("db_id")
+                        data = existing_invoice
+                    else:
+                        invoice_db_id = None
+                except Exception:
+                    invoice_db_id = None
+            else:
+                raise ve
         
         return {
             "status": "ok",
-            "message": "Factura procesada y guardada correctamente.",
+            "message": message,
+            "already_existed": already_existed,
             "invoice_db_id": invoice_db_id,
             "data": data
         }

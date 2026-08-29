@@ -19,84 +19,8 @@ class DevEditorWidget(QWidget):
         self.drag_position = None
         self.open_files = {}  # {filename: text_edit_widget}
         
-        # Estilo retro-hacker coherente con el resto del proyecto
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #030406;
-                color: #00F0FF;
-                font-family: 'Consolas', 'Roboto Mono', monospace;
-            }
-            QLabel {
-                color: #00F0FF;
-            }
-            QPushButton {
-                background-color: rgba(255, 184, 0, 15);
-                color: #FFB800;
-                border: 1px solid rgba(255, 184, 0, 50);
-                border-radius: 3px;
-                padding: 6px 12px;
-                font-size: 11px;
-                font-weight: bold;
-                font-family: 'Consolas';
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 184, 0, 40);
-                color: #FFFFFF;
-                border-color: #FFB800;
-            }
-            QPushButton:pressed {
-                background-color: #FFB800;
-                color: #000000;
-            }
-            QListWidget {
-                border: 1px solid rgba(0, 240, 255, 30);
-                background-color: rgba(5, 7, 10, 200);
-                color: #FFFFFF;
-            }
-            QListWidget::item {
-                border-bottom: 1px solid rgba(0, 240, 255, 15);
-                padding: 8px;
-            }
-            QListWidget::item:selected {
-                background-color: rgba(0, 240, 255, 25);
-                color: #FFFFFF;
-                border: 1px solid #00F0FF;
-            }
-            QTabWidget::pane {
-                border: 1px solid rgba(0, 240, 255, 30);
-                background-color: #030406;
-            }
-            QTabBar::tab {
-                background-color: rgba(5, 7, 10, 255);
-                border: 1px solid rgba(0, 240, 255, 30);
-                color: #00F0FF;
-                padding: 6px 15px;
-                font-size: 11px;
-            }
-            QTabBar::tab:selected {
-                background-color: #00F0FF;
-                color: #000000;
-                font-weight: bold;
-            }
-            QPlainTextEdit {
-                background-color: #05070a;
-                color: #00FF66;
-                border: none;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 12px;
-            }
-            QLineEdit {
-                background-color: #05070a;
-                color: #00FF66;
-                border: 1px solid rgba(0, 240, 255, 30);
-                padding: 6px;
-                font-size: 11px;
-            }
-            QFrame#Separator {
-                border: 1px solid rgba(0, 240, 255, 30);
-            }
-        """)
-
+        self.setObjectName("DevStudio")
+        
         self.setup_ui()
         self.load_file_list()
 
@@ -121,12 +45,6 @@ class DevEditorWidget(QWidget):
         # Contenedor principal con borde retro
         container_frame = QFrame()
         container_frame.setObjectName("EditorContainer")
-        container_frame.setStyleSheet("""
-            QFrame#EditorContainer {
-                border: 2px solid #00F0FF;
-                background-color: #030406;
-            }
-        """)
         container_layout = QVBoxLayout(container_frame)
         container_layout.setContentsMargins(10, 10, 10, 10)
         container_layout.setSpacing(10)
@@ -137,7 +55,7 @@ class DevEditorWidget(QWidget):
         header_layout.setContentsMargins(5, 5, 5, 5)
         
         header_title = QLabel("// MUTHUR SYSTEMS // DEVELOPMENT STUDIO MODULE v1.0.0")
-        header_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #00F0FF; letter-spacing: 1px;")
+        header_title.setProperty("class", "DevHeaderTitle")
         header_layout.addWidget(header_title)
         
         header_layout.addStretch()
@@ -156,7 +74,7 @@ class DevEditorWidget(QWidget):
 
         # ── SPLITTER PRINCIPAL (Explorador | Editor + Terminal) ──
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_splitter.setStyleSheet("QSplitter::handle { background-color: rgba(0, 240, 255, 30); }")
+        main_splitter.setProperty("class", "DevSplitter")
 
         # PANEL DE ARCHIVOS (Izquierda)
         self.files_panel = QWidget()
@@ -165,7 +83,7 @@ class DevEditorWidget(QWidget):
         files_layout.setSpacing(8)
 
         lbl_explorer = QLabel("EXPLORADOR SANDBOX")
-        lbl_explorer.setStyleSheet("font-weight: bold; font-size: 10px; color: rgba(0, 240, 255, 70);")
+        lbl_explorer.setProperty("class", "DevPanelTitle")
         files_layout.addWidget(lbl_explorer)
 
         self.files_list = QListWidget()
@@ -176,7 +94,7 @@ class DevEditorWidget(QWidget):
         self.btn_new_file = QPushButton("NUEVO")
         self.btn_new_file.clicked.connect(self.action_new_file)
         self.btn_delete_file = QPushButton("ELIMINAR")
-        self.btn_delete_file.setStyleSheet("color: #FF0055; border-color: rgba(255, 0, 85, 40);")
+        self.btn_delete_file.setProperty("class", "DevDangerBtn")
         self.btn_delete_file.clicked.connect(self.action_delete_file)
         btn_files_layout.addWidget(self.btn_new_file)
         btn_files_layout.addWidget(self.btn_delete_file)
@@ -192,7 +110,7 @@ class DevEditorWidget(QWidget):
 
         # Splitter vertical para Editor (Arriba) y Terminal (Abajo)
         vertical_splitter = QSplitter(Qt.Orientation.Vertical)
-        vertical_splitter.setStyleSheet("QSplitter::handle { background-color: rgba(0, 240, 255, 30); }")
+        vertical_splitter.setProperty("class", "DevSplitter")
 
         # Editor Area (Tabs + Control Buttons)
         editor_container = QWidget()
@@ -204,7 +122,7 @@ class DevEditorWidget(QWidget):
         self.btn_save_file = QPushButton("GUARDAR")
         self.btn_save_file.clicked.connect(self.action_save_active_file)
         self.btn_compile_run = QPushButton("COMPILAR Y EJECUTAR")
-        self.btn_compile_run.setStyleSheet("color: #00FF66; border-color: rgba(0, 255, 102, 50);")
+        self.btn_compile_run.setProperty("class", "DevSuccessBtn")
         self.btn_compile_run.clicked.connect(self.action_compile_and_run)
         
         editor_controls.addWidget(self.btn_save_file)
@@ -226,7 +144,7 @@ class DevEditorWidget(QWidget):
         terminal_vbox.setSpacing(6)
 
         lbl_terminal = QLabel("TERMINAL (ENTORNO DE PRUEBAS SANDBOX)")
-        lbl_terminal.setStyleSheet("font-weight: bold; font-size: 10px; color: #FFB800;")
+        lbl_terminal.setProperty("class", "DevTerminalTitle")
         terminal_vbox.addWidget(lbl_terminal)
 
         self.terminal_display = QPlainTextEdit()
