@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QFileDialog, QStackedWidget, QSpinBox, 
                              QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout,
-                             QCheckBox, QTabWidget, QTabBar, QApplication)
+                             QCheckBox, QTabWidget, QTabBar, QApplication, QAbstractItemView)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 from core.api_client import AlfonsoAPI
@@ -1244,9 +1244,9 @@ class AeatAutofillWidget(AlfonsoBaseDialog):
 
 
 class ProjectNavigatorDialog(AlfonsoBaseDialog):
-    """Ventana flotante Pop-up del Proyecto Activo con Chat integrado y Canales temáticos."""
+    """Libro de Actas - Registro inmutable de conversaciones y canales."""
     def __init__(self, parent_dashboard, embedded=False):
-        super().__init__(parent_dashboard, "WORKSPACE NAVIGATOR", modal=False, embedded=embedded)
+        super().__init__(parent_dashboard, "LIBRO DE ACTAS - REGISTRO INMUTABLE", modal=False, embedded=embedded)
         self.dashboard = parent_dashboard
         if not embedded:
             self.setMinimumSize(960, 600)
@@ -1323,7 +1323,7 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         right_layout = QVBoxLayout()
         right_layout.setSpacing(10)
         
-        self.lbl_channel_status = QLabel("CANAL: SELECCIONA UN TEMA")
+        self.lbl_channel_status = QLabel("ACTA: SELECCIONA UN REGISTRO")
         self.lbl_channel_status.setStyleSheet("""
             font-size: 10px;
             font-weight: bold;
@@ -1336,12 +1336,16 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         """)
         right_layout.addWidget(self.lbl_channel_status)
         
+        lbl_immutable_warning = QLabel("🛡️ Este registro es inmutable y sirve como soporte documental con validez legal. No puede ser alterado.")
+        lbl_immutable_warning.setStyleSheet("color: #F59E0B; font-size: 11px; font-weight: bold; background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 4px; padding: 6px;")
+        right_layout.addWidget(lbl_immutable_warning)
+        
         self.chat_display = QTextBrowser()
         self.chat_display.setOpenExternalLinks(True)
         self.chat_display.setStyleSheet("""
             QTextBrowser {
-                background-color: rgba(15, 23, 42, 0.9);
-                border: 1px solid rgba(99, 102, 241, 0.2);
+                background-color: rgba(15, 23, 42, 0.95);
+                border: 2px dashed rgba(245, 158, 11, 0.4);
                 border-radius: 6px;
                 color: #CBD5E1;
                 font-family: 'Segoe UI', sans-serif;
@@ -1351,35 +1355,32 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         """)
         right_layout.addWidget(self.chat_display, 1)
         
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(8)
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(8)
         
-        self.txt_input = QTextEdit()
-        self.txt_input.setFixedHeight(50)
-        self.txt_input.setPlaceholderText("Escribe un mensaje para Alfonso en este canal...")
-        self.txt_input.setStyleSheet("""
-            QTextEdit {
-                background-color: rgba(15, 23, 42, 0.9);
-                border: 1px solid rgba(99, 102, 241, 0.3);
+        self.btn_resume = QPushButton("REANUDAR CONVERSACIÓN EN CHAT PRINCIPAL")
+        self.btn_resume.setFixedHeight(40)
+        self.btn_resume.setStyleSheet("""
+            QPushButton {
+                background-color: #10B981;
+                color: white;
+                font-weight: bold;
                 border-radius: 4px;
-                color: #FFFFFF;
-                font-family: 'Segoe UI', sans-serif;
                 font-size: 12px;
-                padding: 5px;
             }
-            QTextEdit:focus {
-                border-color: #6366F1;
+            QPushButton:hover {
+                background-color: #059669;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #9CA3AF;
             }
         """)
-        self.txt_input.installEventFilter(self)
-        input_layout.addWidget(self.txt_input, 1)
+        self.btn_resume.setEnabled(False)
+        self.btn_resume.clicked.connect(self.resume_conversation)
+        action_layout.addWidget(self.btn_resume)
         
-        btn_send = QPushButton("ENVIAR")
-        btn_send.setFixedSize(80, 50)
-        btn_send.clicked.connect(self.send_message_from_dialog)
-        input_layout.addWidget(btn_send)
-        
-        right_layout.addLayout(input_layout)
+        right_layout.addLayout(action_layout)
         content_layout.addLayout(right_layout, 3)
         
         self.content_layout.addLayout(content_layout, 1)
@@ -1396,12 +1397,10 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         bottom_layout.addWidget(btn_close_dlg)
         self.content_layout.addLayout(bottom_layout)
 
-    def eventFilter(self, obj, event):
-        if obj is self.txt_input and event.type() == QEvent.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Return and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
-                self.send_message_from_dialog()
-                return True
-        return super().eventFilter(obj, event)
+    def resume_conversation(self):
+        if self.active_session_id and self.active_session_id != "default":
+            if hasattr(self.dashboard, 'thread') and self.dashboard.thread:
+                self.dashboard.thread.switch_session_requested.emit(self.active_session_id)
 
     def select_project(self, item):
         display_name = item.text().replace("📁 ", "").strip().upper()
@@ -1446,6 +1445,7 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         project = item.data(Qt.ItemDataRole.UserRole + 2)
         
         if not session_id:
+            self.btn_resume.setEnabled(False)
             return
             
         self.active_session_id = session_id
@@ -1462,6 +1462,7 @@ class ProjectNavigatorDialog(AlfonsoBaseDialog):
         self.lbl_channel_status.setText(f"ACTIVO: {project.upper()} > {title.upper()}")
         self.header_title.setText(f"// ALFONSO OS // WORKSPACE: {project.upper()}")
         self.dashboard.lbl_active_session.setText(f"ACTIVO: {project.upper()} > {title.upper()}")
+        self.btn_resume.setEnabled(True)
         
         self.load_dialog_chat_history(session_id, project, title)
 
@@ -1668,6 +1669,9 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.content_layout.addWidget(QLabel("<b>Historial de Movimientos Bancarios:</b>"))
         self.content_layout.addWidget(self.table)
 
@@ -1847,6 +1851,9 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.content_layout.addWidget(self.table)
         
         btn_layout = QHBoxLayout()
@@ -2788,6 +2795,11 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
         btn_send.clicked.connect(self.send_transfer)
         self.content_layout.addWidget(btn_send)
         
+        btn_sepa = QPushButton("GENERAR REMESA SEPA (XML)")
+        btn_sepa.setStyleSheet("background-color: rgba(16, 185, 129, 0.15); border-color: #10B981; color: #34D399; font-weight: bold;")
+        btn_sepa.clicked.connect(self.generate_sepa_file)
+        self.content_layout.addWidget(btn_sepa)
+        
         btn_cancel = QPushButton("CANCELAR")
         btn_cancel.clicked.connect(self.reject)
         self.content_layout.addWidget(btn_cancel)
@@ -2832,6 +2844,27 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al procesar la transferencia: {e}")
+
+    def generate_sepa_file(self):
+        try:
+            from app.domain.services.sepa_service import SepaService
+            res = SepaService.generate_remittance_xml()
+            if res.get("status") == "ok":
+                from PyQt6.QtWidgets import QFileDialog
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self, 
+                    "Guardar Remesa SEPA", 
+                    "remesa_sepa_v1.xml", 
+                    "XML Files (*.xml)"
+                )
+                if file_path:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(res["xml_content"])
+                    QMessageBox.information(self, "Éxito", f"Archivo SEPA guardado correctamente.\nPagos incluidos: {len(res['transfer_ids'])}\nTotal: {res['total_sum']:.2f} €")
+            else:
+                QMessageBox.warning(self, "Aviso", res.get("message", "Error desconocido."))
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Fallo en la generación SEPA: {e}")
 
 
 class AlfonsoManualEntryDialog(AlfonsoBaseDialog):

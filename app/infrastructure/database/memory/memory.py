@@ -88,6 +88,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             status          TEXT DEFAULT 'firmada',
             concept         TEXT,
             blind_index     TEXT,
+            contact_id      INTEGER,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -108,6 +109,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             file_path       TEXT,
             status          TEXT DEFAULT 'borrador',
             signature       TEXT,
+            contact_id      INTEGER,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -119,6 +121,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             description   TEXT,
             price         REAL NOT NULL,
             iva_rate      REAL NOT NULL DEFAULT 21.0,
+            stock         INTEGER DEFAULT 0,
             created_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -134,8 +137,42 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_items (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id             INTEGER NOT NULL,
+            product_id             INTEGER,
+            description_override   TEXT NOT NULL,
+            quantity               INTEGER NOT NULL,
+            unit_price             REAL NOT NULL,
+            subtotal               REAL NOT NULL,
+            FOREIGN KEY(invoice_id) REFERENCES invoices(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS quote_items (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            quote_id               INTEGER NOT NULL,
+            product_id             INTEGER,
+            description_override   TEXT NOT NULL,
+            quantity               INTEGER NOT NULL,
+            unit_price             REAL NOT NULL,
+            subtotal               REAL NOT NULL,
+            FOREIGN KEY(quote_id) REFERENCES quotes(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    """)
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN client_id TEXT NOT NULL DEFAULT 'default'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN item_type TEXT DEFAULT 'product'")
     except sqlite3.OperationalError:
         pass
     try:
@@ -254,6 +291,7 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
             iban           TEXT,
             credentials    TEXT,
             status         TEXT DEFAULT 'active',
+            is_default_remittance INTEGER DEFAULT 0,
             last_sync_at   TEXT,
             created_at     TEXT NOT NULL DEFAULT (datetime('now'))
         )
@@ -273,6 +311,10 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
     """)
     try:
         conn.execute("ALTER TABLE bank_movements ADD COLUMN connection_id INTEGER REFERENCES bank_connections(id)")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE bank_connections ADD COLUMN is_default_remittance INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
 
@@ -335,17 +377,36 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         )
     """)
 
-    # --- BASE DE DATOS DE CLIENTES ---
+    # --- BASE DE DATOS DE CONTACTOS (Clientes y Proveedores) ---
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS clients (
+        CREATE TABLE IF NOT EXISTS contacts (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             name          TEXT NOT NULL UNIQUE,
             nif           TEXT NOT NULL,
             email         TEXT NOT NULL,
+            phone         TEXT,
             address       TEXT,
+            iban          TEXT,
+            contact_type  TEXT NOT NULL DEFAULT 'Cliente',
+            is_active     INTEGER NOT NULL DEFAULT 1,
             created_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+
+    # --- BIENES DE INVERSIÓN (ACTIVOS FIJOS) ---
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS assets (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id           TEXT NOT NULL DEFAULT 'default',
+            name                TEXT NOT NULL,
+            purchase_date       TEXT NOT NULL,
+            cost                REAL NOT NULL,
+            salvage_value       REAL NOT NULL DEFAULT 0.0,
+            useful_life_years   INTEGER NOT NULL,
+            created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     # --- DIARIO DE SESIONES ---
     conn.execute("""
         CREATE TABLE IF NOT EXISTS session_diary (
@@ -357,12 +418,68 @@ def _init_db_schema(conn: sqlite3.Connection) -> None:
         )
     """)
     
+    # MIGRACIONES AL VUELO
+    try:
+        conn.execute("ALTER TABLE invoices ADD COLUMN contact_id INTEGER")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE quotes ADD COLUMN contact_id INTEGER")
+    except Exception:
+        pass
+    # Migrar clientes a contactos
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, nif, email, address, created_at FROM clients")
+        rows = cursor.fetchall()
+        for r in rows:
+            try:
+                conn.execute(
+                    "INSERT INTO contacts (id, name, nif, email, address, created_at, contact_type, is_active) VALUES (?, ?, ?, ?, ?, ?, 'Cliente', 1)",
+                    (r["id"], r["name"], r["nif"], r["email"], r["address"], r["created_at"])
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     # --- EJECUCIÓN DE MIGRACIONES VERSIONADAS ---
     try:
         from app.infrastructure.database.migrations import MigrationRunner
         MigrationRunner.run_pending_migrations(conn)
     except Exception:
         pass
+
+    # --- MIGRACIÓN DE FACTURAS/PRESUPUESTOS A ITEMS ---
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM invoice_items")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("SELECT id, concept, base_imponible FROM invoices")
+        invoices = cursor.fetchall()
+        for inv in invoices:
+            inv_id, concept, base = inv
+            if concept and base is not None:
+                cursor.execute(
+                    "INSERT INTO invoice_items (invoice_id, description_override, quantity, unit_price, subtotal) VALUES (?, ?, 1, ?, ?)",
+                    (inv_id, concept, float(base), float(base))
+                )
+    
+    cursor.execute("SELECT COUNT(*) FROM quote_items")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("SELECT id, concept, base_imponible FROM quotes")
+        quotes = cursor.fetchall()
+        for q in quotes:
+            q_id, concept, base = q
+            if concept and base is not None:
+                try:
+                    b = float(base)
+                    cursor.execute(
+                        "INSERT INTO quote_items (quote_id, description_override, quantity, unit_price, subtotal) VALUES (?, ?, 1, ?, ?)",
+                        (q_id, concept, b, b)
+                    )
+                except ValueError:
+                    pass
+    conn.commit()
 
     conn.commit()
 

@@ -582,6 +582,16 @@ class LedgerService:
         date_close = f"31/12/{year}"
         date_open = f"01/01/{year + 1}"
 
+        # 0. Amortización Automática (Red de seguridad)
+        from app.domain.services.depreciation_service import DepreciationService
+        from app.adapters.memory.asset_repository import MemoryAssetRepository
+        repo = MemoryAssetRepository()
+        ds = DepreciationService(repo)
+        # Asumimos que usa el tenant por defecto u obtenerlo por contexto
+        from app.infrastructure.database.memory.memory import tenant_context
+        cid = tenant_context.get()
+        ds.record_depreciation_entries(cid, year)
+
         # 1. Calcular saldos acumulados de todas las cuentas del ejercicio
         cuentas_saldos = {}
         with _get_connection() as conn:

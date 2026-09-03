@@ -331,3 +331,80 @@ class AlfonsoAPI:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def get_products(self, include_deleted: bool = False) -> dict:
+        """Obtiene la lista de productos y servicios."""
+        try:
+            r = self.session.get(f"{self.base_url}/billing/products", params={"include_deleted": include_deleted}, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def create_invoice(self, data: dict) -> dict:
+        """Crea una nueva factura."""
+        try:
+            r = self.session.post(f"{self.base_url}/billing/invoices/create", json=data, timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def create_product(self, data: dict) -> dict:
+        """Crea un nuevo producto o servicio."""
+        try:
+            r = self.session.post(f"{self.base_url}/billing/products", json=data, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def update_product(self, sku: str, data: dict) -> dict:
+        """Actualiza un producto existente."""
+        try:
+            r = self.session.put(f"{self.base_url}/billing/products/{sku}", json=data, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def delete_product(self, sku: str, confirmed: bool = False) -> dict:
+        """Elimina (Soft Delete) un producto."""
+        try:
+            r = self.session.delete(f"{self.base_url}/billing/products/{sku}", params={"confirmed_by_user": confirmed}, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    # --- Generic HTTP Methods para nuevos módulos ---
+    def get(self, endpoint: str, **kwargs) -> dict:
+        try:
+            r = self.session.get(f"{self.base_url}{endpoint}", timeout=10, **kwargs)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            raise Exception(f"API GET error: {str(e)}")
+
+    def post(self, endpoint: str, json=None, **kwargs) -> dict:
+        try:
+            r = self.session.post(f"{self.base_url}{endpoint}", json=json, timeout=15, **kwargs)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            raise Exception(f"API POST error: {str(e)}")
+
+    def put(self, endpoint: str, json=None, **kwargs) -> dict:
+        try:
+            r = self.session.put(f"{self.base_url}{endpoint}", json=json, timeout=15, **kwargs)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            raise Exception(f"API PUT error: {str(e)}")
+
+    def delete(self, endpoint: str, **kwargs) -> dict:
+        try:
+            r = self.session.delete(f"{self.base_url}{endpoint}", timeout=10, **kwargs)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            raise Exception(f"API DELETE error: {str(e)}")

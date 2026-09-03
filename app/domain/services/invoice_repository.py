@@ -100,6 +100,29 @@ class InvoiceRepository:
                     blind_index
                 ))
                 invoice_db_id = cursor.lastrowid
+            
+            # Gestionar items si existen
+            items = invoice_db_data.get("items")
+            if items is not None:
+                cursor.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (invoice_db_id,))
+                for item in items:
+                    cursor.execute("""
+                        INSERT INTO invoice_items (invoice_id, product_id, description_override, quantity, unit_price, subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        invoice_db_id,
+                        item.get("product_id"),
+                        item.get("description_override", ""),
+                        item.get("quantity", 1),
+                        item.get("unit_price", 0.0),
+                        item.get("subtotal", 0.0)
+                    ))
+                    
+                    # Restar stock si la factura no es borrador y es un producto
+                    if invoice_db_data.get("status") != "borrador" and item.get("product_id"):
+                        cursor.execute("UPDATE products SET stock = stock - ? WHERE id = ? AND item_type = 'product'", 
+                                       (item.get("quantity", 1), item.get("product_id")))
+                        
             conn.commit()
             return invoice_db_id
         finally:

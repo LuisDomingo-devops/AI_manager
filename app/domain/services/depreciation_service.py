@@ -73,3 +73,70 @@ class DepreciationService:
                 })
 
         return proposal
+
+    def record_depreciation_entries(self, client_id: str, year: int) -> Dict[str, Any]:
+        """
+        Calcula las cuotas de amortización para el año y las registra en el Libro Diario 
+        usando LedgerService a fecha 31/12 del año indicado. 
+        Evita duplicar si ya están contabilizadas.
+        """
+        proposal = self.calculate_depreciation_proposal(client_id, year)
+        
+        if not proposal:
+            return {"status": "ok", "message": "No hay activos para amortizar este año o las cuotas son 0.", "total_amount": 0.0}
+
+        # Comprobar si ya existe un asiento de amortización este año
+        from app.domain.services.ledger_service import LedgerService
+        from app.adapters.memory.memory import _get_connection
+        from app.utils.encryption import encryptor
+        
+        # Buscar si hay un asiento con el concepto de amortización para este año
+        already_recorded = False
+        with _get_connection(client_id) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT concept, entry_date FROM journal_entries WHERE entry_date = ?", (f"31/12/{year}",))
+            rows = cursor.fetchall()
+            for r in rows:
+                concept = encryptor.decrypt(r["concept"])
+                if f"Amortización Inmovilizado - Ejercicio {year}" in concept:
+                    already_recorded = True
+                    break
+
+        if already_recorded:
+            return {"status": "warning", "message": f"Las amortizaciones del ejercicio {year} ya estaban contabilizadas.", "total_amount": 0.0}
+
+        apuntes = []
+        total_amortization = 0.0
+        for p in proposal:
+            amount = p["amount"]
+            total_amortization += amount
+            # Debe: 681 (Gasto)
+            apuntes.append({
+                "account_code": p["account_debe"],
+                "debe": amount,
+                "haber": 0.0
+            })
+            # Haber: 281 (Amortización acumulada)
+            apuntes.append({
+                "account_code": p["account_haber"],
+                "debe": 0.0,
+                "haber": amount
+            })
+            
+        if not apuntes:
+            return {"status": "ok", "message": "No hay cuotas válidas para amortizar.", "total_amount": 0.0}
+
+        # Contabilizar el asiento agrupado
+        concept = f"Amortización Inmovilizado - Ejercicio {year}"
+        date_str = f"31/12/{year}"
+        
+        try:
+            journal_id = LedgerService.record_manual_entry(date_str, concept, apuntes)
+            return {
+                "status": "ok", 
+                "message": f"Amortización contabilizada correctamente. Total: {total_amortization:.2f} €",
+                "journal_id": journal_id,
+                "total_amount": total_amortization
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"Error al contabilizar: {str(e)}", "total_amount": 0.0}

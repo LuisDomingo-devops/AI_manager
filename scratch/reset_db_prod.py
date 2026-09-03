@@ -8,16 +8,15 @@ def main():
     print("Iniciando reseteo a producción...")
     
     base_dir = Path(__file__).resolve().parent.parent
-    data_dir = base_dir / "data"
+    data_dir = base_dir / "app" / "data"
     
-    # 1. Borrar base de datos
-    db_path = data_dir / "memory.db"
-    if db_path.exists():
+    # 1. Borrar todas las bases de datos memory*.db
+    for db_path in data_dir.glob("memory*.db"):
         try:
             os.remove(db_path)
             print(f"Borrando DB: {db_path}")
         except Exception as e:
-            print(f"No se pudo borrar la DB (puede que esté en uso): {e}")
+            print(f"No se pudo borrar la DB {db_path} (puede que esté en uso): {e}")
         
     # 2. Borrar carpetas de archivo fiscal
     archivo_fiscal = data_dir / "archivo fiscal"

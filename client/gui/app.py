@@ -372,19 +372,18 @@ class AssistantThread(QThread):
         self.wait(200)
 
 
+from client.gui.theme import HoverAnimationFilter
+
 class HUDPanel(QFrame):
     """Tarjeta contenedora estilo Glassmorphism Dark."""
     def __init__(self, title, parent=None):
         super().__init__(parent)
         self.title = title
         self.setObjectName("HUDPanel")
-        self.setStyleSheet("""
-            #HUDPanel {
-                background-color: rgba(30, 41, 59, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-            }
-        """)
+        
+        # Efecto de sombra y micro-animación de profundidad
+        self.hover_filter = HoverAnimationFilter(self)
+        
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(16, 36, 16, 16)
         
@@ -1492,13 +1491,13 @@ class AlfonsoHUDDashboard(QMainWindow):
             return
         elif event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if event.key() == Qt.Key.Key_N:
-                self.switch_to_view(("facturacion", "nueva_factura_b2b"))
+                self.switch_to_view(("ingresos_gastos", "nueva_factura_b2b"))
                 return
             elif event.key() == Qt.Key.Key_G:
-                self.switch_to_view(("gastos", "ocr_extraccion"))
+                self.switch_to_view(("ingresos_gastos", "ocr_extraccion"))
                 return
             elif event.key() == Qt.Key.Key_D:
-                self.switch_to_view(("facturacion", "facturas_emitidas"))
+                self.switch_to_view(("ingresos_gastos", "facturas_emitidas"))
                 return
             elif event.key() == Qt.Key.Key_H:
                 self.show_help()
@@ -1622,10 +1621,10 @@ class AlfonsoHUDDashboard(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # ------------------ CABECERA GLOBAL SUPERIOR (44px, SIEMPRE VISIBLE) ------------------
+        # ------------------ CABECERA GLOBAL SUPERIOR (60px, SIEMPRE VISIBLE) ------------------
         top_bar = QFrame()
         top_bar.setObjectName("GlobalTopBar")
-        top_bar.setFixedHeight(44)
+        top_bar.setFixedHeight(60)
         top_bar.setStyleSheet("""
             #GlobalTopBar {
                 background-color: #070B14;
@@ -1636,11 +1635,15 @@ class AlfonsoHUDDashboard(QMainWindow):
         top_bar_layout.setContentsMargins(15, 0, 15, 0)
         top_bar_layout.setSpacing(12)
 
-        # Logo & Título de Aplicación
-        logo_icon = QLabel("▲")
-        logo_icon.setStyleSheet("font-size: 16px; color: #00F0FF; font-weight: bold;")
-        logo_title = QLabel("ALFONSO KONTA AI")
-        logo_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;")
+        # Logo & Título de Aplicación (Cargar logotipo corporativo)
+        logo_label = QLabel()
+        logo_path = r"C:\Users\luisd\Desktop\Alfonso_commercial\Marketing\Recursos_graficos_corporativos\Alfonso_AI_Konta_logo_horizontal.png"
+        logo_pixmap = QPixmap(logo_path)
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(logo_pixmap.scaledToHeight(36, Qt.TransformationMode.SmoothTransformation))
+        else:
+            logo_label.setText("ALFONSO KONTA AI")
+            logo_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;")
         
         sep = QLabel("│")
         sep.setStyleSheet("color: rgba(255, 255, 255, 0.15); font-size: 12px;")
@@ -1648,41 +1651,13 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.lbl_view_title = QLabel("● DASHBOARD FISCAL & EMPRESARIAL")
         self.lbl_view_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #00F0FF; letter-spacing: 1px;")
 
-        top_bar_layout.addWidget(logo_icon)
-        top_bar_layout.addWidget(logo_title)
+        top_bar_layout.addWidget(logo_label)
         top_bar_layout.addWidget(sep)
         top_bar_layout.addWidget(self.lbl_view_title)
         top_bar_layout.addStretch()
 
-        # Badge Verifactu SIF
-        sif_badge = QLabel("SIF VERI*FACTU RD 1007/2023 ● REGISTRO INALTERABLE")
-        sif_badge.setStyleSheet("""
-            QLabel {
-                background-color: rgba(0, 240, 255, 0.08);
-                color: #00F0FF;
-                border: 1px solid rgba(0, 240, 255, 0.25);
-                border-radius: 4px;
-                padding: 3px 8px;
-                font-size: 10px;
-                font-weight: bold;
-            }
-        """)
-        top_bar_layout.addWidget(sif_badge)
-
-        # Fecha / Reloj
-        now_init = datetime.datetime.now()
-        self.clock_lbl = QPushButton(f"{now_init.strftime('%d.%m.%Y')} - {now_init.strftime('%H:%M:%S')}")
-        self.clock_lbl.setStyleSheet("""
-            QPushButton {
-                background-color: #111827;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 4px;
-                color: #FFFFFF;
-                padding: 4px 10px;
-                font-size: 11px;
-            }
-        """)
-        top_bar_layout.addWidget(self.clock_lbl)
+        # Reloj eliminado para reducir saturación
+        self.clock_lbl = None
 
         # Perfil Usuario
         user_pill = QLabel("Luis Domingo (Autónomo)")
@@ -1732,7 +1707,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         greeting_layout = QVBoxLayout()
         greeting_lbl = QLabel("Buenos días, Luis")
         greeting_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFFFFF;")
-        sub_greeting = QLabel("Panel Ejecutivo Integral ● Contabilidad, Facturación Verifactu e Impuestos en Tiempo Real")
+        sub_greeting = QLabel("Resumen de actividad y estado financiero actual.")
         sub_greeting.setStyleSheet("font-size: 11px; color: #94A3B8;")
         greeting_layout.addWidget(greeting_lbl)
         greeting_layout.addWidget(sub_greeting)
@@ -1746,6 +1721,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Tarjeta 1: Ingresos
         card1 = QFrame()
+        HoverAnimationFilter(card1)
         card1.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c1_layout = QVBoxLayout(card1)
         c1_layout.setContentsMargins(14, 10, 14, 0)
@@ -1761,6 +1737,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Tarjeta 2: Gastos
         card2 = QFrame()
+        HoverAnimationFilter(card2)
         card2.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c2_layout = QVBoxLayout(card2)
         c2_layout.setContentsMargins(14, 10, 14, 0)
@@ -1776,6 +1753,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Tarjeta 3: Beneficio Neto
         card3 = QFrame()
+        HoverAnimationFilter(card3)
         card3.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c3_layout = QVBoxLayout(card3)
         c3_layout.setContentsMargins(14, 10, 14, 0)
@@ -1791,6 +1769,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Tarjeta 4: IVA Soportado
         card4 = QFrame()
+        HoverAnimationFilter(card4)
         card4.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         c4_layout = QVBoxLayout(card4)
         c4_layout.setContentsMargins(14, 10, 14, 0)
@@ -1812,6 +1791,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Columna 1: Facturas del Mes y Gráfico Donut
         donut_panel = QFrame()
+        HoverAnimationFilter(donut_panel)
         donut_panel.setMinimumHeight(300)
         donut_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         dp_layout = QVBoxLayout(donut_panel)
@@ -1850,6 +1830,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Columna 3: Alertas y Avisos AEAT
         alerts_panel = QFrame()
+        HoverAnimationFilter(alerts_panel)
         alerts_panel.setMinimumHeight(300)
         alerts_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         ap_layout = QVBoxLayout(alerts_panel)
@@ -1919,6 +1900,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Últimos Movimientos / Facturas
         recent_panel = QFrame()
+        HoverAnimationFilter(recent_panel)
         recent_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         rp_layout = QVBoxLayout(recent_panel)
         rp_layout.setContentsMargins(12, 10, 12, 10)
@@ -1981,6 +1963,7 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         # Accesos Rápidos
         quick_panel = QFrame()
+        HoverAnimationFilter(quick_panel)
         quick_panel.setStyleSheet("background-color: #111827; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;")
         quick_layout = QVBoxLayout(quick_panel)
         quick_layout.setContentsMargins(12, 10, 12, 10)
@@ -2242,6 +2225,25 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.view_document_customizer = AlfonsoDocumentCustomizerWidget(self, embedded=True)
         self.central_stack.addWidget(self.view_document_customizer)
 
+        # Paneles de Productos & Servicios (indices 33, 34, 35)
+        from client.gui.panels.product_list_panel import AlfonsoProductListPanel
+        from client.gui.panels.product_form_panel import AlfonsoProductFormPanel
+        from client.gui.panels.product_service_panel import AlfonsoProductServicePanel
+        self.view_product_list = AlfonsoProductListPanel(self)
+        self.central_stack.addWidget(self.view_product_list)       # idx 33
+        self.view_new_product = AlfonsoProductFormPanel(self)
+        self.central_stack.addWidget(self.view_new_product)        # idx 34
+        self.view_service_management = AlfonsoProductServicePanel(self)
+        self.central_stack.addWidget(self.view_service_management) # idx 35
+
+        # Paneles de Contactos (indices 36, 37)
+        from client.gui.panels.contacts_list_panel import AlfonsoContactsListPanel
+        from client.gui.panels.contact_form_panel import AlfonsoContactFormPanel
+        self.view_contacts_list = AlfonsoContactsListPanel(self)
+        self.central_stack.addWidget(self.view_contacts_list)       # idx 36
+        self.view_new_contact = AlfonsoContactFormPanel(self)
+        self.central_stack.addWidget(self.view_new_contact)         # idx 37
+
         main_layout.addWidget(self.central_stack, 1)
 
         # ------------------ PANEL DERECHO: CHAT ASISTENTE IA (380px) ------------------
@@ -2326,7 +2328,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 border-radius: 8px;
                 color: #F8FAFC;
                 font-family: 'Segoe UI', sans-serif;
-                font-size: 11px;
+                font-size: 14px;
                 padding: 8px;
             }
         """)
@@ -2354,7 +2356,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 border-radius: 6px;
                 color: #FFFFFF;
                 padding: 6px;
-                font-size: 11px;
+                font-size: 14px;
             }
             QTextEdit:focus {
                 border: 1px solid #00F0FF;
@@ -2634,6 +2636,19 @@ class AlfonsoHUDDashboard(QMainWindow):
             ("sistema", "suscripcion_licencia"): (30, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
             ("sistema", "centro_ayuda"): (31, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
 
+            # Productos & Servicios
+            ("productos", "lista_productos"): (33, "PRODUCTOS & SERVICIOS > LISTA DE PRODUCTOS", "productos", "lista_productos"),
+            ("productos", "nuevo_producto"): (34, "PRODUCTOS & SERVICIOS > CREAR NUEVO PRODUCTO", "productos", "nuevo_producto"),
+            ("productos", "gestion_servicios"): (35, "PRODUCTOS & SERVICIOS > GESTIÓN DE SERVICIOS", "productos", "gestion_servicios"),
+
+            # Contactos
+            ("contactos", "lista_contactos"): (36, "CONTACTOS > DIRECTORIO", "contactos", "lista_contactos"),
+            ("contactos", "nuevo_contacto"): (37, "CONTACTOS > CREAR NUEVO CONTACTO", "contactos", "nuevo_contacto"),
+
+            # Contabilidad Financiera
+            ("contabilidad", "gestion_activos"): (38, "CONTABILIDAD FINANCIERA > GESTIÓN DE ACTIVOS", "contabilidad", "gestion_activos"),
+            ("contabilidad", "balance_situacion"): (39, "CONTABILIDAD FINANCIERA > BALANCE DE SITUACIÓN", "contabilidad", "balance_situacion"),
+
             # Legacy string aliases
             "Dashboard": (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
             "Facturas": (3, "FACTURACIÓN & VENTAS > FACTURAS EMITIDAS (7XX)", "facturacion", "facturas_emitidas"),
@@ -2772,10 +2787,10 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.switch_to_view("Configuración")
 
     def show_subscription_dialog(self):
-        self.switch_to_view(("sistema", "suscripcion_licencia"))
+        self.switch_to_view(("configuracion", "suscripcion_licencia"))
 
     def show_help(self):
-        self.switch_to_view(("sistema", "centro_ayuda"))
+        self.switch_to_view(("configuracion", "centro_ayuda"))
 
     def hide_calendar(self):
         self.switch_to_view("Dashboard")
@@ -3089,6 +3104,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             from app.adapters.memory.memory import _get_connection
             from app.utils.encryption import encryptor
             import datetime
+            import traceback
             
             now_dt = datetime.datetime.now()
             current_quarter = (now_dt.month - 1) // 3 + 1
@@ -3224,6 +3240,22 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.lbl_kpi_gastos_title.setText(f"Gastos  <span style='color: #F59E0B;'>({pendientes} pendientes)</span>" if total_facturas else "Gastos")
             if hasattr(self, 'lbl_kpi_iva_title') and self.lbl_kpi_iva_title:
                 self.lbl_kpi_iva_title.setText(f"IVA Soportado  <span style='color: #8B5CF6;'>({total_facturas} facturas)</span>" if total_facturas else "IVA Soportado")
+            if hasattr(self, 'lbl_kpi_beneficio_title') and self.lbl_kpi_beneficio_title:
+                if total_facturas:
+                    month_idx = now_dt.month - 1
+                    current_profit = (monthly_incomes[month_idx] - monthly_expenses[month_idx]) if 0 <= month_idx < 12 else 0
+                    prev_profit = (monthly_incomes[month_idx-1] - monthly_expenses[month_idx-1]) if 1 <= month_idx < 12 else 0
+                    
+                    if prev_profit > 0:
+                        diff = ((current_profit - prev_profit) / prev_profit) * 100
+                        if diff >= 0:
+                            self.lbl_kpi_beneficio_title.setText(f"Beneficio Neto  <span style='color: #10B981;'>▲ +{diff:.1f}%</span>")
+                        else:
+                            self.lbl_kpi_beneficio_title.setText(f"Beneficio Neto  <span style='color: #EF4444;'>▼ {diff:.1f}%</span>")
+                    else:
+                        self.lbl_kpi_beneficio_title.setText("Beneficio Neto")
+                else:
+                    self.lbl_kpi_beneficio_title.setText("Beneficio Neto")
 
             # Actualizar Sparklines con datos históricos reales (últimos 9 meses o plano a 0)
             if hasattr(self, 'c1_spark') and self.c1_spark:
@@ -3323,7 +3355,13 @@ class AlfonsoHUDDashboard(QMainWindow):
                         QPushButton:hover { background-color: rgba(16, 185, 129, 0.15); }
                     """)
         except Exception as e:
-            print(f"Error updating business telemetry: {e}")
+            err_msg = f"Error updating metrics: {e}\n{traceback.format_exc()}"
+            print(err_msg)
+            try:
+                with open(r"c:\Users\luisd\Desktop\Alfonso_Autonomo\logs\tools.log", "a", encoding="utf-8") as f:
+                    f.write(err_msg + "\n")
+            except:
+                pass
 
     def toggle_maximize_restore(self):
         """Alterna entre pantalla completa (maximizado) y tamaño de ventana normal."""

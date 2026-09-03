@@ -9,286 +9,112 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QColor, QCursor, QIcon
-
+from client.gui.theme import HoverAnimationFilter
 
 # Definición completa de la arquitectura de navegación de Alfonso Autónomo
 SIDEBAR_CATEGORIES = [
     {
         "id": "dashboard",
-        "title": "PANEL DE CONTROL",
+        "title": "INICIO",
         "icon": "",
-        "badge": "En Vivo",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "resumen_ejecutivo",
-                "title": "Resumen Ejecutivo",
-                "icon": "",
-                "desc": "KPIs en tiempo real, Donut Chart y alertas AEAT"
-            },
-            {
-                "id": "kpis_analitica",
-                "title": "Analítica & KPIs",
-                "icon": "",
-                "desc": "Métricas avanzadas, márgenes y evolución trimestral"
-            },
-            {
-                "id": "prevision_cashflow",
-                "title": "Previsión Tesorería",
-                "icon": "",
-                "desc": "Cash Flow a 30/60/90 días y cobros previstos"
-            }
+            {"id": "resumen_ejecutivo", "title": "Resumen Ejecutivo", "icon": "", "desc": "KPIs en tiempo real, Donut Chart y alertas AEAT"},
+            {"id": "kpis_analitica", "title": "Analítica & KPIs", "icon": "", "desc": "Métricas avanzadas, márgenes y evolución trimestral"},
+            {"id": "prevision_cashflow", "title": "Previsión Tesorería", "icon": "", "desc": "Cash Flow a 30/60/90 días y cobros previstos"}
         ]
     },
     {
-        "id": "facturacion",
-        "title": "FACTURACIÓN & VENTAS",
+        "id": "ingresos_gastos",
+        "title": "INGRESOS Y GASTOS",
         "icon": "",
-        "badge": "Veri*Factu",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "facturas_emitidas",
-                "title": "Facturas Emitidas",
-                "icon": "",
-                "desc": "Libro de ingresos (7XX), estados de cobro y exportación"
-            },
-            {
-                "id": "nueva_factura_b2b",
-                "title": "Nueva Factura / FacturaE",
-                "icon": "",
-                "desc": "Emisión rápida, FacturaE B2B XML y Ley Crea y Crece"
-            },
-            {
-                "id": "verifactu_sif",
-                "title": "Veri*Factu & Huella Hash",
-                "icon": "",
-                "desc": "Registro inalterable RD 1007/2023 y QR de cotejo AEAT"
-            }
-        ]
-    },
-    {
-        "id": "gastos",
-        "title": "GASTOS & COMPRAS",
-        "icon": "",
-        "badge": "Deducible",
-        "subcategories": [
-            {
-                "id": "libro_gastos",
-                "title": "Libro de Gastos",
-                "icon": "",
-                "desc": "Libro de compras (6XX) y partidas deducibles"
-            },
-            {
-                "id": "ocr_extraccion",
-                "title": "Captura & OCR IA",
-                "icon": "",
-                "desc": "Extracción automática de tickets y facturas recibidas"
-            },
-            {
-                "id": "registro_manual",
-                "title": "Registro Manual",
-                "icon": "",
-                "desc": "Inserción directa de gastos y cuota de autónomo RETA"
-            }
+            {"id": "nueva_factura_b2b", "title": "Nueva Factura / FacturaE", "icon": "", "desc": "Emisión rápida, FacturaE B2B XML y Ley Crea y Crece"},
+            {"id": "facturas_emitidas", "title": "Facturas Emitidas", "icon": "", "desc": "Libro de ingresos (7XX), estados de cobro y exportación"},
+            {"id": "ocr_extraccion", "title": "Captura & OCR IA", "icon": "", "desc": "Extracción automática de tickets y facturas recibidas"},
+            {"id": "libro_gastos", "title": "Libro de Gastos", "icon": "", "desc": "Libro de compras (6XX) y partidas deducibles"},
+            {"id": "registro_manual", "title": "Registro Manual", "icon": "", "desc": "Inserción directa de gastos y cuota de autónomo RETA"}
         ]
     },
     {
         "id": "bancos",
-        "title": "BANCA & TESORERÍA",
+        "title": "TESORERÍA",
         "icon": "",
-        "badge": "PSD2",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "conciliacion_bancaria",
-                "title": "Conciliación Bancaria",
-                "icon": "",
-                "desc": "Emparejamiento inteligente de apuntes y facturas"
-            },
-            {
-                "id": "conexiones_psd2",
-                "title": "Cuentas Conectadas",
-                "icon": "",
-                "desc": "Banca abierta Open Banking y sincronización de saldos"
-            },
-            {
-                "id": "transferencias_pagos",
-                "title": "Realizar Pagos",
-                "icon": "",
-                "desc": "Transferencias a proveedores y remesas SEPA"
-            }
+            {"id": "conciliacion_bancaria", "title": "Conciliación Bancaria", "icon": "", "desc": "Emparejamiento inteligente de apuntes y facturas"},
+            {"id": "conexiones_psd2", "title": "Cuentas Conectadas", "icon": "", "desc": "Banca abierta Open Banking y sincronización de saldos"},
+            {"id": "transferencias_pagos", "title": "Realizar Pagos", "icon": "", "desc": "Transferencias a proveedores y remesas SEPA"}
         ]
     },
     {
-        "id": "impuestos",
-        "title": "FISCALIDAD & AEAT",
+        "id": "catalogos",
+        "title": "CATÁLOGOS",
         "icon": "",
-        "badge": "Oficial",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "modelos_trimestrales",
-                "title": "Modelos 303 y 130",
-                "icon": "",
-                "desc": "Autoliquidación trimestral de IVA e IRPF en tiempo real"
-            },
-            {
-                "id": "automatizacion_aeat",
-                "title": "Sede Electrónica AEAT",
-                "icon": "",
-                "desc": "Asistente de presentación telemática con Playwright"
-            },
-            {
-                "id": "calendario_fiscal",
-                "title": "Calendario Fiscal",
-                "icon": "",
-                "desc": "Vencimientos oficiales, plazos tributarios y alarmas"
-            },
-            {
-                "id": "novedades_boe",
-                "title": "Monitor BOE & Leyes",
-                "icon": "",
-                "desc": "Novedades fiscales, deducciones y normativa estatal"
-            }
+            {"id": "lista_contactos", "title": "Directorio", "icon": "", "desc": "Lista de clientes y proveedores"},
+            {"id": "nuevo_contacto", "title": "Nuevo Contacto", "icon": "", "desc": "Crear un nuevo cliente o proveedor"},
+            {"id": "lista_productos", "title": "Lista de Productos", "icon": "", "desc": "Ver y gestionar productos existentes"},
+            {"id": "nuevo_producto", "title": "Crear Producto/Servicio", "icon": "", "desc": "Añadir un nuevo ítem al catálogo"},
+            {"id": "gestion_servicios", "title": "Gestión de Servicios", "icon": "", "desc": "Configurar y asignar servicios a productos"}
+        ]
+    },
+    {
+        "id": "fiscal_contable",
+        "title": "FISCAL Y CONTABLE",
+        "icon": "",
+        "badge": "",
+        "subcategories": [
+            {"id": "modelos_trimestrales", "title": "Modelos 303 y 130", "icon": "", "desc": "Autoliquidación trimestral de IVA e IRPF en tiempo real"},
+            {"id": "automatizacion_aeat", "title": "Sede Electrónica AEAT", "icon": "", "desc": "Asistente de presentación telemática con Playwright"},
+            {"id": "calendario_fiscal", "title": "Calendario Fiscal", "icon": "", "desc": "Vencimientos oficiales, plazos tributarios y alarmas"},
+            {"id": "balance_situacion", "title": "Balance de Situación", "icon": "", "desc": "Estado de Activo, Pasivo y Patrimonio Netos (PGC)"},
+            {"id": "gestion_activos", "title": "Gestión de Activos", "icon": "", "desc": "Bienes de inversión y cuadro de amortizaciones"},
+            {"id": "libros_oficiales_aeat", "title": "Libros Registro Oficiales", "icon": "", "desc": "Exportador Excel/CSV normalizado para la AEAT"}
         ]
     },
     {
         "id": "laboral",
         "title": "LABORAL & NÓMINAS",
         "icon": "",
-        "badge": "TGSS",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "empleados_contratos",
-                "title": "Empleados & Contratos",
-                "icon": "",
-                "desc": "Gestión de plantilla, altas y contratos de trabajo"
-            },
-            {
-                "id": "generador_nominas",
-                "title": "Generador de Nóminas",
-                "icon": "",
-                "desc": "Cálculo de IRPF/SS y generación de nóminas PDF"
-            },
-            {
-                "id": "afiliacion_tgss",
-                "title": "Seguridad Social TGSS",
-                "icon": "",
-                "desc": "Ficheros AFI/CRA, cotizaciones y cuota RETA"
-            }
+            {"id": "empleados_contratos", "title": "Empleados & Contratos", "icon": "", "desc": "Gestión de plantilla, altas y contratos de trabajo"},
+            {"id": "generador_nominas", "title": "Generador de Nóminas", "icon": "", "desc": "Cálculo de IRPF/SS y generación de nóminas PDF"},
+            {"id": "afiliacion_tgss", "title": "Seguridad Social TGSS", "icon": "", "desc": "Ficheros AFI/CRA, cotizaciones y cuota RETA"}
         ]
     },
     {
-        "id": "documentos",
-        "title": "DOCUMENTOS & ARCHIVO",
+        "id": "espacio_trabajo",
+        "title": "ESPACIO DE TRABAJO",
         "icon": "",
-        "badge": "Custodia",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "archivo_fiscal",
-                "title": "Archivo Digital",
-                "icon": "",
-                "desc": "Explorador organizado por ejercicios y trimestres"
-            },
-            {
-                "id": "visor_documental",
-                "title": "Visor Documental IA",
-                "icon": "",
-                "desc": "Previsualización con metadatos contables extraídos"
-            },
-            {
-                "id": "diseno_maquetacion",
-                "title": "Diseño y Maquetación",
-                "icon": "",
-                "desc": "Editor Drag-and-Drop de plantillas y personalización"
-            },
-            {
-                "id": "libros_oficiales_aeat",
-                "title": "Libros Registro Oficiales",
-                "icon": "",
-                "desc": "Exportador Excel/CSV normalizado para la AEAT"
-            }
+            {"id": "correo_inteligente", "title": "Alfonso Mail", "icon": "", "desc": "Bandeja de correo, extracción de facturas y respuestas"},
+            {"id": "agenda_citas", "title": "Agenda & Citas", "icon": "", "desc": "Citas previas en Administraciones y recordatorios"},
+            {"id": "archivo_fiscal", "title": "Archivo Digital", "icon": "", "desc": "Explorador organizado por ejercicios y trimestres"},
+            {"id": "visor_documental", "title": "Visor Documental IA", "icon": "", "desc": "Previsualización con metadatos contables extraídos"},
+            {"id": "proyectos_sesiones", "title": "Libro de Actas (Registro)", "icon": "", "desc": "Registro inmutable y soporte documental de conversaciones"}
         ]
     },
     {
-        "id": "comunicacion",
-        "title": "ASISTENTE & COMUNICACIÓN",
+        "id": "configuracion",
+        "title": "CONFIGURACIÓN Y AUDITORÍA",
         "icon": "",
-        "badge": "AI 2.0",
+        "badge": "",
         "subcategories": [
-            {
-                "id": "correo_inteligente",
-                "title": "Alfonso Mail",
-                "icon": "",
-                "desc": "Bandeja de correo, extracción de facturas y respuestas"
-            },
-            {
-                "id": "agenda_citas",
-                "title": "Agenda & Citas",
-                "icon": "",
-                "desc": "Citas previas en Administraciones y recordatorios"
-            },
-            {
-                "id": "proyectos_sesiones",
-                "title": "Proyectos & Sesiones",
-                "icon": "",
-                "desc": "Gestor multi-sesión de proyectos de trabajo"
-            }
-        ]
-    },
-    {
-        "id": "cumplimiento",
-        "title": "AUDITORÍA & ASESORÍA",
-        "icon": "",
-        "badge": "Audit",
-        "subcategories": [
-            {
-                "id": "declaracion_sif",
-                "title": "Declaración SIF",
-                "icon": "",
-                "desc": "Acreditación y declaración responsable RD 1007/2023"
-            },
-            {
-                "id": "auditoria_inmutabilidad",
-                "title": "Auditoría de Inmutabilidad",
-                "icon": "",
-                "desc": "Verificación criptográfica y registro inalterable"
-            },
-            {
-                "id": "panel_asesor",
-                "title": "Panel Gestoría / Advisor",
-                "icon": "",
-                "desc": "Gestión multi-empresa y multi-inquilino"
-            }
-        ]
-    },
-    {
-        "id": "sistema",
-        "title": "SISTEMA & CONFIGURACIÓN",
-        "icon": "",
-        "badge": "Ajustes",
-        "subcategories": [
-            {
-                "id": "perfil_fiscal",
-                "title": "Perfil del Autónomo",
-                "icon": "",
-                "desc": "NIF, actividad IAE, tipo IRPF y domicilio fiscal"
-            },
-            {
-                "id": "copias_seguridad",
-                "title": "Copias de Seguridad",
-                "icon": "",
-                "desc": "Snapshots locales, exportación y restauración de datos"
-            },
-            {
-                "id": "suscripcion_licencia",
-                "title": "Suscripción & Licencia",
-                "icon": "",
-                "desc": "Detalles del plan activo y ampliación de licencia"
-            },
-            {
-                "id": "centro_ayuda",
-                "title": "Centro de Ayuda & Manual",
-                "icon": "",
-                "desc": "Manual de usuario, preguntas frecuentes (FAQ), glosario y atajos"
-            }
+            {"id": "perfil_fiscal", "title": "Perfil del Autónomo", "icon": "", "desc": "NIF, actividad IAE, tipo IRPF y domicilio fiscal"},
+            {"id": "suscripcion_licencia", "title": "Suscripción & Licencia", "icon": "", "desc": "Detalles del plan activo y ampliación de licencia"},
+            {"id": "panel_asesor", "title": "Panel Gestoría / Advisor", "icon": "", "desc": "Gestión multi-empresa y multi-inquilino"},
+            {"id": "verifactu_sif", "title": "Veri*Factu & Huella Hash", "icon": "", "desc": "Registro inalterable RD 1007/2023 y QR de cotejo AEAT"},
+            {"id": "auditoria_inmutabilidad", "title": "Auditoría de Inmutabilidad", "icon": "", "desc": "Verificación criptográfica y registro inalterable"},
+            {"id": "declaracion_sif", "title": "Declaración SIF", "icon": "", "desc": "Acreditación y declaración responsable RD 1007/2023"},
+            {"id": "diseno_maquetacion", "title": "Diseño y Maquetación", "icon": "", "desc": "Editor Drag-and-Drop de plantillas y personalización"},
+            {"id": "copias_seguridad", "title": "Copias de Seguridad", "icon": "", "desc": "Snapshots locales, exportación y restauración de datos"},
+            {"id": "centro_ayuda", "title": "Centro de Ayuda & Manual", "icon": "", "desc": "Manual de usuario, preguntas frecuentes (FAQ), glosario y atajos"},
+            {"id": "novedades_boe", "title": "Monitor BOE & Leyes", "icon": "", "desc": "Novedades fiscales, deducciones y normativa estatal"}
         ]
     }
 ]
@@ -315,6 +141,10 @@ class SubcategoryButton(QPushButton):
 
         self.setFixedHeight(30)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Efecto hover fluido (desactivado para máximo rendimiento)
+        # self.hover_filter = HoverAnimationFilter(self, base_blur=0, hover_blur=10, duration=150)
+        
         self.update_style()
 
     def set_active_state(self, active: bool):
@@ -334,7 +164,7 @@ class SubcategoryButton(QPushButton):
                     color: #FFFFFF;
                     text-align: left;
                     font-weight: bold;
-                    font-size: 11px;
+                    font-size: 13px;
                     padding-left: 8px;
                 }
             """)
@@ -346,13 +176,8 @@ class SubcategoryButton(QPushButton):
                     border-radius: 6px;
                     color: #94A3B8;
                     text-align: left;
-                    font-size: 11px;
+                    font-size: 13px;
                     padding-left: 8px;
-                }
-                QPushButton:hover {
-                    color: #F1F5F9;
-                    background-color: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.08);
                 }
             """)
 
@@ -380,16 +205,18 @@ class CategoryGroupWidget(QWidget):
         self.header_btn.setFixedHeight(28)
         self.header_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header_btn.clicked.connect(self.toggle_expanded)
+        
+        # self.header_hover = HoverAnimationFilter(self.header_btn, base_blur=0, hover_blur=8, duration=150)
 
         header_layout = QHBoxLayout(self.header_btn)
         header_layout.setContentsMargins(6, 0, 6, 0)
         header_layout.setSpacing(6)
 
         self.lbl_chevron = QLabel("▾" if self.is_expanded else "▸")
-        self.lbl_chevron.setStyleSheet("color: #6366F1; font-size: 10px; font-weight: bold;")
+        self.lbl_chevron.setStyleSheet("color: #6366F1; font-size: 12px; font-weight: bold;")
 
         self.lbl_title = QLabel(self.category_data["title"])
-        self.lbl_title.setStyleSheet("color: #E2E8F0; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;")
+        self.lbl_title.setStyleSheet("color: #E2E8F0; font-size: 12px; font-weight: bold; letter-spacing: 0.5px;")
 
         header_layout.addWidget(self.lbl_chevron)
         header_layout.addWidget(self.lbl_title)
@@ -568,9 +395,9 @@ class AlfonsoSidebarWidget(QFrame):
         plan_layout.setSpacing(2)
 
         self.lbl_plan_title = QLabel(tier_title)
-        self.lbl_plan_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #FFB800;")
+        self.lbl_plan_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #FFB800;")
         self.lbl_plan_sub = QLabel(tier_sub)
-        self.lbl_plan_sub.setStyleSheet("font-size: 9px; color: #94A3B8;")
+        self.lbl_plan_sub.setStyleSheet("font-size: 11px; color: #94A3B8;")
 
         btn_plan = QPushButton("Gestionar Licencia")
         btn_plan.setFixedHeight(22)
@@ -592,6 +419,7 @@ class AlfonsoSidebarWidget(QFrame):
             group.filter_items(text)
 
     def on_subcategory_selected(self, cat_id: str, subcat_id: str, title: str):
+        print(f"[SIDEBAR EMIT] cat_id={cat_id!r}  subcat_id={subcat_id!r}  title={title!r}")
         self.set_active(cat_id, subcat_id, expand_group=True)
         self.category_selected.emit(cat_id, subcat_id, title)
 

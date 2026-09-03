@@ -38,34 +38,32 @@ class DonutChartWidget(QWidget):
         painter.drawEllipse(rect)
         
         # Calculate angles (16ths of a degree for QPainter.drawArc)
-        if self.total <= 0:
-            return
+        if self.total > 0:
+            angle_pagadas = int((self.pagadas / self.total) * 360 * 16)
+            angle_pendientes = int((self.pendientes / self.total) * 360 * 16)
+            angle_rechazadas = int((self.rechazadas / self.total) * 360 * 16)
             
-        angle_pagadas = int((self.pagadas / self.total) * 360 * 16)
-        angle_pendientes = int((self.pendientes / self.total) * 360 * 16)
-        angle_rechazadas = int((self.rechazadas / self.total) * 360 * 16)
-        
-        start_angle = 90 * 16  # start at 12 o'clock
-        
-        # 1. Pagadas (Green/Emerald: #10B981)
-        if angle_pagadas > 0:
-            pen = QPen(QColor("#10B981"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.drawArc(rect, start_angle, -angle_pagadas)
-            start_angle -= angle_pagadas
+            start_angle = 90 * 16  # start at 12 o'clock
             
-        # 2. Pendientes (Yellow/Amber: #F59E0B)
-        if angle_pendientes > 0:
-            pen = QPen(QColor("#F59E0B"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.drawArc(rect, start_angle, -angle_pendientes)
-            start_angle -= angle_pendientes
-            
-        # 3. Rechazadas (Red/Rose: #EF4444)
-        if angle_rechazadas > 0:
-            pen = QPen(QColor("#EF4444"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.drawArc(rect, start_angle, -angle_rechazadas)
+            # 1. Pagadas (Green/Emerald: #10B981)
+            if angle_pagadas > 0:
+                pen = QPen(QColor("#10B981"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(pen)
+                painter.drawArc(rect, start_angle, -angle_pagadas)
+                start_angle -= angle_pagadas
+                
+            # 2. Pendientes (Yellow/Amber: #F59E0B)
+            if angle_pendientes > 0:
+                pen = QPen(QColor("#F59E0B"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(pen)
+                painter.drawArc(rect, start_angle, -angle_pendientes)
+                start_angle -= angle_pendientes
+                
+            # 3. Rechazadas (Red/Rose: #EF4444)
+            if angle_rechazadas > 0:
+                pen = QPen(QColor("#EF4444"), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(pen)
+                painter.drawArc(rect, start_angle, -angle_rechazadas)
             
         # Central text
         painter.setPen(QColor("#FFFFFF"))
