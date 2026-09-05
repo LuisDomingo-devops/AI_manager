@@ -61,7 +61,8 @@ def test_invoice_saving_triggers_excel_sync():
         "total_amount": 530.0,
         "category": "gasto",
         "quarter": 3,
-        "year": 2026
+        "year": 2026,
+        "status": "firmada"
     }
 
     # Guardar factura (debe disparar el trigger de ExcelSyncService)

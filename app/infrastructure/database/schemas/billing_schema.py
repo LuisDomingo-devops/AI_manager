@@ -24,6 +24,8 @@ def init_billing_schema(conn: sqlite3.Connection) -> None:
             concept         TEXT,
             blind_index     TEXT,
             contact_id      INTEGER,
+            tax_engine_version TEXT,
+            requires_manual_confirmation INTEGER DEFAULT 0,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)

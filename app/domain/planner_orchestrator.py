@@ -396,6 +396,14 @@ class ToolExecutionEngine:
                 logger.warning("No se pudo inspeccionar la firma: %s", e)
 
             try:
+                import json
+                from app.domain.services.audit_ledger import AuditLedgerService
+                audit_desc = f"Tool: {tool_name} | Args: {json.dumps(args, default=str)}"
+                AuditLedgerService.log_audit_event("tool_execution", audit_desc, client_id)
+            except Exception as e:
+                logger.warning("No se pudo registrar la auditoría de tool_execution: %s", e)
+
+            try:
                 if asyncio.iscoroutinefunction(tool):
                     result = await asyncio.wait_for(tool(**args), timeout=_TOOL_TIMEOUT)
                 else:
