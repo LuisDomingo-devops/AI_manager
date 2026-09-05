@@ -234,6 +234,9 @@ class MailWidget(AlfonsoBaseDialog):
         self.list_widget.clear()
         self.emails_list = self.api.get_emails(category=self.current_category)
         
+        if not isinstance(self.emails_list, list):
+            self.emails_list = []
+            
         if not self.emails_list:
             item = QListWidgetItem("Sin correos electrónicos en esta categoría.")
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)

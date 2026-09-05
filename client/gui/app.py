@@ -153,11 +153,17 @@ class AssistantThread(QThread):
         if threshold is None:
             effective_device = device if device is not None else self.audio.device
             if hasattr(self.audio, 'calibrate_threshold'):
-                threshold = await asyncio.to_thread(self.audio.calibrate_threshold, effective_device)
+                try:
+                    threshold = await asyncio.to_thread(self.audio.calibrate_threshold, effective_device)
+                except Exception as e:
+                    print(f"[WARN] Error al calibrar micrófono: {e}. Usando umbral por defecto 500.")
+                    threshold = 500
             else:
-                # Fallback local seguro si la API de AudioService restaurada no lo expone
-                from core.config import SILENCE_THRESHOLD
-                threshold = SILENCE_THRESHOLD
+                try:
+                    from core.config import SILENCE_THRESHOLD
+                    threshold = SILENCE_THRESHOLD
+                except ImportError:
+                    threshold = 500
             self.config['threshold'] = threshold 
 
         while self.running:
@@ -168,7 +174,6 @@ class AssistantThread(QThread):
                         self.pending_text_message = None
                         
                         self.state_changed.emit("thinking")
-                        self.new_message.emit("Tú", user_text)
                         
                         chat_res = self.api.send_chat(user_text, self.session_id)
                         response_data = chat_res.get("result", {})
@@ -344,15 +349,22 @@ class AssistantThread(QThread):
 
         self.state_changed.emit("connecting")
         print(f"[INFO] Intentando conectar al servidor backend: {self.api.base_url}")
-        try:
-            if not self.api.ping():
-                print(f"[ERROR] No se pudo conectar al backend {self.api.base_url}. Revisa si el servidor está activo.")
+        while self.running:
+            try:
+                if self.api.ping():
+                    print("[OK] Conexión con el servidor backend establecida.")
+                    self.state_changed.emit("idle")
+                    break
+                else:
+                    print(f"[WARN] Esperando al backend en {self.api.base_url}...")
+                    self.state_changed.emit("error")
+                    self.msleep(2000)
+            except Exception as e:
+                print(f"[WARN] Error conectando al backend: {e}. Reintentando...")
                 self.state_changed.emit("error")
-                return
-            print("[OK] Conexión con el servidor backend establecida.")
-        except Exception as e:
-            print(f"[CRITICAL] Error durante la conexión al backend: {e}")
-            self.state_changed.emit("error")
+                self.msleep(2000)
+                
+        if not self.running:
             return
 
         self.state_changed.emit("idle")
@@ -361,6 +373,10 @@ class AssistantThread(QThread):
             self.loop.run_until_complete(self._audio_loop())
         except asyncio.CancelledError:
             print("[INFO] AssistantThread tasks cancelled.")
+        except Exception as e:
+            import traceback
+            print(f"[CRITICAL] Error fatal no controlado en AssistantThread._audio_loop: {e}")
+            traceback.print_exc()
         finally:
             self.loop.close()
             print("[INFO] Asyncio event loop closed.")
@@ -2484,9 +2500,17 @@ class AlfonsoHUDDashboard(QMainWindow):
 
         if text:
             self.text_input.clear()
+            
+            # Mostrar inmediatamente el mensaje en la UI
+            self.update_chat("Tú", text)
+            
             if not self.text_mode_enabled:
                 self.toggle_text_mode()
-            self.thread.send_text_message(text)
+                
+            if hasattr(self, 'thread') and self.thread.isRunning():
+                self.thread.send_text_message(text)
+            else:
+                self.update_chat("Alfonso", "⚠️ **Error de conexión:** El motor de Inteligencia Artificial (Backend) no está ejecutándose. Por favor, asegúrate de iniciar el servidor backend.")
 
     def handle_file_drop(self, filepaths):
         from pathlib import Path
@@ -2573,9 +2597,9 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.thread.close_mail.connect(self.hide_mail)
         self.thread.sync_mail.connect(self.reload_mail_events)
         self.thread.switch_session_requested.connect(self.handler_switch_session)
-        self.thread.confirm_invoice_requested.connect(self.show_invoice_confirmation)
+        
+        # INICIAR EL HILO SECUNDARIO
         self.thread.start()
-
     def on_sidebar_category_selected(self, cat_id: str, subcat_id: str, title: str):
         """Manejador ejecutado al pulsar cualquier subcategoría en el panel lateral."""
         self.switch_to_view((cat_id, subcat_id))
@@ -2583,71 +2607,65 @@ class AlfonsoHUDDashboard(QMainWindow):
     def switch_to_view(self, target):
         """Cambia dinámicamente la vista del panel central (QStackedWidget) y actualiza el título y menú."""
         mapping = {
-            # Panel de Control
+            # INICIO
             ("dashboard", "resumen_ejecutivo"): (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
             ("dashboard", "kpis_analitica"): (1, "PANEL DE CONTROL > ANALÍTICA & KPIS", "dashboard", "kpis_analitica"),
             ("dashboard", "prevision_cashflow"): (2, "PANEL DE CONTROL > PREVISIÓN DE TESORERÍA", "dashboard", "prevision_cashflow"),
 
-            # Facturación & Ventas
-            ("facturacion", "facturas_emitidas"): (3, "FACTURACIÓN & VENTAS > FACTURAS EMITIDAS (7XX)", "facturacion", "facturas_emitidas"),
-            ("facturacion", "nueva_factura_b2b"): (4, "FACTURACIÓN & VENTAS > NUEVA FACTURA / FACTURAE B2B", "facturacion", "nueva_factura_b2b"),
-            ("facturacion", "verifactu_sif"): (5, "FACTURACIÓN & VENTAS > VERI*FACTU & HUELLA HASH", "facturacion", "verifactu_sif"),
+            # INGRESOS Y GASTOS
+            ("ingresos_gastos", "facturas_emitidas"): (3, "INGRESOS Y GASTOS > FACTURAS EMITIDAS (7XX)", "ingresos_gastos", "facturas_emitidas"),
+            ("ingresos_gastos", "nueva_factura_b2b"): (4, "INGRESOS Y GASTOS > NUEVA FACTURA / FACTURAE B2B", "ingresos_gastos", "nueva_factura_b2b"),
+            ("ingresos_gastos", "libro_gastos"): (6, "INGRESOS Y GASTOS > LIBRO DE GASTOS Y COMPRAS (6XX)", "ingresos_gastos", "libro_gastos"),
+            ("ingresos_gastos", "ocr_extraccion"): (7, "INGRESOS Y GASTOS > CAPTURA & EXTRACCIÓN OCR", "ingresos_gastos", "ocr_extraccion"),
+            ("ingresos_gastos", "registro_manual"): (8, "INGRESOS Y GASTOS > REGISTRO MANUAL DE GASTO", "ingresos_gastos", "registro_manual"),
 
-            # Gastos & Compras
-            ("gastos", "libro_gastos"): (6, "GASTOS & COMPRAS > LIBRO DE GASTOS Y COMPRAS (6XX)", "gastos", "libro_gastos"),
-            ("gastos", "ocr_extraccion"): (7, "GASTOS & COMPRAS > CAPTURA & EXTRACCIÓN OCR", "gastos", "ocr_extraccion"),
-            ("gastos", "registro_manual"): (8, "GASTOS & COMPRAS > REGISTRO MANUAL DE GASTO", "gastos", "registro_manual"),
+            # TESORERÍA (bancos)
+            ("bancos", "conciliacion_bancaria"): (9, "TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
+            ("bancos", "conexiones_psd2"): (10, "TESORERÍA > CUENTAS BANCARIAS VINCULADAS", "bancos", "conexiones_psd2"),
+            ("bancos", "transferencias_pagos"): (11, "TESORERÍA > EMISIÓN DE TRANSFERENCIAS SEPA", "bancos", "transferencias_pagos"),
 
-            # Banca & Tesorería
-            ("bancos", "conciliacion_bancaria"): (9, "BANCA & TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
-            ("bancos", "conexiones_psd2"): (10, "BANCA & TESORERÍA > CUENTAS BANCARIAS VINCULADAS", "bancos", "conexiones_psd2"),
-            ("bancos", "transferencias_pagos"): (11, "BANCA & TESORERÍA > EMISIÓN DE TRANSFERENCIAS SEPA", "bancos", "transferencias_pagos"),
+            # CATÁLOGOS
+            ("catalogos", "lista_contactos"): (36, "CATÁLOGOS > DIRECTORIO", "catalogos", "lista_contactos"),
+            ("catalogos", "nuevo_contacto"): (37, "CATÁLOGOS > CREAR NUEVO CONTACTO", "catalogos", "nuevo_contacto"),
+            ("catalogos", "lista_productos"): (33, "CATÁLOGOS > LISTA DE PRODUCTOS", "catalogos", "lista_productos"),
+            ("catalogos", "nuevo_producto"): (34, "CATÁLOGOS > CREAR NUEVO PRODUCTO", "catalogos", "nuevo_producto"),
+            ("catalogos", "gestion_servicios"): (35, "CATÁLOGOS > GESTIÓN DE SERVICIOS", "catalogos", "gestion_servicios"),
+            ("catalogos", "clientes_proveedores"): (36, "CATÁLOGOS > CLIENTES & PROVEEDORES", "catalogos", "clientes_proveedores"),
+            ("catalogos", "productos_servicios"): (33, "CATÁLOGOS > PRODUCTOS & SERVICIOS", "catalogos", "productos_servicios"),
+            ("catalogos", "bienes_inversion"): (38, "CATÁLOGOS > BIENES DE INVERSIÓN", "catalogos", "bienes_inversion"),
 
-            # Fiscalidad & AEAT
-            ("impuestos", "modelos_trimestrales"): (12, "FISCALIDAD & AEAT > MODELOS TRIMESTRALES (303, 130)", "impuestos", "modelos_trimestrales"),
-            ("impuestos", "automatizacion_aeat"): (13, "FISCALIDAD & AEAT > SEDE ELECTRÓNICA & PLAYWRIGHT", "impuestos", "automatizacion_aeat"),
-            ("impuestos", "calendario_fiscal"): (14, "FISCALIDAD & AEAT > CALENDARIO FISCAL & VENCIMIENTOS", "impuestos", "calendario_fiscal"),
-            ("impuestos", "novedades_boe"): (15, "FISCALIDAD & AEAT > MONITOR BOE & NOVEDADES FISCALES", "impuestos", "novedades_boe"),
+            # FISCAL Y CONTABLE
+            ("fiscal_contable", "modelos_trimestrales"): (12, "FISCAL Y CONTABLE > MODELOS TRIMESTRALES (303, 130)", "fiscal_contable", "modelos_trimestrales"),
+            ("fiscal_contable", "automatizacion_aeat"): (13, "FISCAL Y CONTABLE > SEDE ELECTRÓNICA & PLAYWRIGHT", "fiscal_contable", "automatizacion_aeat"),
+            ("fiscal_contable", "calendario_fiscal"): (14, "FISCAL Y CONTABLE > CALENDARIO FISCAL & VENCIMIENTOS", "fiscal_contable", "calendario_fiscal"),
+            ("fiscal_contable", "balance_situacion"): (39, "FISCAL Y CONTABLE > BALANCE DE SITUACIÓN", "fiscal_contable", "balance_situacion"),
+            ("fiscal_contable", "gestion_activos"): (38, "FISCAL Y CONTABLE > GESTIÓN DE ACTIVOS", "fiscal_contable", "gestion_activos"),
+            ("fiscal_contable", "libros_oficiales_aeat"): (21, "FISCAL Y CONTABLE > LIBROS REGISTRO OFICIALES", "fiscal_contable", "libros_oficiales_aeat"),
+            ("fiscal_contable", "novedades_boe"): (15, "FISCAL Y CONTABLE > MONITOR BOE & NOVEDADES FISCALES", "fiscal_contable", "novedades_boe"),
 
-            # Laboral & Nóminas
-            ("laboral", "empleados_contratos"): (16, "LABORAL & NÓMINAS > GESTIÓN DE EMPLEADOS Y CONTRATOS", "laboral", "empleados_contratos"),
-            ("laboral", "generador_nominas"): (17, "LABORAL & NÓMINAS > GENERADOR OFICIAL DE NÓMINAS PDF", "laboral", "generador_nominas"),
-            ("laboral", "afiliacion_tgss"): (18, "LABORAL & NÓMINAS > SEGURIDAD SOCIAL & TGSS / RETA", "laboral", "afiliacion_tgss"),
+            # LABORAL & NÓMINAS
+            ("laboral", "empleados_contratos"): (16, "LABORAL & NÓMINAS > EMPLEADOS & CONTRATOS", "laboral", "empleados_contratos"),
+            ("laboral", "generador_nominas"): (17, "LABORAL & NÓMINAS > GENERADOR DE NÓMINAS", "laboral", "generador_nominas"),
+            ("laboral", "afiliacion_tgss"): (18, "LABORAL & NÓMINAS > SEGURIDAD SOCIAL TGSS", "laboral", "afiliacion_tgss"),
 
-            # Documentos & Archivo
-            ("documentos", "archivo_fiscal"): (19, "DOCUMENTOS & ARCHIVO > ARCHIVO FISCAL DIGITAL", "documentos", "archivo_fiscal"),
-            ("documentos", "visor_documental"): (20, "DOCUMENTOS & ARCHIVO > VISOR DOCUMENTAL CON IA", "documentos", "visor_documental"),
-            ("documentos", "diseno_maquetacion"): (32, "DOCUMENTOS & ARCHIVO > DISEÑO Y MAQUETACIÓN", "documentos", "diseno_maquetacion"),
-            ("documentos", "libros_oficiales_aeat"): (21, "DOCUMENTOS & ARCHIVO > LIBROS OFICIALES AEAT", "documentos", "libros_oficiales_aeat"),
+            # ESPACIO DE TRABAJO
+            ("espacio_trabajo", "correo_inteligente"): (22, "ESPACIO DE TRABAJO > ALFONSO MAIL INTELIGENTE", "espacio_trabajo", "correo_inteligente"),
+            ("espacio_trabajo", "agenda_citas"): (23, "ESPACIO DE TRABAJO > AGENDA & CITAS PREVIAS", "espacio_trabajo", "agenda_citas"),
+            ("espacio_trabajo", "archivo_fiscal"): (19, "ESPACIO DE TRABAJO > ARCHIVO DIGITAL", "espacio_trabajo", "archivo_fiscal"),
+            ("espacio_trabajo", "visor_documental"): (20, "ESPACIO DE TRABAJO > VISOR DOCUMENTAL IA", "espacio_trabajo", "visor_documental"),
+            ("espacio_trabajo", "proyectos_sesiones"): (24, "ESPACIO DE TRABAJO > LIBRO DE ACTAS (REGISTRO)", "espacio_trabajo", "proyectos_sesiones"),
 
-            # Asistente & Comunicación
-            ("comunicacion", "correo_inteligente"): (22, "ASISTENTE & COMUNICACIÓN > ALFONSO MAIL INTELIGENTE", "comunicacion", "correo_inteligente"),
-            ("comunicacion", "agenda_citas"): (23, "ASISTENTE & COMUNICACIÓN > AGENDA & CITAS PREVIAS", "comunicacion", "agenda_citas"),
-            ("comunicacion", "proyectos_sesiones"): (24, "ASISTENTE & COMUNICACIÓN > NAVEGADOR DE PROYECTOS", "comunicacion", "proyectos_sesiones"),
-
-            # Auditoría & Asesoría
-            ("cumplimiento", "declaracion_sif"): (25, "AUDITORÍA & ASESORÍA > DECLARACIÓN RESPONSABLE SIF", "cumplimiento", "declaracion_sif"),
-            ("cumplimiento", "auditoria_inmutabilidad"): (26, "AUDITORÍA & ASESORÍA > AUDITORÍA DE INMUTABILIDAD", "cumplimiento", "auditoria_inmutabilidad"),
-            ("cumplimiento", "panel_asesor"): (27, "AUDITORÍA & ASESORÍA > PANEL GESTORÍA & MULTI-INQUILINO", "cumplimiento", "panel_asesor"),
-
-            # Sistema & Configuración
-            ("sistema", "perfil_fiscal"): (28, "SISTEMA & CONFIGURACIÓN > PERFIL FISCAL DEL AUTÓNOMO", "sistema", "perfil_fiscal"),
-            ("sistema", "copias_seguridad"): (29, "SISTEMA & CONFIGURACIÓN > COPIAS DE SEGURIDAD & RESTAURACIÓN", "sistema", "copias_seguridad"),
-            ("sistema", "suscripcion_licencia"): (30, "SISTEMA & CONFIGURACIÓN > SUSCRIPCIÓN & LICENCIA", "sistema", "suscripcion_licencia"),
-            ("sistema", "centro_ayuda"): (31, "SISTEMA & CONFIGURACIÓN > CENTRO DE AYUDA & MANUAL", "sistema", "centro_ayuda"),
-
-            # Productos & Servicios
-            ("productos", "lista_productos"): (33, "PRODUCTOS & SERVICIOS > LISTA DE PRODUCTOS", "productos", "lista_productos"),
-            ("productos", "nuevo_producto"): (34, "PRODUCTOS & SERVICIOS > CREAR NUEVO PRODUCTO", "productos", "nuevo_producto"),
-            ("productos", "gestion_servicios"): (35, "PRODUCTOS & SERVICIOS > GESTIÓN DE SERVICIOS", "productos", "gestion_servicios"),
-
-            # Contactos
-            ("contactos", "lista_contactos"): (36, "CONTACTOS > DIRECTORIO", "contactos", "lista_contactos"),
-            ("contactos", "nuevo_contacto"): (37, "CONTACTOS > CREAR NUEVO CONTACTO", "contactos", "nuevo_contacto"),
-
-            # Contabilidad Financiera
-            ("contabilidad", "gestion_activos"): (38, "CONTABILIDAD FINANCIERA > GESTIÓN DE ACTIVOS", "contabilidad", "gestion_activos"),
-            ("contabilidad", "balance_situacion"): (39, "CONTABILIDAD FINANCIERA > BALANCE DE SITUACIÓN", "contabilidad", "balance_situacion"),
+            # CONFIGURACIÓN Y AUDITORÍA
+            ("configuracion", "perfil_fiscal"): (28, "CONFIGURACIÓN Y AUDITORÍA > PERFIL FISCAL DEL AUTÓNOMO", "configuracion", "perfil_fiscal"),
+            ("configuracion", "suscripcion_licencia"): (30, "CONFIGURACIÓN Y AUDITORÍA > SUSCRIPCIÓN & LICENCIA", "configuracion", "suscripcion_licencia"),
+            ("configuracion", "panel_asesor"): (27, "CONFIGURACIÓN Y AUDITORÍA > PANEL GESTORÍA / ADVISOR", "configuracion", "panel_asesor"),
+            ("configuracion", "verifactu_sif"): (5, "CONFIGURACIÓN Y AUDITORÍA > VERI*FACTU & HUELLA HASH", "configuracion", "verifactu_sif"),
+            ("configuracion", "auditoria_inmutabilidad"): (26, "CONFIGURACIÓN Y AUDITORÍA > AUDITORÍA DE INMUTABILIDAD", "configuracion", "auditoria_inmutabilidad"),
+            ("configuracion", "declaracion_sif"): (25, "CONFIGURACIÓN Y AUDITORÍA > DECLARACIÓN RESPONSABLE SIF", "configuracion", "declaracion_sif"),
+            ("configuracion", "diseno_maquetacion"): (32, "CONFIGURACIÓN Y AUDITORÍA > DISEÑO Y MAQUETACIÓN", "configuracion", "diseno_maquetacion"),
+            ("configuracion", "copias_seguridad"): (29, "CONFIGURACIÓN Y AUDITORÍA > COPIAS DE SEGURIDAD & RESTAURACIÓN", "configuracion", "copias_seguridad"),
+            ("configuracion", "centro_ayuda"): (31, "CONFIGURACIÓN Y AUDITORÍA > CENTRO DE AYUDA & MANUAL", "configuracion", "centro_ayuda"),
+            ("configuracion", "novedades_boe"): (15, "CONFIGURACIÓN Y AUDITORÍA > MONITOR BOE & LEYES", "configuracion", "novedades_boe"),
 
             # Legacy string aliases
             "Dashboard": (0, "PANEL DE CONTROL > RESUMEN EJECUTIVO", "dashboard", "resumen_ejecutivo"),
@@ -2804,6 +2822,8 @@ class AlfonsoHUDDashboard(QMainWindow):
     def reload_calendar_events(self):
         if hasattr(self, 'view_calendar') and hasattr(self.view_calendar, 'load_events'):
             self.view_calendar.load_events()
+        if hasattr(self, 'view_agenda') and hasattr(self.view_agenda, 'load_events'):
+            self.view_agenda.load_events()
 
     def reload_mail_events(self):
         if hasattr(self, 'view_mail') and hasattr(self.view_mail, 'load_emails'):

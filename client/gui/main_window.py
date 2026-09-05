@@ -54,7 +54,7 @@ class AlfonsoHUDDashboard(QMainWindow, AlfonsoStyledWidget):
         ("espacio_trabajo","archivo_fiscal"): 19,
         ("espacio_trabajo","visor_documental"): 20,
         ("espacio_trabajo","proyectos_sesiones"): 24,
-        # CONFIGURACIÓN Y AUDITORÍA
+        # AJUSTES
         ("configuracion","perfil_fiscal"): 28,
         ("configuracion","suscripcion_licencia"): 30,
         ("configuracion","panel_asesor"): 27,
@@ -109,9 +109,7 @@ class AlfonsoHUDDashboard(QMainWindow, AlfonsoStyledWidget):
         body.setContentsMargins(0,0,0,0)
         body.setSpacing(0)
         self.sidebar = AlfonsoSidebarWidget(self)
-        self.sidebar.category_selected.connect(
-            lambda cat, sub, title: self.on_sidebar_category_selected(cat, sub, title)
-        )
+        self.sidebar.category_selected.connect(self.on_sidebar_category_selected)
         self.sidebar.plan_clicked.connect(lambda: self.switch_to_view(("configuracion","suscripcion_licencia")))
         body.addWidget(self.sidebar)
         self.dashboard_panel = AlfonsoDashboardPanel(self)

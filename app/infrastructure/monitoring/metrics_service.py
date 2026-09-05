@@ -17,11 +17,7 @@ class MetricsService:
     @classmethod
     def init_metrics_schema(cls) -> None:
         """Inicializa la tabla de métricas de consumo de LLM."""
-        if cls._db_initialized:
-            return
         with cls._lock:
-            if cls._db_initialized:
-                return
             conn = _get_connection()
             try:
                 conn.execute("""

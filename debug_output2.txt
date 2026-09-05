@@ -1,0 +1,3 @@
+Clicking btn...
+SIGNAL CAUGHT: cat=ingresos_gastos, sub=nueva_factura_b2b, title=Nueva Factura / FacturaE
+btn is_active: True

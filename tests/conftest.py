@@ -56,3 +56,38 @@ def clean_test_databases():
             except Exception:
                 pass
     yield
+@pytest.fixture(autouse=True)
+def reset_db_caches():
+    """
+    Limpia los cachés de inicialización de base de datos antes de cada test.
+    Esto permite que si un test hace DROP TABLE en su teardown/setup,
+    el siguiente test vuelva a ejecutar CREATE TABLE IF NOT EXISTS.
+    """
+    # 1. Reset memory.py _initialized_dbs
+    try:
+        from app.infrastructure.database.memory import memory
+        memory._initialized_dbs.clear()
+    except Exception:
+        pass
+        
+    # 2. Reset module level _db_initialized flags
+    try:
+        from app.infrastructure.database import calendar_db, mail_db
+        calendar_db._db_initialized = False
+        mail_db._db_initialized = False
+    except Exception:
+        pass
+        
+    try:
+        from app.infrastructure.monitoring import metrics_service
+        metrics_service._db_initialized = False
+    except Exception:
+        pass
+        
+    try:
+        from app.infrastructure.security import session_manager
+        session_manager.SessionManager._db_initialized = False
+    except Exception:
+        pass
+    
+    yield

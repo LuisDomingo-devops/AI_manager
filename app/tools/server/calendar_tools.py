@@ -70,6 +70,8 @@ async def calendar_create_event(
             date_str = start_time[:10]
             existing_events = list_events(start_date=date_str, end_date=date_str)
             for ev in existing_events:
+                if str(ev.get("id", "")).startswith("fiscal-"):
+                    continue
                 ev_start = parse_dt(ev.get("start_time"))
                 ev_end = parse_dt(ev.get("end_time"))
                 if ev_start and not ev_end:

@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from app.adapters.memory.memory import _get_connection, _init_db_schema
+from app.adapters.memory.memory import _get_connection, init_all_schemas
 from app.utils.encryption import encryptor
 
 def seed_database():
@@ -8,7 +8,7 @@ def seed_database():
     
     # Asegurar que el esquema existe
     with _get_connection() as conn:
-        _init_db_schema(conn)
+        init_all_schemas(conn)
         cursor = conn.cursor()
         
         # Limpiar facturas existentes para evitar duplicados en la demo

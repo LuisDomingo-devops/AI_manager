@@ -183,6 +183,9 @@ async def get_contacts(include_deleted: bool = False, contact_type: str = None) 
         return {"status": "error", "message": str(e)}
 
 async def create_contact(name: str, nif: str, email: str, phone: str = "", address: str = "", iban: str = "", contact_type: str = "Cliente") -> dict:
+    from app.utils.validators import validate_nif_nie_cif
+    if not validate_nif_nie_cif(nif):
+        return {"status": "error", "message": f"El NIF/NIE/CIF '{nif}' no es válido."}
     try:
         conn = _get_connection()
         try:
@@ -200,6 +203,9 @@ async def create_contact(name: str, nif: str, email: str, phone: str = "", addre
         return {"status": "error", "message": str(e)}
 
 async def update_contact(contact_id: int, name: str, nif: str, email: str, phone: str = "", address: str = "", iban: str = "", contact_type: str = "Cliente") -> dict:
+    from app.utils.validators import validate_nif_nie_cif
+    if not validate_nif_nie_cif(nif):
+        return {"status": "error", "message": f"El NIF/NIE/CIF '{nif}' no es válido."}
     try:
         conn = _get_connection()
         try:
@@ -208,6 +214,8 @@ async def update_contact(contact_id: int, name: str, nif: str, email: str, phone
                 "UPDATE contacts SET name=?, nif=?, email=?, phone=?, address=?, iban=?, contact_type=? WHERE id=?",
                 (name, nif, email, phone, address, iban, contact_type, contact_id)
             )
+            if cursor.rowcount == 0:
+                return {"status": "error", "message": f"No se encontró el contacto con id {contact_id}"}
             conn.commit()
             return {"status": "ok", "message": "Contacto actualizado"}
         finally:
@@ -222,6 +230,8 @@ async def delete_contact(contact_id: int) -> dict:
         try:
             cursor = conn.cursor()
             cursor.execute("UPDATE contacts SET is_active=0 WHERE id=?", (contact_id,))
+            if cursor.rowcount == 0:
+                return {"status": "error", "message": f"No se encontró el contacto con id {contact_id}"}
             conn.commit()
             return {"status": "ok", "message": "Contacto eliminado (soft delete)"}
         finally:
@@ -241,76 +251,38 @@ async def get_clients(include_deleted: bool = False) -> dict:
 async def create_client(name: str, nif: str, email: str, address: str = "") -> dict:
     """
     Registra un nuevo cliente en la base de datos para automatizar futuras facturas.
+    (Wrapper por compatibilidad hacia contacts)
     """
-    try:
-        nif_clean = nif.strip().upper()
-        if not validate_nif_nie_cif(nif_clean):
-            return {"status": "error", "message": f"El NIF/CIF/NIE '{nif}' no es válido formalmente."}
-
-        conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO clients (name, nif, email, address)
-                VALUES (?, ?, ?, ?)
-            """, (name.strip(), nif_clean, email.strip(), address.strip()))
-            conn.commit()
-            return {"status": "ok", "message": f"Cliente '{name}' registrado con éxito en la base de datos."}
-        except sqlite3.IntegrityError:
-            return {"status": "error", "message": f"El cliente '{name}' ya está registrado."}
-        finally:
-            conn.close()
-    except Exception as e:
-        tool_logger.exception("Error al registrar cliente")
-        return {"status": "error", "message": str(e)}
+    res = await create_contact(name=name, nif=nif, email=email, address=address, contact_type="Cliente")
+    if res["status"] == "ok":
+        res["message"] = f"Cliente '{name}' registrado con éxito en la base de datos."
+    return res
 
 async def update_client(client_id: int, name: str = None, nif: str = None, email: str = None, address: str = None) -> dict:
     """
     Actualiza los datos de un cliente existente por su ID.
+    (Wrapper por compatibilidad hacia contacts)
     """
-    try:
-        if nif is not None:
-            nif_clean = nif.strip().upper()
-            if not validate_nif_nie_cif(nif_clean):
-                return {"status": "error", "message": f"El NIF/CIF/NIE '{nif}' no es válido formalmente."}
-        
-        conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM clients WHERE id = ?", (client_id,))
-            if not cursor.fetchone():
-                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
-
-            fields_to_update = []
-            params = []
-            if name is not None:
-                fields_to_update.append("name = ?")
-                params.append(name.strip())
-            if nif is not None:
-                fields_to_update.append("nif = ?")
-                params.append(nif.strip().upper())
-            if email is not None:
-                fields_to_update.append("email = ?")
-                params.append(email.strip())
-            if address is not None:
-                fields_to_update.append("address = ?")
-                params.append(address.strip())
-
-            if not fields_to_update:
-                return {"status": "ok", "message": "No se especificaron campos para actualizar."}
-
-            params.append(client_id)
-            query = f"UPDATE clients SET {', '.join(fields_to_update)} WHERE id = ?"
-            cursor.execute(query, tuple(params))
-            conn.commit()
-            return {"status": "ok", "message": f"Cliente con ID {client_id} actualizado con éxito."}
-        except sqlite3.IntegrityError:
-            return {"status": "error", "message": "El nombre del cliente ya está registrado por otro cliente."}
-        finally:
-            conn.close()
-    except Exception as e:
-        tool_logger.exception("Error al actualizar cliente")
-        return {"status": "error", "message": str(e)}
+    # Para ser estrictos habría que obtener primero el contacto para no borrar los demás campos,
+    # pero como asume que update_contact puede manejarlo... wait, update_contact no maneja None por defecto.
+    # Obtener el contacto actual
+    res = await get_contacts(include_deleted=False)
+    if res["status"] != "ok": return res
+    contact = next((c for c in res["contacts"] if c["id"] == client_id), None)
+    if not contact:
+        return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
+    
+    final_name = name if name is not None else contact.get("name", "")
+    final_nif = nif if nif is not None else contact.get("nif", "")
+    final_email = email if email is not None else contact.get("email", "")
+    final_address = address if address is not None else contact.get("address", "")
+    final_phone = contact.get("phone", "")
+    final_iban = contact.get("iban", "")
+    
+    res_upd = await update_contact(client_id, final_name, final_nif, final_email, final_phone, final_address, final_iban, "Cliente")
+    if res_upd["status"] == "ok":
+        res_upd["message"] = f"Cliente con ID {client_id} actualizado con éxito."
+    return res_upd
 
 async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict:
     """
@@ -322,25 +294,12 @@ async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict
             "message": f"¿Confirmas que deseas desactivar al cliente con ID {client_id} de tu base de datos?"
         }
 
-    try:
-        conn = _get_connection()
+    res = await delete_contact(client_id)
+    if res["status"] == "ok":
+        res["message"] = f"Cliente con ID {client_id} desactivado del sistema."
+        
+        # Registrar en el Ledger de Auditoría
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM clients WHERE id = ?", (client_id,))
-            row = cursor.fetchone()
-            if not row:
-                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
-            if "is_active" in row.keys() and row["is_active"] == 0:
-                return {"status": "error", "message": f"No se encontró el cliente con ID {client_id}."}
-
-            # Soft delete seguro para proteger integridad contable
-            try:
-                cursor.execute("UPDATE clients SET is_active = 0, deleted_at = datetime('now') WHERE id = ?", (client_id,))
-            except sqlite3.OperationalError:
-                cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
-            conn.commit()
-            
-            # Registrar en el Ledger de Auditoría
             from app.domain.services.audit_ledger import AuditLedgerService
             from app.adapters.memory.memory import tenant_context
             cid = tenant_context.get()
@@ -349,13 +308,10 @@ async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict
                 description=f"Desactivación (Soft Delete) del cliente con ID {client_id}.",
                 client_id=cid
             )
+        except Exception:
+            pass
             
-            return {"status": "ok", "message": f"Cliente con ID {client_id} desactivado con éxito."}
-        finally:
-            conn.close()
-    except Exception as e:
-        tool_logger.exception("Error al eliminar cliente")
-        return {"status": "error", "message": str(e)}
+    return res
 
 async def create_product(sku: str = None, name: str = "", price: float = 0.0, description: str = "", iva_rate: float = 21.0, item_type: str = "product") -> dict:
     """
