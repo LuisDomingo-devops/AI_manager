@@ -215,3 +215,123 @@ class InvoiceRepository:
             return None
         finally:
             conn.close()
+
+    @staticmethod
+    def generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:
+        if rect_id:
+            return rect_id
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT invoice_id FROM invoices")
+            rows = cursor.fetchall()
+            count = 0
+            prefix = "R-BORRADOR-2026-" if is_draft else "R-2026-"
+            for r in rows:
+                try:
+                    dec_id = encryptor.decrypt(r["invoice_id"])
+                    if dec_id.startswith(prefix):
+                        count += 1
+                except Exception:
+                    pass
+            return f"{prefix}{count + 101:03d}"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def generate_unique_invoice_id(is_draft: bool, invoice_id: str) -> str:
+        if is_draft:
+            if not invoice_id or not invoice_id.startswith("BORRADOR-"):
+                conn = _get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT invoice_id FROM invoices")
+                    rows = cursor.fetchall()
+                    draft_count = 0
+                    for r in rows:
+                        try:
+                            dec_id = encryptor.decrypt(r["invoice_id"])
+                            if dec_id.startswith("BORRADOR-"):
+                                draft_count += 1
+                        except Exception:
+                            pass
+                    invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
+                finally:
+                    conn.close()
+        else:
+            if not invoice_id or invoice_id.startswith("BORRADOR-"):
+                conn = _get_connection()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT invoice_id FROM invoices")
+                    rows = cursor.fetchall()
+                    firm_count = 0
+                    for r in rows:
+                        try:
+                            dec_id = encryptor.decrypt(r["invoice_id"])
+                            if dec_id.startswith("F-"):
+                                firm_count += 1
+                        except Exception:
+                            pass
+                    invoice_id = f"F-2026-{firm_count + 101:03d}"
+                finally:
+                    conn.close()
+        return invoice_id
+
+    @staticmethod
+    def get_invoice_file_path(invoice_id: str) -> Optional[str]:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT invoice_id, file_path FROM invoices")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_id = encryptor.decrypt(r["invoice_id"])
+                    if dec_id.upper() == invoice_id.upper():
+                        return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
+                except Exception:
+                    pass
+            return None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def update_invoice_status(db_id: int, status: str, conn=None):
+        local_conn = conn or _get_connection()
+        try:
+            cursor = local_conn.cursor()
+            cursor.execute("UPDATE invoices SET status = ? WHERE id = ?", (status, db_id))
+            if not conn:
+                local_conn.commit()
+        finally:
+            if not conn:
+                local_conn.close()
+
+    @staticmethod
+    def get_pending_invoices() -> list:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept, date FROM invoices")
+            rows = cursor.fetchall()
+            invoices = []
+            for r in rows:
+                if r["status"] == "cobrada":
+                    continue
+                try:
+                    invoices.append({
+                        "db_id": r["id"],
+                        "invoice_id": encryptor.decrypt(r["invoice_id"]),
+                        "receiver_name": encryptor.decrypt(r["receiver_name"]),
+                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
+                        "status": r["status"],
+                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                        "date": encryptor.decrypt(r["date"]) if r["date"] else ""
+                    })
+                except Exception:
+                    pass
+            return invoices
+        finally:
+            conn.close()

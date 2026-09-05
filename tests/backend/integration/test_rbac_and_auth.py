@@ -144,8 +144,9 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
 
 def test_sqlite_memory_isolation(tmp_path, monkeypatch):
     memory_module = sys.modules["app.infrastructure.database.memory.memory"]
+    connection_manager = sys.modules["app.infrastructure.database.connection_manager"]
     db_path = tmp_path / "test_rbac_memory.db"
-    monkeypatch.setattr(memory_module, "DB_PATH", db_path)
+    monkeypatch.setattr(connection_manager, "DB_PATH", db_path)
     memory_module._db_initialized = False
     
     mem = SessionMemory(max_messages=10)

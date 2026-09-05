@@ -367,7 +367,7 @@ TEXTO DE LA FACTURA:
         y dispara el evento correspondiente de forma asíncrona.
         """
         from app.domain.schemas import InvoiceSchema
-        from app.domain.services.invoice_repository import InvoiceRepository
+        from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
         from app.core.events import event_bus
         
         # Validar y normalizar datos contables mediante Pydantic

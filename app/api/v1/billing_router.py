@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
 from app.api.routes import verify_api_key
-from app.domain.services.invoice_repository import InvoiceRepository
+from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
 from app.domain.services.b2b_einvoice_service import B2BEInvoiceService
 from app.tools.server.billing_tools import (
     generate_invoice_pdf,

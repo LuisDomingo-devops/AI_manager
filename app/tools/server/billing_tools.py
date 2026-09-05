@@ -12,7 +12,7 @@ from app.utils.encryption import encryptor
 from app.domain.services.ledger_service import LedgerService
 from app.domain.services.excel_sync import ExcelSyncService
 from app.domain.services.verifactu_service import VerifactuService
-from app.domain.services.invoice_repository import InvoiceRepository
+from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
 from app.core.events import event_bus
 from app.utils.logger import tool_logger
 from app.utils.validators import validate_nif_nie_cif
@@ -959,65 +959,13 @@ async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = Fals
 
 
 def _generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:
-    if rect_id:
-        return rect_id
-    conn = _get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT invoice_id FROM invoices")
-        rows = cursor.fetchall()
-        count = 0
-        prefix = "R-BORRADOR-2026-" if is_draft else "R-2026-"
-        for r in rows:
-            try:
-                dec_id = encryptor.decrypt(r["invoice_id"])
-                if dec_id.startswith(prefix):
-                    count += 1
-            except Exception:
-                pass
-        return f"{prefix}{count + 101:03d}"
-    finally:
-        conn.close()
+    from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+    return InvoiceRepository.generate_unique_rectificativa_id(is_draft, rect_id)
 
 
 def _generate_unique_invoice_id(is_draft: bool, invoice_id: str) -> str:
-    if is_draft:
-        if not invoice_id or not invoice_id.startswith("BORRADOR-"):
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT invoice_id FROM invoices")
-                rows = cursor.fetchall()
-                draft_count = 0
-                for r in rows:
-                    try:
-                        dec_id = encryptor.decrypt(r["invoice_id"])
-                        if dec_id.startswith("BORRADOR-"):
-                            draft_count += 1
-                    except Exception:
-                        pass
-                invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
-            finally:
-                conn.close()
-    else:
-        if not invoice_id or invoice_id.startswith("BORRADOR-"):
-            conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT invoice_id FROM invoices")
-                rows = cursor.fetchall()
-                firm_count = 0
-                for r in rows:
-                    try:
-                        dec_id = encryptor.decrypt(r["invoice_id"])
-                        if dec_id.startswith("F-"):
-                            firm_count += 1
-                    except Exception:
-                        pass
-                invoice_id = f"F-2026-{firm_count + 101:03d}"
-            finally:
-                conn.close()
-    return invoice_id
+    from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+    return InvoiceRepository.generate_unique_invoice_id(is_draft, invoice_id)
 
 
 async def generate_invoice_pdf(
@@ -1438,6 +1386,21 @@ async def cancel_invoice(invoice_id: str) -> dict:
         tool_logger.exception("Error al anular la factura")
         return {"status": "error", "message": str(e)}
 
+async def get_invoice_file(invoice_id: str) -> dict:
+    """
+    Retorna la ruta del archivo PDF de una factura.
+    """
+    try:
+        from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+        file_path = InvoiceRepository.get_invoice_file_path(invoice_id)
+        if file_path:
+            return {"status": "ok", "file_path": file_path}
+        else:
+            return {"status": "error", "message": f"Factura {invoice_id} no encontrada o sin archivo."}
+    except Exception as e:
+        tool_logger.exception("Error al buscar archivo de factura")
+        return {"status": "error", "message": str(e)}
+
 async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
     """
     Envía por correo electrónico la factura generada a la dirección de email especificada.
@@ -1446,22 +1409,10 @@ async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
         from app.tools.server.mail_tools import mail_send_email
         
         # Buscar la ruta de la factura en DB
-        conn = _get_connection()
-        pdf_path_str = None
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT file_path FROM invoices")
-            rows = cursor.fetchall()
-            for r in rows:
-                p_dec = encryptor.decrypt(r["file_path"])
-                if invoice_id in p_dec:
-                    pdf_path_str = p_dec
-                    break
-        finally:
-            conn.close()
-            
-        if not pdf_path_str:
-            return {"status": "error", "message": f"No se encontró el archivo físico de la factura {invoice_id} en la base de datos."}
+        pdf_res = await get_invoice_file(invoice_id)
+        if pdf_res["status"] == "error":
+            return pdf_res
+        pdf_path_str = pdf_res["file_path"]
 
         # Obtener emisor_name dinámico
         emisor_name = "LUIS DOMINGO"
@@ -1750,8 +1701,11 @@ async def register_payment(invoice_id: str, amount: float, payment_method: str =
             # Si el pago actual completa la factura, actualizar su estado a 'cobrada'
             new_total_paid = round(total_paid_before + amount, 2)
             new_pending = round(total_amount - new_total_paid, 2)
-            if new_pending <= 0.0:
-                cursor.execute("UPDATE invoices SET status = 'cobrada' WHERE id = ?", (inv["db_id"],))
+            
+            # Actualizar estado de la factura a 'cobrada' de forma optimista
+            if not inv.get("status") == "cobrada":
+                if new_pending <= 0.0:
+                    InvoiceRepository.update_invoice_status(inv["db_id"], "cobrada", conn=conn)
                 
             conn.commit()
         finally:
@@ -1828,33 +1782,14 @@ async def get_invoice_payment_summary(invoice_id: str) -> dict:
         tool_logger.exception("Error al obtener resumen de pagos")
         return {"status": "error", "message": str(e)}
 
+
 async def get_pending_payments_report() -> dict:
     """
     Genera un listado consolidado de todas las facturas que tienen un saldo pendiente de cobro.
     """
     try:
-        conn = _get_connection()
-        invoices = []
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept, date FROM invoices")
-            rows = cursor.fetchall()
-            for r in rows:
-                try:
-                    invoices.append({
-                        "db_id": r["id"],
-                        "invoice_id": encryptor.decrypt(r["invoice_id"]),
-                        "receiver_name": encryptor.decrypt(r["receiver_name"]),
-                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
-                        "total_amount": float(encryptor.decrypt(r["total_amount"])),
-                        "status": r["status"],
-                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
-                        "date": encryptor.decrypt(r["date"])
-                    })
-                except Exception:
-                    pass
-        finally:
-            conn.close()
+        from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+        invoices = InvoiceRepository.get_pending_invoices()
 
         conn = _get_connection()
         pending_report = []
@@ -2300,7 +2235,7 @@ async def export_einvoice_tool(invoice_id: str, format_type: str = "ubl") -> dic
     - 'facturae': Estándar español Facturae v3.2.2 firmado digitalmente
     """
     try:
-        from app.domain.services.invoice_repository import InvoiceRepository
+        from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
         from app.domain.services.b2b_einvoice_service import B2BEInvoiceService
         
         inv = InvoiceRepository.find_invoice_by_id(invoice_id)

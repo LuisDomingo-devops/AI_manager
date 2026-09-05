@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
 from app.domain.services.ledger_service import LedgerService
-from app.domain.services.invoice_repository import InvoiceRepository
+from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
 from app.tools.server.billing_tools import (
     generate_invoice_pdf,
     get_profit_and_loss_report,

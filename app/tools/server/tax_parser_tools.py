@@ -41,7 +41,7 @@ async def parse_invoice(file_path: str) -> dict:
                 already_existed = True
                 message = f"La factura ya estaba registrada en el sistema. {str(ve)}"
                 try:
-                    from app.domain.services.invoice_repository import InvoiceRepository
+                    from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
                     existing_invoice = InvoiceRepository.find_invoice_by_id(data.get("invoice_id", ""))
                     if existing_invoice and existing_invoice.get("invoice_id") != "[CORRUPTED_DATA]":
                         invoice_db_id = existing_invoice.get("db_id")

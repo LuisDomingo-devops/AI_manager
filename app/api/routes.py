@@ -390,16 +390,16 @@ class MetadataPatch(BaseModel):
     is_persistent: Optional[bool] = None
 
 @router.get("/conversations", dependencies=[Depends(verify_api_key)])
-async def get_conversations():
+async def get_conversations(client_id: str = Depends(verify_api_key)):
     from app.adapters.memory.memory import memory
-    convs = memory.list_persistent_conversations()
+    convs = memory.list_persistent_conversations(client_id=client_id)
     return {"conversations": convs, "count": len(convs)}
 
 
 @router.patch("/conversations/{session_id}", dependencies=[Depends(verify_api_key)])
-async def patch_conversation(session_id: str, payload: MetadataPatch):
+async def patch_conversation(session_id: str, payload: MetadataPatch, client_id: str = Depends(verify_api_key)):
     from app.adapters.memory.memory import memory
-    existing = memory.get_metadata(session_id)
+    existing = memory.get_metadata(session_id, client_id=client_id)
     if not existing:
         # Si no existe metadato aún, creamos uno base
         title = payload.title or "Nueva conversación"
@@ -412,15 +412,15 @@ async def patch_conversation(session_id: str, payload: MetadataPatch):
         project_name = payload.project_name if payload.project_name is not None else existing["project_name"]
         is_persistent = payload.is_persistent if payload.is_persistent is not None else existing["is_persistent"]
 
-    memory.upsert_metadata(session_id, title, discipline, project_name, is_persistent)
+    memory.upsert_metadata(session_id, title, discipline, project_name, is_persistent, client_id=client_id)
     return {"status": "ok", "session_id": session_id}
 
 
 @router.get("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
-async def get_memory(session_id: str):
+async def get_memory(session_id: str, client_id: str = Depends(verify_api_key)):
     from app.adapters.memory.memory import memory
-    history = memory.get_history(session_id)
-    metadata = memory.get_metadata(session_id)
+    history = memory.get_history(session_id, client_id=client_id)
+    metadata = memory.get_metadata(session_id, client_id=client_id)
     return {
         "session_id": session_id,
         "metadata": metadata,
@@ -430,20 +430,21 @@ async def get_memory(session_id: str):
 
 
 @router.delete("/memory/{session_id}", dependencies=[Depends(verify_api_key)])
-async def clear_memory(session_id: str):
+async def clear_memory(session_id: str, client_id: str = Depends(verify_api_key)):
     from app.adapters.memory.memory import memory
-    memory.clear(session_id)
+    memory.clear(session_id, client_id=client_id)
     # También limpiar metadatos al borrar memoria
-    with sqlite3.connect(str(DB_PATH), check_same_thread=False) as conn:
+    from app.adapters.memory.memory import _get_connection
+    with _get_connection(client_id) as conn:
         conn.execute("DELETE FROM conversation_metadata WHERE session_id = ?", (session_id,))
         conn.commit()
     return {"status": "ok", "session_id": session_id, "message": "Historial borrado"}
 
 
 @router.get("/memory", dependencies=[Depends(verify_api_key)])
-async def list_sessions():
+async def list_sessions(client_id: str = Depends(verify_api_key)):
     from app.adapters.memory.memory import memory
-    sessions = memory.list_sessions()
+    sessions = memory.list_sessions(client_id=client_id)
     return {"sessions": sessions, "count": len(sessions)}
 
 

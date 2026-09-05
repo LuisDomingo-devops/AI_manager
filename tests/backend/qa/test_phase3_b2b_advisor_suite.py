@@ -4,7 +4,7 @@ from lxml import etree
 
 from app.domain.services.b2b_einvoice_service import B2BEInvoiceService
 from app.domain.services.ledger_service import LedgerService
-from app.domain.services.invoice_repository import InvoiceRepository
+from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
 from app.tools.server.billing_tools import (
     generate_invoice_pdf,
     export_einvoice_tool,
