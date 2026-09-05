@@ -224,7 +224,7 @@ class TaxParserService:
         import asyncio
         from datetime import datetime
         from app.utils.anonymizer import DataAnonymizer
-        from app.infrastructure.adapters.llm_client import OllamaClient
+        from app.infrastructure.adapters.llm_client import GeminiClient
         from app.domain.services.tax_engine import TaxEngine
         
         if not user_nif:
@@ -273,7 +273,7 @@ Si encuentras un token [IMPORTE_X], devuélvelo como string y ya lo transformare
 TEXTO DE LA FACTURA:
 {anon_text}
 """
-        client = OllamaClient()
+        client = GeminiClient()
         try:
             # Ejecutar el coroutine en un hilo nuevo para evitar el RuntimeError de asyncio
             import concurrent.futures

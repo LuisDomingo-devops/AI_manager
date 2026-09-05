@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import router
-from app.adapters.llm_client import OllamaClient, get_system_prompt
+from app.adapters.llm_client import GeminiClient, get_system_prompt
 from app.adapters.metrics import increment_http_errors, increment_http_requests, record_http_latency
 from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.adapters.alfonso_bridge import bridge as alfonso_bridge
@@ -48,7 +48,7 @@ from app.domain.services.excel_sync import ExcelSyncService
 # Instancias globales
 # ---------------------------------------------------------------------------
 
-llm = OllamaClient()
+llm = GeminiClient()
 planner_orchestrator = PlannerOrchestrator()
 _bg_security_task = None
 _bg_mail_task = None

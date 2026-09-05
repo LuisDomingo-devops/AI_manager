@@ -25,8 +25,6 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     ENV: str = "development"
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    MODEL_NAME: str = "qwen2.5:1.5b"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL_NAME: str = "gemini-3.1-flash-lite"
     GEMINI_API_VERSION: str = "v1beta"

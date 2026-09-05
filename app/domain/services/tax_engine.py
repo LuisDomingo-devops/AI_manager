@@ -180,7 +180,7 @@ class TaxEngine:
         Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones.
         """
         import asyncio
-        from app.infrastructure.adapters.llm_client import OllamaClient
+        from app.infrastructure.adapters.llm_client import GeminiClient
         
         territory = TaxTerritoryFactory.get_current_territory()
         supported_rates = territory.get_supported_iva_rates()
@@ -195,7 +195,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
 TEXTO:
 {text[:2000]}
 """
-        client = OllamaClient()
+        client = GeminiClient()
         try:
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:

@@ -487,8 +487,8 @@ class PlannerOrchestrator:
     def llm(self):
         if self._llm is not None:
             return self._llm
-        from app.adapters.llm_client import OllamaClient
-        return OllamaClient()
+        from app.adapters.llm_client import GeminiClient
+        return GeminiClient()
 
     @property
     def memory(self):

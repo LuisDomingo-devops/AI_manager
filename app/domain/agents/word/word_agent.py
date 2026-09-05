@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from app.adapters.llm_client import OllamaClient
+from app.adapters.llm_client import GeminiClient
 from app.domain.services.ledger_service import LedgerService
 from app.utils.logger import orchestrator_logger
 from app.utils.paths import get_client_desktop
@@ -11,7 +11,7 @@ class WordAgent:
     financieros formales y los guarda como documentos Word (.docx).
     """
     def __init__(self):
-        self.llm = OllamaClient()
+        self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/word_system.txt")
         self._load_prompt()
 

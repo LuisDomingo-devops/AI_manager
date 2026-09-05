@@ -33,7 +33,7 @@ from unittest.mock import patch
 
 def test_resolve_rates():
     # Detects from text (mocking LLM)
-    with patch("app.infrastructure.adapters.llm_client.OllamaClient.generate") as mock_generate:
+    with patch("app.infrastructure.adapters.llm_client.GeminiClient.generate") as mock_generate:
         import asyncio
         async def mock_async_gen(*args, **kwargs):
             return '{"iva_rate": 10.0, "irpf_rate": 15.0}'
@@ -44,7 +44,7 @@ def test_resolve_rates():
         assert irpf == 15.0
 
     # Fallbacks to rules -> No longer injects 21% blindly!
-    with patch("app.infrastructure.adapters.llm_client.OllamaClient.generate") as mock_generate:
+    with patch("app.infrastructure.adapters.llm_client.GeminiClient.generate") as mock_generate:
         async def mock_async_gen_none(*args, **kwargs):
             return '{"iva_rate": null, "irpf_rate": null}'
         mock_generate.side_effect = mock_async_gen_none

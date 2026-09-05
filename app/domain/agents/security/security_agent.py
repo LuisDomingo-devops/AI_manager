@@ -19,7 +19,7 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Set, Optional
 
-from app.adapters.llm_client import OllamaClient
+from app.adapters.llm_client import GeminiClient
 from app.utils.logger import build_logger, orchestrator_logger
 
 # Logger exclusivo de seguridad
@@ -27,7 +27,7 @@ cyber_logger = build_logger("cybersecurity", "cybersecurity.log", log_to_console
 
 class CyberSecurityAgent:
     def __init__(self):
-        self.llm = OllamaClient()
+        self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/security_system.txt")
         self.system_prompt = ""
         self._load_prompt()

@@ -8,7 +8,7 @@ Encapsula el conocimiento jurídico (Constitución Española, Código Civil, Có
 Cuando el PlannerOrchestrator identifica una consulta de carácter legal o cuando se solicita un borrador inteligente para responder a un correo electrónico.
 
 ¿CÓMO LO HACE?
-Realiza búsquedas semánticas en la base de datos ChromaDB mediante vector_memory.query_legal para recuperar artículos relevantes, inyecta este contexto legislativo en OllamaClient y genera la respuesta formal y precisa.
+Realiza búsquedas semánticas en la base de datos ChromaDB mediante vector_memory.query_legal para recuperar artículos relevantes, inyecta este contexto legislativo en GeminiClient y genera la respuesta formal y precisa.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/domain/planner_orchestrator.py: Delega consultas legales a este agente.
@@ -20,7 +20,7 @@ Realiza búsquedas semánticas en la base de datos ChromaDB mediante vector_memo
 import os
 from pathlib import Path
 from app.adapters.memory.vector_memory import vector_memory
-from app.adapters.llm_client import OllamaClient
+from app.adapters.llm_client import GeminiClient
 from app.utils.logger import orchestrator_logger
 
 class MarcosAgent:
@@ -30,7 +30,7 @@ class MarcosAgent:
     legales utilizando ChromaDB y LLM.
     """
     def __init__(self):
-        self.llm = OllamaClient()
+        self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/marcos_system.txt")
         self._load_prompt()
 

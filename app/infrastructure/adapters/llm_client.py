@@ -1,14 +1,14 @@
 """
-LLM CLIENT — Cliente del modelo de lenguaje (Ollama).
+LLM CLIENT — Cliente del modelo de lenguaje (Gemini).
 
 ¿QUÉ HACE?
-Gestiona la comunicación con el servidor Ollama local para generar texto, completar chats, estructurar JSON y precalentar el modelo.
+Gestiona la comunicación con el servidor Gemini local para generar texto, completar chats, estructurar JSON y precalentar el modelo.
 
 ¿CUÁNDO LO HACE?
 Siempre que el orquestador, router o agentes requieran capacidades cognitivas de inferencia del LLM.
 
 ¿CÓMO LO HACE?
-Formateando payloads HTTP compatibles con la API `/api/chat` de Ollama y llamándolos con app/adapters/http_client.py.
+Formateando payloads HTTP compatibles con la API `/api/chat` de Gemini y llamándolos con app/adapters/http_client.py.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/adapters/http_client.py (provee el cliente HTTP subyacente para las peticiones)
@@ -267,7 +267,7 @@ def extract_json_robust(raw: str) -> dict | None:
 
 from app.domain.ports.llm_port import LLMPort
 
-class OllamaClient(LLMPort):
+class GeminiClient(LLMPort):
 
     async def _call_gemini_api(self, messages: list[dict[str, str]], system_prompt: str | None = None, temperature: float = 0.7) -> tuple[str, int, int]:
         """Llamada directa mediante HTTP a la API oficial de Gemini 1.5 Flash."""
@@ -353,7 +353,7 @@ class OllamaClient(LLMPort):
         import time
         start_time = time.perf_counter()
         p_tok, c_tok = 0, 0
-        model_name = settings.MODEL_NAME
+        model_name = settings.GEMINI_MODEL_NAME
 
         # Si hay GEMINI_API_KEY o GEMINI_PROXY_URL configurada, usar Gemini
         if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
@@ -363,7 +363,7 @@ class OllamaClient(LLMPort):
             model_name = settings.GEMINI_MODEL_NAME
         else:
             payload = {
-                "model": settings.MODEL_NAME,
+                "model": settings.GEMINI_MODEL_NAME,
                 "messages": anonymized_messages,
                 "stream": False,
                 "keep_alive": -1,
@@ -460,7 +460,7 @@ class OllamaClient(LLMPort):
             options_payload.update(options)
 
         payload = {
-            "model": settings.MODEL_NAME,
+            "model": settings.GEMINI_MODEL_NAME,
             "messages": messages,
             "stream": False,
             "keep_alive": -1,
@@ -474,64 +474,22 @@ class OllamaClient(LLMPort):
                 if tool_schemas:
                     payload["tools"] = tool_schemas
             except Exception as e:
-                logger.warning("No se pudieron cargar los esquemas de herramientas para Ollama: %s", e)
+                logger.warning("No se pudieron cargar los esquemas de herramientas para Gemini: %s", e)
 
-        logger.info("MODEL=%s MODE=%s", settings.MODEL_NAME, mode)
+        logger.info("MODEL=%s MODE=%s", settings.GEMINI_MODEL_NAME, mode)
 
         import time
         start_time = time.perf_counter()
         p_tok, c_tok = 0, 0
-        model_name = settings.MODEL_NAME
+        model_name = settings.GEMINI_MODEL_NAME
 
         try:
-            if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
-                logger.info("Utilizando la API de Gemini para generar (en la nube)")
-                content, p_tok, c_tok = await self._call_gemini_api(messages, temperature=options_payload["temperature"])
-                model_name = settings.GEMINI_MODEL_NAME
-            else:
-                response = await client.post(
-                    f"{settings.OLLAMA_BASE_URL}/api/chat",
-                    json=payload,
-                )
-
-                if response.status_code != 200:
-                    raise RuntimeError(response.text)
-
-                data = response.json()
-                p_tok = data.get("prompt_eval_count", 0)
-                c_tok = data.get("eval_count", 0)
+            if not (settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL):
+                raise RuntimeError("GEMINI_API_KEY o GEMINI_PROXY_URL no están configurados.")
                 
-                # Verificar si Ollama devolvió llamadas de herramientas nativas
-                tool_calls = data.get("message", {}).get("tool_calls", [])
-                if tool_calls:
-                    first_call = tool_calls[0].get("function", {})
-                    t_name = first_call.get("name")
-                    t_args = first_call.get("arguments", {})
-                    logger.info("Llamada de herramienta nativa detectada: %s con args: %s", t_name, t_args)
-                    res_str = json.dumps({"tool": t_name, "args": t_args})
-                    if anonymizer:
-                        res_str = anonymizer.detokenize(res_str, mapping)
-                        
-                    # Log metrics
-                    latency_ms = int((time.perf_counter() - start_time) * 1000)
-                    try:
-                        from app.infrastructure.monitoring.metrics_service import MetricsService
-                        from app.adapters.memory.memory import tenant_context
-                        cid = tenant_context.get()
-                        MetricsService.log_llm_metrics(
-                            client_id=cid,
-                            model_name=model_name,
-                            prompt_tokens=p_tok,
-                            completion_tokens=c_tok,
-                            latency_ms=latency_ms,
-                            request_id=request_id
-                        )
-                    except Exception as ex:
-                        logger.warning("Error al registrar métricas de LLM en generate (tools): %s", ex)
-                        
-                    return res_str
-
-                content = data.get("message", {}).get("content", "").strip()
+            logger.info("Utilizando la API de Gemini para generar (en la nube)")
+            content, p_tok, c_tok = await self._call_gemini_api(messages, temperature=options_payload["temperature"])
+            model_name = settings.GEMINI_MODEL_NAME
 
             if not content:
                 raise ValueError("Empty response")

@@ -1,60 +1,10 @@
-import pytest
-from unittest.mock import patch
-from app.config import settings
-from app.domain.services.tax_territory_factory import TaxTerritoryFactory
-from app.domain.services.tax_engine import TaxEngine
-from app.infrastructure.tax_territories.common_territory import CommonTerritoryAdapter
-from app.infrastructure.tax_territories.canarias_territory import CanariasTerritoryAdapter
-from app.infrastructure.tax_territories.navarra_territory import NavarraTerritoryAdapter
-from app.infrastructure.tax_territories.pais_vasco_territory import PaisVascoTerritoryAdapter
+import re
 
+path = r'c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\backend\integration\test_tax_multiterritory.py'
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
 
-def test_territory_adapters_integrity():
-    # 1. Común
-    common = CommonTerritoryAdapter()
-    assert "comun" in common.calculate_tax_dues(100.0, 50.0)["territory"]
-    assert 21.0 in common.get_supported_iva_rates()
-    
-    # 2. Canarias
-    canarias = CanariasTerritoryAdapter()
-    assert "canarias" in canarias.calculate_tax_dues(100.0, 50.0)["territory"]
-    assert 7.0 in canarias.get_supported_iva_rates()
-    assert 21.0 not in canarias.get_supported_iva_rates()
-
-    # 3. Navarra
-    navarra = NavarraTerritoryAdapter()
-    assert "navarra" in navarra.calculate_tax_dues(100.0, 50.0)["territory"]
-    
-    # 4. País Vasco
-    vasco = PaisVascoTerritoryAdapter()
-    assert "pais_vasco" in vasco.calculate_tax_dues(100.0, 50.0)["territory"]
-
-
-def test_tax_territory_factory_resolution():
-    # Limpiar caché de la factoría para el test
-    TaxTerritoryFactory._cached_adapters.clear()
-    
-    with patch.object(settings, "FISCAL_TERRITORY", "comun"):
-        adapter = TaxTerritoryFactory.get_current_territory()
-        assert isinstance(adapter, CommonTerritoryAdapter)
-
-    TaxTerritoryFactory._cached_adapters.clear()
-    with patch.object(settings, "FISCAL_TERRITORY", "canarias"):
-        adapter = TaxTerritoryFactory.get_current_territory()
-        assert isinstance(adapter, CanariasTerritoryAdapter)
-
-    TaxTerritoryFactory._cached_adapters.clear()
-    with patch.object(settings, "FISCAL_TERRITORY", "navarra"):
-        adapter = TaxTerritoryFactory.get_current_territory()
-        assert isinstance(adapter, NavarraTerritoryAdapter)
-
-    TaxTerritoryFactory._cached_adapters.clear()
-    with patch.object(settings, "FISCAL_TERRITORY", "pais_vasco"):
-        adapter = TaxTerritoryFactory.get_current_territory()
-        assert isinstance(adapter, PaisVascoTerritoryAdapter)
-
-
-def test_tax_engine_ocr_resolution_multiterritory():
+new_test = '''def test_tax_engine_ocr_resolution_multiterritory():
     # 1. Caso Régimen Común
     TaxTerritoryFactory._cached_adapters.clear()
     
@@ -105,3 +55,9 @@ def test_tax_engine_ocr_resolution_multiterritory():
             res_navarra_ok = TaxEngine.resolve_rates_with_confidence("Factura con IVA foral 4%")
             assert res_navarra_ok["iva_rate"] == 4.0
             assert res_navarra_ok["requires_manual_confirmation"] is False
+'''
+
+content = re.sub(r'def test_tax_engine_ocr_resolution_multiterritory\(\):.*', new_test, content, flags=re.DOTALL)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)

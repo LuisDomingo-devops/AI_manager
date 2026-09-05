@@ -7,7 +7,7 @@ from app.config import settings
 from app.adapters.memory.memory import _get_connection, DB_PATH
 from app.domain.services.tax_parser_service import TaxParserService, extract_text_from_file
 from app.tools.server.tax_parser_tools import parse_invoice, parse_tax_model, get_quarterly_aggregates
-from app.infrastructure.adapters.llm_client import OllamaClient
+from app.infrastructure.adapters.llm_client import GeminiClient
 import json
 
 @pytest.fixture(autouse=True)
@@ -36,7 +36,7 @@ def mock_llm_generate(monkeypatch):
             })
         return "{}"
     
-    monkeypatch.setattr(OllamaClient, "generate", dummy_generate)
+    monkeypatch.setattr(GeminiClient, "generate", dummy_generate)
 
 @pytest.fixture(autouse=True)
 def clean_db():
