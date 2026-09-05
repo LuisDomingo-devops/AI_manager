@@ -142,11 +142,8 @@ class GoCardlessProvider(BaseBankProvider):
 
     def confirm_auth(self, requisition_id: str, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
         secret_id, secret_key = self._resolve_credentials(credentials_dict)
-        if not secret_id or not secret_key or secret_id.startswith("mock_") or requisition_id.startswith("req_gocardless"):
-            return {
-                "status": "success",
-                "accounts": ["acc_gocardless_bbva_999"]
-            }
+        if not secret_id or not secret_key:
+            raise ValueError("Credenciales de GoCardless no configuradas. No se admiten simulaciones en entorno real.")
             
         try:
             import httpx
@@ -171,21 +168,8 @@ class GoCardlessProvider(BaseBankProvider):
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
         secret_id, secret_key = self._resolve_credentials(credentials_dict)
         
-        if not secret_id or not secret_key or secret_id.startswith("mock_") or account_id.startswith("acc_gocardless"):
-            return [
-                {
-                    "date": "05/08/2026",
-                    "concept": "Pago factura IBER-9812-401 Iberdrola",
-                    "amount": -68.42,
-                    "reference": "REF9812401"
-                },
-                {
-                    "date": "06/08/2026",
-                    "concept": "Cobro servicio consultoria Alfonso",
-                    "amount": 1500.00,
-                    "reference": "FAC-2026-001"
-                }
-            ]
+        if not secret_id or not secret_key:
+            raise ValueError("Credenciales de GoCardless no configuradas. No se admiten simulaciones en entorno real.")
             
         try:
             import httpx

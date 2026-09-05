@@ -37,6 +37,9 @@ class InvoiceSchema(BaseModel):
     category: Literal["ingreso", "gasto", "income", "expense"] = Field(..., description="Categoría contable")
     quarter: int = Field(..., ge=1, le=4, description="Trimestre contable (1-4)")
     year: int = Field(..., ge=2000, le=2100, description="Año contable")
+    status: Optional[str] = Field(default="pending", description="Estado de la factura")
+    tax_engine_version: Optional[str] = Field(default=None, description="Versión del motor fiscal")
+    requires_manual_confirmation: Optional[bool] = Field(default=False, description="Requiere revisión manual")
 
     @field_validator("date")
     @classmethod

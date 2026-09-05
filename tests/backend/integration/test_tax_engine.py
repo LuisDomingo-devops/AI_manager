@@ -29,17 +29,30 @@ def test_resolve_dates():
     assert year is not None
     assert quarter is not None
 
-def test_resolve_rates():
-    # Detects from text
-    iva, irpf = TaxEngine.resolve_rates("Factura con IVA del 10% e IRPF de -15% de retención")
-    assert iva == 10.0
-    assert irpf == 15.0
+from unittest.mock import patch
 
-    # Fallbacks to rules
-    rules = TaxEngine.load_rules()
-    iva, irpf = TaxEngine.resolve_rates("Factura sin mención a tasas")
-    assert iva == rules.get("iva_general_rate", 21.0)
-    assert irpf == 0.0
+def test_resolve_rates():
+    # Detects from text (mocking LLM)
+    with patch("app.infrastructure.adapters.llm_client.OllamaClient.generate") as mock_generate:
+        import asyncio
+        async def mock_async_gen(*args, **kwargs):
+            return '{"iva_rate": 10.0, "irpf_rate": 15.0}'
+        mock_generate.side_effect = mock_async_gen
+
+        iva, irpf = TaxEngine.resolve_rates("Factura con IVA del 10% e IRPF de -15% de retención")
+        assert iva == 10.0
+        assert irpf == 15.0
+
+    # Fallbacks to rules -> No longer injects 21% blindly!
+    with patch("app.infrastructure.adapters.llm_client.OllamaClient.generate") as mock_generate:
+        async def mock_async_gen_none(*args, **kwargs):
+            return '{"iva_rate": null, "irpf_rate": null}'
+        mock_generate.side_effect = mock_async_gen_none
+        
+        # Debe devolver 0.0 y requerir confirmación manual (comprobado en tax_parser, aquí resolve_rates devuelve la tupla)
+        iva, irpf = TaxEngine.resolve_rates("Factura sin mención a tasas")
+        assert iva == 0.0
+        assert irpf == 0.0
 
 def test_extract_financials_and_recalculate():
     # Recalculates from base imponible

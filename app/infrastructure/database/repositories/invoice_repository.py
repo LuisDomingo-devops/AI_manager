@@ -46,7 +46,8 @@ class InvoiceRepository:
                     UPDATE invoices SET
                         invoice_id = ?, date = ?, issuer_name = ?, issuer_nif = ?, receiver_name = ?, receiver_nif = ?,
                         base_imponible = ?, iva_rate = ?, iva_amount = ?, irpf_rate = ?, irpf_amount = ?, total_amount = ?,
-                        category = ?, quarter = ?, year = ?, file_path = ?, status = ?, concept = ?, blind_index = ?
+                        category = ?, quarter = ?, year = ?, file_path = ?, status = ?, concept = ?, blind_index = ?,
+                        tax_engine_version = ?, requires_manual_confirmation = ?
                     WHERE id = ?
                 """, (
                     encryptor.encrypt(invoice_db_data["invoice_id"]),
@@ -68,6 +69,8 @@ class InvoiceRepository:
                     invoice_db_data.get("status", "firmada"),
                     encryptor.encrypt(invoice_db_data.get("concept", "")),
                     blind_index,
+                    invoice_db_data.get("tax_engine_version"),
+                    1 if invoice_db_data.get("requires_manual_confirmation") else 0,
                     existing_id_db
                 ))
                 invoice_db_id = existing_id_db
@@ -76,8 +79,9 @@ class InvoiceRepository:
                     INSERT INTO invoices (
                         invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
                         base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                        category, quarter, year, file_path, status, concept, blind_index
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        category, quarter, year, file_path, status, concept, blind_index,
+                        tax_engine_version, requires_manual_confirmation
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     encryptor.encrypt(invoice_db_data["invoice_id"]),
                     encryptor.encrypt(invoice_db_data["date"]),
@@ -97,7 +101,9 @@ class InvoiceRepository:
                     encryptor.encrypt(invoice_db_data.get("file_path", "")),
                     invoice_db_data.get("status", "firmada"),
                     encryptor.encrypt(invoice_db_data.get("concept", "")),
-                    blind_index
+                    blind_index,
+                    invoice_db_data.get("tax_engine_version"),
+                    1 if invoice_db_data.get("requires_manual_confirmation") else 0
                 ))
                 invoice_db_id = cursor.lastrowid
             

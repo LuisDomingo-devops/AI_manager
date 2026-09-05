@@ -225,6 +225,7 @@ class TaxParserService:
         from datetime import datetime
         from app.utils.anonymizer import DataAnonymizer
         from app.infrastructure.adapters.llm_client import OllamaClient
+        from app.domain.services.tax_engine import TaxEngine
         
         if not user_nif:
             try:
@@ -323,18 +324,41 @@ TEXTO DE LA FACTURA:
                 quarter = (now.month - 1) // 3 + 1
                 date_str = now.strftime("%d/%m/%Y")
                 
-            iva_rate = round((iva / base) * 100) if base > 0 else 0
-            if iva_rate > 100:
-                iva_rate = 21
-            irpf_rate = round((irpf / base) * 100) if base > 0 else 0
+            requires_manual_confirmation = False
+            status = "firmada"
+            is_iva_inferred = False
+
+            if base > 0:
+                iva_rate = round((iva / base) * 100)
+            else:
+                iva_rate = 0
+            
+            if iva_rate > 100 or (base > 0 and iva == 0):
+                iva_rate = 0
+                is_iva_inferred = True
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+
+            if base > 0:
+                irpf_rate = round((irpf / base) * 100)
+            else:
+                irpf_rate = 0
+                
             if irpf_rate > 100:
-                irpf_rate = 15
+                irpf_rate = 0
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
             
             # Validaciones de campos obligatorios requeridos por VERIFACTU
             if not issuer_nif or not receiver_nif:
                 app_logger.warning("Faltan NIFs, usando valores por defecto para permitir procesamiento")
                 if not issuer_nif: issuer_nif = "B00000000"
                 if not receiver_nif: receiver_nif = user_nif
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+
+            engine_rules = TaxEngine.load_rules()
+            tax_engine_version = f"v{engine_rules.get('last_updated', 'unknown')}"
                 
             return {
                 "invoice_id": str(parsed.get("invoice_id", f"FAC-{int(datetime.now().timestamp())}")),
@@ -352,9 +376,11 @@ TEXTO DE LA FACTURA:
                 "category": category,
                 "quarter": quarter,
                 "year": year,
-                "confidence_score": 0.95,
-                "requires_manual_confirmation": False,
-                "is_iva_inferred": False
+                "status": status,
+                "tax_engine_version": tax_engine_version,
+                "confidence_score": 0.95 if not requires_manual_confirmation else 0.50,
+                "requires_manual_confirmation": requires_manual_confirmation,
+                "is_iva_inferred": is_iva_inferred
             }
         except Exception as e:
             app_logger.error(f"Error parseando con LLM: {str(e)}")

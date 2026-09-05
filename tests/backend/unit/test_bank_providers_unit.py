@@ -161,3 +161,15 @@ def test_plaid_provider_unit():
     txs = provider.fetch_transactions({}, "acc_1", "01/08/2026")
     assert len(txs) == 1
     assert any("Plaid" in t["concept"] for t in txs)
+
+def test_gocardless_provider_real_api_enforcement():
+    provider = GoCardlessProvider()
+    
+    # Validar que lanza error si no hay keys
+    with pytest.raises(ValueError) as exc:
+        provider.fetch_transactions({}, "acc_1", "01/08/2026")
+    assert "Credenciales de GoCardless no configuradas" in str(exc.value)
+    
+    with pytest.raises(ValueError) as exc:
+        provider.confirm_auth("req_123", {})
+    assert "Credenciales de GoCardless no configuradas" in str(exc.value)

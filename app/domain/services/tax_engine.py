@@ -175,54 +175,80 @@ class TaxEngine:
     @classmethod
     def resolve_rates_with_confidence(cls, text: str) -> Dict[str, Any]:
         """
-        Busca tasas de IVA/IGIC e IRPF y evalúa la confianza de la extracción.
-        Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones de tasas soportadas.
+        Busca tasas de IVA/IGIC e IRPF usando LLM para extracción estructurada.
+        Evalúa la confianza de la extracción.
+        Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones.
         """
-        text_lower = text.lower()
-        iva_rate = None
-        is_iva_inferred = False
-        confidence = 1.0
-        requires_manual_confirmation = False
-
+        import asyncio
+        from app.infrastructure.adapters.llm_client import OllamaClient
+        
         territory = TaxTerritoryFactory.get_current_territory()
         supported_rates = territory.get_supported_iva_rates()
+        
+        prompt = f"""
+Extrae las tasas de impuestos (IVA, IGIC, IRPF, retenciones) mencionadas explícitamente en el siguiente texto de una factura.
+Si el texto menciona exención o inversión del sujeto pasivo, la tasa de IVA es 0.
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
+- "iva_rate": float (tasa de IVA o IGIC en porcentaje, 0.0 si no se aplica o está exento, null si no se menciona)
+- "irpf_rate": float (tasa de IRPF o retención en porcentaje, 0.0 si no hay, null si no se menciona)
 
-        iva_rate_match = re.search(r'\b(?:iva|i\.v\.a\.|igic|i\.g\.i\.c\.)\b.{0,30}?(\d+(?:[.,]\d+)?)\s*%', text_lower)
-        if iva_rate_match:
-            try:
-                iva_rate = float(iva_rate_match.group(1).replace(",", "."))
-                if iva_rate not in supported_rates:
-                    # La tasa extraída no pertenece al territorio fiscal actual
-                    requires_manual_confirmation = True
-                    confidence = 0.50
-            except Exception:
-                iva_rate = territory.get_default_iva_rate()
-                requires_manual_confirmation = True
-        else:
-            # Buscar menciones de exención o régimen especial
-            if any(term in text_lower for term in ["exento", "exenta", "art. 20", "artículo 20", "inversión del sujeto pasivo", "0%"]):
+TEXTO:
+{text[:2000]}
+"""
+        client = OllamaClient()
+        try:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, client.generate(prompt, mode="raw"))
+                response = future.result()
+
+            response = response.strip()
+            if response.startswith("```json"): response = response[7:]
+            if response.startswith("```"): response = response[3:]
+            if response.endswith("```"): response = response[:-3]
+            response = response.strip()
+            
+            parsed = json.loads(response)
+            iva_rate = parsed.get("iva_rate")
+            irpf_rate = parsed.get("irpf_rate")
+            
+            is_iva_inferred = False
+            requires_manual_confirmation = False
+            confidence = 0.95
+            
+            if iva_rate is None:
                 iva_rate = 0.0
-            else:
-                iva_rate = territory.get_default_iva_rate()
                 is_iva_inferred = True
-                confidence = 0.60
                 requires_manual_confirmation = True
-
-        irpf_rate = 0.0
-        irpf_rate_match = re.search(r'(?:irpf|i\.r\.p\.f\.|retenci[oó]n)[^0-9%-]*?(-?\d+(?:[.,]\d+)?)\s*%', text_lower)
-        if irpf_rate_match:
-            try:
-                irpf_rate = abs(float(irpf_rate_match.group(1).replace(",", ".")))
-            except Exception:
+                confidence = 0.50
+            elif float(iva_rate) not in supported_rates:
+                iva_rate = float(iva_rate)
+                requires_manual_confirmation = True
+                confidence = 0.50
+            else:
+                iva_rate = float(iva_rate)
+                
+            if irpf_rate is None:
                 irpf_rate = 0.0
-
-        return {
-            "iva_rate": iva_rate,
-            "irpf_rate": irpf_rate,
-            "is_iva_inferred": is_iva_inferred,
-            "confidence_score": confidence,
-            "requires_manual_confirmation": requires_manual_confirmation
-        }
+            else:
+                irpf_rate = float(irpf_rate)
+                
+            return {
+                "iva_rate": iva_rate,
+                "irpf_rate": irpf_rate,
+                "is_iva_inferred": is_iva_inferred,
+                "confidence_score": confidence,
+                "requires_manual_confirmation": requires_manual_confirmation
+            }
+        except Exception as e:
+            app_logger.error(f"Error extrayendo tasas con LLM: {e}")
+            return {
+                "iva_rate": 0.0,
+                "irpf_rate": 0.0,
+                "is_iva_inferred": True,
+                "confidence_score": 0.30,
+                "requires_manual_confirmation": True
+            }
 
     @classmethod
     def resolve_rates(cls, text: str) -> Tuple[float, float]:
