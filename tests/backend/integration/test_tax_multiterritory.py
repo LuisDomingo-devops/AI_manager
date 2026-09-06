@@ -3,6 +3,7 @@ from unittest.mock import patch
 from app.config import settings
 from app.domain.services.tax_territory_factory import TaxTerritoryFactory
 from app.domain.services.tax_engine import TaxEngine
+from app.domain.services.tax_parser_service import TaxParserService
 from app.infrastructure.tax_territories.common_territory import CommonTerritoryAdapter
 from app.infrastructure.tax_territories.canarias_territory import CanariasTerritoryAdapter
 from app.infrastructure.tax_territories.navarra_territory import NavarraTerritoryAdapter
@@ -70,12 +71,12 @@ def test_tax_engine_ocr_resolution_multiterritory():
         ]
         with patch.object(settings, "FISCAL_TERRITORY", "comun"):
             # Texto con IVA del 21% (soportado en régimen común)
-            res_comun_ok = TaxEngine.resolve_rates_with_confidence("Factura con base 100€ e IVA 21%")
+            res_comun_ok = TaxParserService.resolve_rates_with_confidence("Factura con base 100€ e IVA 21%")
             assert res_comun_ok["iva_rate"] == 21.0
             assert res_comun_ok["requires_manual_confirmation"] is False
             
             # Texto con IGIC del 7% (no soportado en régimen común)
-            res_comun_err = TaxEngine.resolve_rates_with_confidence("Factura canaria con IGIC 7%")
+            res_comun_err = TaxParserService.resolve_rates_with_confidence("Factura canaria con IGIC 7%")
             assert res_comun_err["iva_rate"] == 7.0
             assert res_comun_err["requires_manual_confirmation"] is True  # Requiere confirmación por no estar soportada
             assert res_comun_err["confidence_score"] == 0.50
@@ -84,24 +85,24 @@ def test_tax_engine_ocr_resolution_multiterritory():
         TaxTerritoryFactory._cached_adapters.clear()
         with patch.object(settings, "FISCAL_TERRITORY", "canarias"):
             # Texto con IGIC del 7% (soportado en Canarias)
-            res_can_ok = TaxEngine.resolve_rates_with_confidence("Factura con IGIC 7%")
+            res_can_ok = TaxParserService.resolve_rates_with_confidence("Factura con IGIC 7%")
             assert res_can_ok["iva_rate"] == 7.0
             assert res_can_ok["requires_manual_confirmation"] is False
     
             # Texto con IVA del 21% (no soportado en Canarias)
-            res_can_err = TaxEngine.resolve_rates_with_confidence("Factura de la península con IVA 21%")
+            res_can_err = TaxParserService.resolve_rates_with_confidence("Factura de la península con IVA 21%")
             assert res_can_err["iva_rate"] == 21.0
             assert res_can_err["requires_manual_confirmation"] is True  # Requiere confirmación por no estar soportada en Canarias
             assert res_can_err["confidence_score"] == 0.50
             
             # Inferencia de tasa por defecto en caso de ausencia
-            res_can_inf = TaxEngine.resolve_rates_with_confidence("Factura sin tasas explícitas")
+            res_can_inf = TaxParserService.resolve_rates_with_confidence("Factura sin tasas explícitas")
             assert res_can_inf["iva_rate"] == 0.0  # El motor de fallback devuelve 0.0 cuando no encuentra tasas explícitas
             assert res_can_inf["is_iva_inferred"] is True
             
         # 3. Caso Navarra (Hacienda Foral)
         TaxTerritoryFactory._cached_adapters.clear()
         with patch.object(settings, "FISCAL_TERRITORY", "navarra"):
-            res_navarra_ok = TaxEngine.resolve_rates_with_confidence("Factura con IVA foral 4%")
+            res_navarra_ok = TaxParserService.resolve_rates_with_confidence("Factura con IVA foral 4%")
             assert res_navarra_ok["iva_rate"] == 4.0
             assert res_navarra_ok["requires_manual_confirmation"] is False

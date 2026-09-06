@@ -4,6 +4,9 @@ from app.tools.server.billing_tools import close_fiscal_year_tool
 
 @pytest.mark.asyncio
 async def test_year_end_closing():
+    from app.infrastructure.database.connection_manager import tenant_context
+    tenant_context.set("test_year_end_tenant")
+    
     # Attempt to close a year (e.g. 2026) without confirmation
     res_no_confirm = await close_fiscal_year_tool(2026, confirmed_by_user=False)
     assert res_no_confirm["status"] == "pending_confirmation"

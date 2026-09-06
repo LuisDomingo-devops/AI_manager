@@ -5,6 +5,9 @@ from app.adapters.memory.memory import memory
 import os
 
 def test_leak():
+    from app.infrastructure.database.connection_manager import tenant_context
+    tenant_context.set("default")
+    
     memory.add_message("leak_session", "user", "secret_data", client_id="victim")
     
     with TestClient(app) as client:

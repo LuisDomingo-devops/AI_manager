@@ -21,6 +21,57 @@ class TaxEngine:
     _rules_path = Path(__file__).resolve().parent / "tax_rules.json"
 
     @classmethod
+    def determine_document_type(cls, text: str) -> str:
+        """
+        Determina de forma determinista la tipología del documento usando expresiones regulares
+        y heurísticas de palabras clave.
+        Retorna: "Factura ordinaria", "Factura simplificada", "Albarán", o "Proforma"
+        """
+        text_upper = text.upper()
+        
+        # Prioridad 1: Proformas / Presupuestos
+        if re.search(r'\b(PROFORMA|PRESUPUESTO|PRO-FORMA|ESTIMATION|QUOTE)\b', text_upper):
+            return "Proforma"
+            
+        # Prioridad 2: Albaranes / Notas de Entrega
+        if re.search(r'\b(ALBAR[AÁ]N|NOTA DE ENTREGA|DELIVERY NOTE|PACKING SLIP)\b', text_upper):
+            if not re.search(r'\b(FACTURA|INVOICE)\b', text_upper):
+                return "Albarán"
+                
+        # Prioridad 3: Tickets / Facturas simplificadas
+        if re.search(r'\b(FACTURA SIMPLIFICADA|TICKET|RECIBO)\b', text_upper):
+            return "Factura simplificada"
+            
+        # Por defecto, asumimos factura ordinaria si no encaja en las anteriores
+        return "Factura ordinaria"
+
+    @classmethod
+    def determine_payment_direction(cls, text: str, user_nif: str, extracted_issuer_nif: str, extracted_receiver_nif: str) -> str:
+        """
+        Determina determinísticamente si el documento es a cobrar (income) o a pagar (expense).
+        """
+        user_nif_upper = user_nif.upper().strip()
+        issuer_nif_upper = extracted_issuer_nif.upper().strip()
+        receiver_nif_upper = extracted_receiver_nif.upper().strip()
+
+        # 1. Validación estricta por NIFs extraídos
+        if receiver_nif_upper == user_nif_upper:
+            return "expense"
+        elif issuer_nif_upper == user_nif_upper:
+            return "income"
+            
+        # 2. Validación de respaldo buscando el NIF del usuario explícitamente en el texto
+        text_upper = text.upper()
+        if user_nif_upper in text_upper:
+            if re.search(rf'\b(CLIENTE|FACTURADO A|RECEPTOR|BILL TO)[\s\S]{{0,100}}{re.escape(user_nif_upper)}\b', text_upper):
+                return "expense"
+            if re.search(rf'\b(EMISOR|PROVEEDOR|FACTURADO POR|FROM)[\s\S]{{0,100}}{re.escape(user_nif_upper)}\b', text_upper):
+                return "income"
+                
+        # 3. Fallback: la mayoría de documentos subidos por un autónomo suelen ser gastos (tickets, compras)
+        return "expense"
+
+    @classmethod
     def load_rules(cls) -> Dict[str, Any]:
         """Carga las reglas fiscales desde el archivo JSON."""
         try:
@@ -171,92 +222,6 @@ class TaxEngine:
 
         # Fallback a la fecha actual
         return now.strftime("%Y-%m-%d"), now.year, (now.month - 1) // 3 + 1
-
-    @classmethod
-    def resolve_rates_with_confidence(cls, text: str) -> Dict[str, Any]:
-        """
-        Busca tasas de IVA/IGIC e IRPF usando LLM para extracción estructurada.
-        Evalúa la confianza de la extracción.
-        Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones.
-        """
-        import asyncio
-        from app.infrastructure.adapters.llm_client import GeminiClient
-        
-        territory = TaxTerritoryFactory.get_current_territory()
-        supported_rates = territory.get_supported_iva_rates()
-        
-        prompt = f"""
-Extrae las tasas de impuestos (IVA, IGIC, IRPF, retenciones) mencionadas explícitamente en el siguiente texto de una factura.
-Si el texto menciona exención o inversión del sujeto pasivo, la tasa de IVA es 0.
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
-- "iva_rate": float (tasa de IVA o IGIC en porcentaje, 0.0 si no se aplica o está exento, null si no se menciona)
-- "irpf_rate": float (tasa de IRPF o retención en porcentaje, 0.0 si no hay, null si no se menciona)
-
-TEXTO:
-{text[:2000]}
-"""
-        client = GeminiClient()
-        try:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(asyncio.run, client.generate(prompt, mode="raw"))
-                response = future.result()
-
-            response = response.strip()
-            if response.startswith("```json"): response = response[7:]
-            if response.startswith("```"): response = response[3:]
-            if response.endswith("```"): response = response[:-3]
-            response = response.strip()
-            
-            parsed = json.loads(response)
-            iva_rate = parsed.get("iva_rate")
-            irpf_rate = parsed.get("irpf_rate")
-            
-            is_iva_inferred = False
-            requires_manual_confirmation = False
-            confidence = 0.95
-            
-            if iva_rate is None:
-                iva_rate = 0.0
-                is_iva_inferred = True
-                requires_manual_confirmation = True
-                confidence = 0.50
-            elif float(iva_rate) not in supported_rates:
-                iva_rate = float(iva_rate)
-                requires_manual_confirmation = True
-                confidence = 0.50
-            else:
-                iva_rate = float(iva_rate)
-                
-            if irpf_rate is None:
-                irpf_rate = 0.0
-            else:
-                irpf_rate = float(irpf_rate)
-                
-            return {
-                "iva_rate": iva_rate,
-                "irpf_rate": irpf_rate,
-                "is_iva_inferred": is_iva_inferred,
-                "confidence_score": confidence,
-                "requires_manual_confirmation": requires_manual_confirmation
-            }
-        except Exception as e:
-            app_logger.error(f"Error extrayendo tasas con LLM: {e}")
-            return {
-                "iva_rate": 0.0,
-                "irpf_rate": 0.0,
-                "is_iva_inferred": True,
-                "confidence_score": 0.30,
-                "requires_manual_confirmation": True
-            }
-
-    @classmethod
-    def resolve_rates(cls, text: str) -> Tuple[float, float]:
-        """
-        Busca tasas de IVA e IRPF delegando en resolve_rates_with_confidence.
-        """
-        res = cls.resolve_rates_with_confidence(text)
-        return res["iva_rate"], res["irpf_rate"]
 
     @classmethod
     def extract_financials(cls, text: str, text_lower: str, iva_rate: float, irpf_rate: float) -> Tuple[float, float, float, float]:

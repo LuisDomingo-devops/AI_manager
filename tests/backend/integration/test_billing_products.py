@@ -6,9 +6,12 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.api.routes import verify_api_key
 
-# Mock de la dependencia de autenticación para que siempre devuelva "default"
-app.dependency_overrides[verify_api_key] = lambda: "default"
-
+# Mock de la dependencia de autenticación
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[verify_api_key] = lambda: "default"
+    yield
+    app.dependency_overrides.clear()
 # Asumimos que conftest.py o pytest configurará las dependencias de la base de datos de test
 # y que se salta la autenticación o se pasa una API KEY válida.
 

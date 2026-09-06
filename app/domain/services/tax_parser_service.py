@@ -7,11 +7,12 @@ extracción estructurada, clasifica las facturas, las persiste en SQLite y gener
 """
 
 import os
+import json
 import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from PIL import Image
 try:
@@ -225,6 +226,7 @@ class TaxParserService:
         from datetime import datetime
         from app.utils.anonymizer import DataAnonymizer
         from app.infrastructure.adapters.llm_client import GeminiClient
+        from app.domain.services.tax_territory_factory import TaxTerritoryFactory
         from app.domain.services.tax_engine import TaxEngine
         
         if not user_nif:
@@ -253,9 +255,9 @@ class TaxParserService:
         anon_text, mapping = anonymizer.anonymize(text)
         
         prompt = f"""
-Extrae los siguientes datos financieros del siguiente texto de una factura. 
+Extrae los siguientes datos financieros del siguiente texto. 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
-- "invoice_id": string (número de factura)
+- "invoice_id": string (número de factura o documento)
 - "date": string (fecha en formato YYYY-MM-DD, si no hay, la fecha actual)
 - "issuer_name": string (nombre del emisor)
 - "issuer_nif": string (NIF/CIF del emisor)
@@ -264,7 +266,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
 - "base_imponible": float (base imponible)
 - "iva_amount": float (cuota de IVA)
 - "irpf_amount": float (cuota de IRPF, 0.0 si no hay)
-- "total_amount": float (total de la factura)
+- "total_amount": float (total de la factura o documento)
 
 Ten en cuenta que el usuario principal es {user_name} con NIF {user_nif}.
 El texto ha sido anonimizado con tokens como [NIF_1], [NOMBRE_1], [IMPORTE_1]. MANTÉN LOS TOKENS en el JSON resultante, NO intentes inventar nombres o cifras.
@@ -311,7 +313,16 @@ TEXTO DE LA FACTURA:
             issuer_nif = parsed.get("issuer_nif", "").strip() or "B00000000"
             receiver_nif = parsed.get("receiver_nif", "").strip() or user_nif
             
-            category = "expense" if receiver_nif.upper() == user_nif.upper() else "income"
+            # Clasificación de categoría basada determinísticamente en heurísticas y NIF
+            category = TaxEngine.determine_payment_direction(text, user_nif, issuer_nif, receiver_nif)
+            
+            # Clasificación de tipo de documento determinista
+            doc_type = TaxEngine.determine_document_type(text)
+            tipo_factura = "F1"
+            if doc_type == "Factura simplificada":
+                tipo_factura = "F2"
+                
+            is_albaran = (doc_type == "Albarán")
             
             try:
                 date_obj = datetime.strptime(parsed.get("date", ""), "%Y-%m-%d")
@@ -329,25 +340,14 @@ TEXTO DE LA FACTURA:
             is_iva_inferred = False
 
             if base > 0:
-                iva_rate = round((iva / base) * 100)
+                iva_rate = float(round((iva / base) * 100, 2))
             else:
-                iva_rate = 0
+                iva_rate = 0.0
             
-            if iva_rate > 100 or (base > 0 and iva == 0):
-                iva_rate = 0
-                is_iva_inferred = True
-                requires_manual_confirmation = True
-                status = "PENDIENTE_REVISION"
-
             if base > 0:
-                irpf_rate = round((irpf / base) * 100)
+                irpf_rate = float(round((irpf / base) * 100, 2))
             else:
-                irpf_rate = 0
-                
-            if irpf_rate > 100:
-                irpf_rate = 0
-                requires_manual_confirmation = True
-                status = "PENDIENTE_REVISION"
+                irpf_rate = 0.0
             
             # Validaciones de campos obligatorios requeridos por VERIFACTU
             if not issuer_nif or not receiver_nif:
@@ -356,6 +356,33 @@ TEXTO DE LA FACTURA:
                 if not receiver_nif: receiver_nif = user_nif
                 requires_manual_confirmation = True
                 status = "PENDIENTE_REVISION"
+
+            extracted_data = {
+                "issuer_nif": issuer_nif,
+                "receiver_nif": receiver_nif,
+                "invoice_number": str(parsed.get("invoice_id", f"FAC-{int(datetime.now().timestamp())}")),
+                "date_of_issue": date_str,
+                "base_imponible": base,
+                "iva_amount": iva,
+                "total_amount": total,
+                "irpf_amount": irpf,
+                "iva_rate": iva_rate,
+                "irpf_rate": irpf_rate,
+                "tipo_factura": tipo_factura,
+                "is_albaran": is_albaran
+            }
+            
+            # Validación Determinista y Auditoría Formal contra la Normativa
+            from app.domain.services.fiscal_validator import validate_invoice_for_sif
+            validation_result = validate_invoice_for_sif(extracted_data)
+            
+            if not validation_result.is_valid or validation_result.requires_human_review:
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+            
+            if is_albaran:
+                status = "NO_CONTABILIZABLE"
+                requires_manual_confirmation = True
 
             engine_rules = TaxEngine.load_rules()
             tax_engine_version = f"v{engine_rules.get('last_updated', 'unknown')}"
@@ -385,6 +412,93 @@ TEXTO DE LA FACTURA:
         except Exception as e:
             app_logger.error(f"Error parseando con LLM: {str(e)}")
             raise e
+
+    @classmethod
+    def resolve_rates_with_confidence(cls, text: str) -> Dict[str, Any]:
+        """
+        Busca tasas de IVA/IGIC e IRPF usando LLM para extracción estructurada.
+        Evalúa la confianza de la extracción.
+        Usa dinámicamente el territorio fiscal activo para fallbacks y validaciones.
+        """
+        import asyncio
+        from app.infrastructure.adapters.llm_client import GeminiClient
+        from app.domain.services.tax_territory_factory import TaxTerritoryFactory
+        
+        territory = TaxTerritoryFactory.get_current_territory()
+        supported_rates = territory.get_supported_iva_rates()
+        
+        prompt = f"""
+Extrae las tasas de impuestos (IVA, IGIC, IRPF, retenciones) mencionadas explícitamente en el siguiente texto de una factura.
+Si el texto menciona exención o inversión del sujeto pasivo, la tasa de IVA es 0.
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
+- "iva_rate": float (tasa de IVA o IGIC en porcentaje, 0.0 si no se aplica o está exento, null si no se menciona)
+- "irpf_rate": float (tasa de IRPF o retención en porcentaje, 0.0 si no hay, null si no se menciona)
+
+TEXTO:
+{text[:2000]}
+"""
+        client = GeminiClient()
+        try:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, client.generate(prompt, mode="raw"))
+                response = future.result()
+
+            response = response.strip()
+            if response.startswith("```json"): response = response[7:]
+            if response.startswith("```"): response = response[3:]
+            if response.endswith("```"): response = response[:-3]
+            response = response.strip()
+            
+            parsed = json.loads(response)
+            iva_rate = parsed.get("iva_rate")
+            irpf_rate = parsed.get("irpf_rate")
+            
+            is_iva_inferred = False
+            requires_manual_confirmation = False
+            confidence = 0.95
+            
+            if iva_rate is None:
+                iva_rate = 0.0
+                is_iva_inferred = True
+                requires_manual_confirmation = True
+                confidence = 0.50
+            elif float(iva_rate) not in supported_rates:
+                iva_rate = float(iva_rate)
+                requires_manual_confirmation = True
+                confidence = 0.50
+            else:
+                iva_rate = float(iva_rate)
+                
+            if irpf_rate is None:
+                irpf_rate = 0.0
+            else:
+                irpf_rate = float(irpf_rate)
+                
+            return {
+                "iva_rate": iva_rate,
+                "irpf_rate": irpf_rate,
+                "is_iva_inferred": is_iva_inferred,
+                "confidence_score": confidence,
+                "requires_manual_confirmation": requires_manual_confirmation
+            }
+        except Exception as e:
+            app_logger.error(f"Error extrayendo tasas con LLM: {e}")
+            return {
+                "iva_rate": 0.0,
+                "irpf_rate": 0.0,
+                "is_iva_inferred": True,
+                "confidence_score": 0.30,
+                "requires_manual_confirmation": True
+            }
+
+    @classmethod
+    def resolve_rates(cls, text: str) -> Tuple[float, float]:
+        """
+        Busca tasas de IVA e IRPF delegando en resolve_rates_with_confidence.
+        """
+        res = cls.resolve_rates_with_confidence(text)
+        return res["iva_rate"], res["irpf_rate"]
 
     @classmethod
     def save_invoice_to_db(cls, data: Dict[str, Any], file_path: str = "") -> int:

@@ -8,8 +8,11 @@ from app.api.routes import verify_api_key
 import uuid
 
 # Mock de la dependencia de autenticación
-app.dependency_overrides[verify_api_key] = lambda: "default"
-
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[verify_api_key] = lambda: "default"
+    yield
+    app.dependency_overrides.clear()
 client = TestClient(app)
 
 # SKU específico para denotar un servicio

@@ -8,12 +8,6 @@ import re
 from typing import Dict, Any, List, Tuple, Optional
 from pydantic import BaseModel, Field
 
-# Tipos impositivos de IVA legalmente vigentes en España (Régimen General y Reducidos)
-VALID_IVA_RATES = {0.0, 2.0, 4.0, 5.0, 7.5, 10.0, 21.0}
-
-# Tipos de Retención de IRPF habituales para profesionales autónomos
-VALID_IRPF_RATES = {0.0, 1.0, 2.0, 7.0, 15.0, 19.0}
-
 # Tipos de Factura según Veri*Factu / Reglamento de Facturación
 VALID_INVOICE_TYPES = {
     "F1",  # Factura ordinaria
@@ -156,7 +150,16 @@ def validate_invoice_for_sif(invoice_data: Dict[str, Any]) -> FiscalValidationRe
     errors = []
     warnings = []
 
-    # 1. Campos obligatorios
+    # 1. Validación de Albarán
+    if invoice_data.get("is_albaran", False):
+        return FiscalValidationResult(
+            is_valid=False,
+            requires_human_review=True,
+            errors=["El documento ha sido clasificado como Albarán, que no es un documento contabilizable."],
+            warnings=["Se requiere una factura formal para contabilizar este movimiento."]
+        )
+
+    # 2. Campos obligatorios
     issuer_nif = str(invoice_data.get("issuer_nif", "")).strip().upper()
     receiver_nif = str(invoice_data.get("receiver_nif", "")).strip().upper()
     invoice_number = str(invoice_data.get("invoice_number", "")).strip()
@@ -198,12 +201,25 @@ def validate_invoice_for_sif(invoice_data: Dict[str, Any]) -> FiscalValidationRe
             errors=[f"Error en formato numérico de importes: {str(e)}"]
         )
 
-    # Validar tipos impositivos contra listas autorizadas
-    if iva_rate is not None and iva_rate not in VALID_IVA_RATES:
-        errors.append(f"Tipo de IVA '{iva_rate}%' no es un tipo impositivo legal en España ({sorted(VALID_IVA_RATES)}).")
+    # Validar tipos impositivos dinámicamente contra la configuración oficial
+    from app.domain.services.tax_territory_factory import TaxTerritoryFactory
+    from app.domain.services.tax_engine import TaxEngine
+    
+    active_territory = TaxTerritoryFactory.get_current_territory()
+    supported_iva_rates = active_territory.get_supported_iva_rates()
+    # Ensure 0.0 is always valid for exemptions/inversions
+    if 0.0 not in supported_iva_rates:
+        supported_iva_rates.append(0.0)
+        
+    if iva_rate is not None and iva_rate not in supported_iva_rates:
+        errors.append(f"Tipo de IVA '{iva_rate}%' no es un tipo impositivo legal en el territorio {active_territory.get_name()} ({sorted(supported_iva_rates)}).")
 
-    if irpf_rate is not None and irpf_rate not in VALID_IRPF_RATES:
-        warnings.append(f"Tipo de IRPF '{irpf_rate}%' poco habitual. Verifique retención aplicable.")
+    engine_rules = TaxEngine.load_rules()
+    irpf_general_rate = engine_rules.get("irpf_profesionales_rate", 15.0)
+    valid_irpf_rates = {0.0, 1.0, 2.0, 7.0, irpf_general_rate, 19.0}
+
+    if irpf_rate is not None and irpf_rate not in valid_irpf_rates:
+        warnings.append(f"Tipo de IRPF '{irpf_rate}%' poco habitual o no verificado. Verifique retención aplicable.")
 
     # Validar coherencia aritmética
     is_arithmetic_valid, arithmetic_errors = validate_arithmetic_consistency(

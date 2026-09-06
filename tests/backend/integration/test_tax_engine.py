@@ -3,6 +3,7 @@ import os
 import json
 from pathlib import Path
 from app.domain.services.tax_engine import TaxEngine
+from app.domain.services.tax_parser_service import TaxParserService
 
 def test_parse_number():
     assert TaxEngine.parse_number("1.234,56 €") == 1234.56
@@ -39,7 +40,7 @@ def test_resolve_rates():
             return '{"iva_rate": 10.0, "irpf_rate": 15.0}'
         mock_generate.side_effect = mock_async_gen
 
-        iva, irpf = TaxEngine.resolve_rates("Factura con IVA del 10% e IRPF de -15% de retención")
+        iva, irpf = TaxParserService.resolve_rates("Factura con IVA del 10% e IRPF de -15% de retención")
         assert iva == 10.0
         assert irpf == 15.0
 
@@ -50,7 +51,7 @@ def test_resolve_rates():
         mock_generate.side_effect = mock_async_gen_none
         
         # Debe devolver 0.0 y requerir confirmación manual (comprobado en tax_parser, aquí resolve_rates devuelve la tupla)
-        iva, irpf = TaxEngine.resolve_rates("Factura sin mención a tasas")
+        iva, irpf = TaxParserService.resolve_rates("Factura sin mención a tasas")
         assert iva == 0.0
         assert irpf == 0.0
 
