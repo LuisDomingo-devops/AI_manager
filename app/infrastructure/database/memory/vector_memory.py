@@ -70,7 +70,14 @@ class VectorMemory(VectorMemoryPort):
         
         self._refresh_collection()
         fact_id = str(uuid.uuid4())
-        cid = client_id or "default"
+        cid = client_id
+        if not cid:
+            try:
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+            except ImportError:
+                cid = "default"
+        cid = cid or "default"
         try:
             self.collection.add(
                 documents=[fact.strip()],
@@ -89,7 +96,14 @@ class VectorMemory(VectorMemoryPort):
             return []
         
         self._refresh_collection()
-        cid = client_id or "default"
+        cid = client_id
+        if not cid:
+            try:
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+            except ImportError:
+                cid = "default"
+        cid = cid or "default"
         try:
             results = self.collection.query(
                 query_texts=[query.strip()],
@@ -148,7 +162,14 @@ class VectorMemory(VectorMemoryPort):
             return []
         
         self._refresh_collection()
-        cid = client_id or "default"
+        cid = client_id
+        if not cid:
+            try:
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+            except ImportError:
+                cid = "default"
+        cid = cid or "default"
         try:
             results = self.collection.query(
                 query_texts=[query.strip()],
@@ -187,7 +208,14 @@ class VectorMemory(VectorMemoryPort):
     def delete_facts_by_session(self, session_id: str, client_id: str | None = None) -> bool:
         """Borra todos los hechos asociados a una sesión."""
         self._refresh_collection()
-        cid = client_id or "default"
+        cid = client_id
+        if not cid:
+            try:
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+            except ImportError:
+                cid = "default"
+        cid = cid or "default"
         try:
             self.collection.delete(where={"$and": [{"session_id": session_id}, {"client_id": cid}]})
             orchestrator_logger.info("Recuerdos semánticos eliminados para la sesión: %s y cliente: %s", session_id, cid)
@@ -199,7 +227,14 @@ class VectorMemory(VectorMemoryPort):
     def get_all_facts(self, client_id: str | None = None) -> list[dict]:
         """Obtiene todos los hechos almacenados en la colección."""
         self._refresh_collection()
-        cid = client_id or "default"
+        cid = client_id
+        if not cid:
+            try:
+                from app.adapters.memory.memory import tenant_context
+                cid = tenant_context.get()
+            except ImportError:
+                cid = "default"
+        cid = cid or "default"
         try:
             results = self.collection.get(where={"client_id": cid})
             documents = results.get("documents", [])
@@ -229,3 +264,4 @@ class VectorMemory(VectorMemoryPort):
 
 # Instancia única global
 vector_memory = VectorMemory()
+

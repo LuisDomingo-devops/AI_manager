@@ -66,10 +66,13 @@ async def verify_api_key(
     # 2. Fallback a la API Key estática (admite inicialización de sesión)
     if api_key and isinstance(api_key, str) and secrets.compare_digest(api_key, settings.ALFONSO_API_KEY):
         from app.adapters.memory.memory import tenant_context
-        # Si no se ha seteado contexto del tenant, dejar default
-        if tenant_context.get() == "default":
+        
+        # Respetar el contexto inyectado por el middleware (X-Client-ID) si lo hay
+        current_tenant = tenant_context.get()
+        if not current_tenant or current_tenant == "default":
             tenant_context.set("default")
-        return "default"
+            return "default"
+        return current_tenant
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
