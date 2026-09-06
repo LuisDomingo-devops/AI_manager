@@ -214,7 +214,9 @@ def validate_invoice_for_sif(invoice_data: Dict[str, Any]) -> FiscalValidationRe
     if iva_rate is not None and iva_rate not in supported_iva_rates:
         errors.append(f"Tipo de IVA '{iva_rate}%' no es un tipo impositivo legal en el territorio {active_territory.get_name()} ({sorted(supported_iva_rates)}).")
 
-    engine_rules = TaxEngine.load_rules()
+    from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+    engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
+    engine_rules = engine.load_rules()
     irpf_general_rate = engine_rules.get("irpf_profesionales_rate", 15.0)
     valid_irpf_rates = {0.0, 1.0, 2.0, 7.0, irpf_general_rate, 19.0}
 

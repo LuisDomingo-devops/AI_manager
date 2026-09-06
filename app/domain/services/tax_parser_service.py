@@ -384,7 +384,9 @@ TEXTO DE LA FACTURA:
                 status = "NO_CONTABILIZABLE"
                 requires_manual_confirmation = True
 
-            engine_rules = TaxEngine.load_rules()
+            from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+            engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
+            engine_rules = engine.load_rules()
             tax_engine_version = f"v{engine_rules.get('last_updated', 'unknown')}"
                 
             return {

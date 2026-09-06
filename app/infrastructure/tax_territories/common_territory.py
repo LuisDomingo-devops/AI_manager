@@ -11,7 +11,9 @@ class CommonTerritoryAdapter(TaxTerritoryPort):
     def get_default_iva_rate(self) -> float:
         try:
             from app.domain.services.tax_engine import TaxEngine
-            rules = TaxEngine.load_rules()
+            from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+            engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
+            rules = engine.load_rules()
             return rules.get("iva_general_rate", 21.0)
         except Exception:
             return 21.0

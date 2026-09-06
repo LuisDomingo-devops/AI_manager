@@ -18,7 +18,8 @@ DATE_ISO_REGEX = re.compile(r'\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b')
 MONEY_REGEX = re.compile(r'\b\d+(?:[.,]\d{2})?\b')
 
 class TaxEngine:
-    _rules_path = Path(__file__).resolve().parent / "tax_rules.json"
+    def __init__(self, tax_rules_port=None):
+        self.tax_rules_port = tax_rules_port
 
     @classmethod
     def determine_document_type(cls, text: str) -> str:
@@ -71,28 +72,17 @@ class TaxEngine:
         # 3. Fallback: la mayoría de documentos subidos por un autónomo suelen ser gastos (tickets, compras)
         return "expense"
 
-    @classmethod
-    def load_rules(cls) -> Dict[str, Any]:
-        """Carga las reglas fiscales desde el archivo JSON."""
-        try:
-            if cls._rules_path.exists():
-                with open(cls._rules_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception as e:
-            app_logger.error(f"Error al cargar tax_rules.json: {str(e)}")
-        
-        # Fallbacks por defecto si no se puede leer
-        return {
-            "iva_general_rate": 21.0,
-            "irpf_profesionales_rate": 15.0,
-            "last_updated": "2026-08-13",
-            "boe_reference": "Default Seed Fallback"
-        }
+    def load_rules(self) -> Dict[str, Any]:
+        """Carga las reglas fiscales usando el puerto."""
+        if not self.tax_rules_port:
+            # Fallback en caso de que no se haya inyectado
+            from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+            self.tax_rules_port = FileTaxRulesAdapter()
+        return self.tax_rules_port.get_rules()
 
-    @classmethod
-    def update_tax_rules(cls, new_rules: Dict[str, Any], boe_link: str, boe_section: str, confirmed_by_user: bool = False) -> Dict[str, Any]:
+    def update_tax_rules(self, new_rules: Dict[str, Any], boe_link: str, boe_section: str, confirmed_by_user: bool = False) -> Dict[str, Any]:
         """
-        Actualiza las reglas fiscales en tax_rules.json tras confirmación humana.
+        Actualiza las reglas fiscales tras confirmación humana.
         """
         # Validar enlace obligatorio del BOE y sección
         if not boe_link or not boe_link.startswith("http"):
@@ -100,7 +90,7 @@ class TaxEngine:
         if not boe_section or len(boe_section.strip()) < 3:
             return {"status": "error", "message": "Es obligatorio citar el artículo, sección o página específica del BOE que respalda la norma."}
 
-        current_rules = cls.load_rules()
+        current_rules = self.load_rules()
         proposed = {**current_rules, **new_rules}
         
         # Identificar qué cambia
@@ -128,19 +118,22 @@ class TaxEngine:
                 "boe_section": boe_section
             }
 
-        # Guardar en disco
+        # Guardar a través del puerto
         try:
             proposed["last_updated"] = datetime.now().strftime("%Y-%m-%d")
             proposed["boe_reference"] = f"{boe_link} ({boe_section})"
-            with open(cls._rules_path, "w", encoding="utf-8") as f:
-                json.dump(proposed, f, indent=2, ensure_ascii=False)
+            
+            if not self.tax_rules_port:
+                from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+                self.tax_rules_port = FileTaxRulesAdapter()
+                
+            self.tax_rules_port.save_rules(proposed)
             return {
                 "status": "ok",
                 "message": f"Reglas fiscales actualizadas exitosamente con los cambios: {', '.join(changes)}. Referencia del BOE guardada.",
                 "rules": proposed
             }
         except Exception as e:
-            app_logger.error(f"Error al escribir tax_rules.json: {str(e)}")
             return {"status": "error", "message": f"Error interno al actualizar reglas fiscales: {str(e)}"}
 
     @classmethod
