@@ -74,6 +74,28 @@ class LedgerService:
             return journal_id
 
     @classmethod
+    def record_journal_entry(cls, ledger_entry: Dict[str, Any]) -> int:
+        """
+        Registra un asiento genérico en el libro diario.
+        El diccionario debe contener: 'date', 'concept' y 'entries' (lista de diccionarios con 'account', 'debe' y 'haber').
+        """
+        date_str = ledger_entry.get("date", datetime.now().strftime("%d/%m/%Y"))
+        concept = ledger_entry.get("concept", "Asiento contable")
+        year = cls.extract_year_from_date(date_str)
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
+
+        apuntes = []
+        for entry in ledger_entry.get("entries", []):
+            apuntes.append({
+                "account_code": entry["account"],
+                "debe": float(entry.get("debe", 0.0)),
+                "haber": float(entry.get("haber", 0.0))
+            })
+            
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
+
+    @classmethod
     def record_invoice_asiento(cls, invoice_data: Dict[str, Any]) -> int:
         """
         Registra el asiento contable (partida doble) para una factura de ingreso o gasto.

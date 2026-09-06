@@ -896,6 +896,38 @@ async def get_quotes() -> dict:
         tool_logger.exception("Error al obtener presupuestos")
         return {"status": "error", "message": str(e)}
 
+async def update_quote_status(quote_id: str, new_status: str) -> dict:
+    valid_statuses = ("borrador", "enviado", "aceptado", "rechazado", "facturado")
+    if new_status not in valid_statuses:
+        return {"status": "error", "message": f"Estado inválido. Debe ser uno de: {', '.join(valid_statuses)}"}
+    
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, quote_id FROM quotes")
+            rows = cursor.fetchall()
+            db_id = None
+            for r in rows:
+                try:
+                    if encryptor.decrypt(r["quote_id"]) == quote_id:
+                        db_id = r["id"]
+                        break
+                except Exception:
+                    pass
+            
+            if not db_id:
+                return {"status": "error", "message": f"No se encontró el presupuesto '{quote_id}'."}
+                
+            cursor.execute("UPDATE quotes SET status = ? WHERE id = ?", (new_status, db_id))
+            conn.commit()
+            return {"status": "ok", "message": f"Presupuesto {quote_id} actualizado al estado '{new_status}' con éxito."}
+        finally:
+            conn.close()
+    except Exception as e:
+        tool_logger.exception("Error al actualizar el estado del presupuesto")
+        return {"status": "error", "message": str(e)}
+
 async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = False) -> dict:
     """
     Convierte un presupuesto existente en una factura formal.
@@ -921,6 +953,13 @@ async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = Fals
                             "iva_rate": float(encryptor.decrypt(r["iva_rate"])),
                             "irpf_rate": float(encryptor.decrypt(r["irpf_rate"]))
                         }
+                        
+                        cursor.execute("SELECT product_id, description_override, quantity, unit_price, subtotal FROM quote_items WHERE quote_id = ?", (db_id,))
+                        quote_items = []
+                        for row in cursor.fetchall():
+                            quote_items.append(dict(row))
+                        quote_data["items"] = quote_items
+                        
                         break
                 except Exception:
                     pass
@@ -942,7 +981,8 @@ async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = Fals
             concept=quote_data["concept"],
             iva_rate=quote_data["iva_rate"],
             irpf_rate=quote_data["irpf_rate"],
-            confirmed_by_user=confirmed_by_user
+            confirmed_by_user=confirmed_by_user,
+            items=quote_data.get("items")
         )
         if res["status"] == "error":
             return {"status": "error", "message": f"Presupuesto marcado como facturado, pero error al emitir factura: {res['message']}"}
@@ -1711,6 +1751,22 @@ async def register_payment(invoice_id: str, amount: float, payment_method: str =
         finally:
             conn.close()
 
+        # Generar apunte contable del cobro
+        try:
+            from app.domain.services.ledger_service import LedgerService
+            account_debe = "57000000" if payment_method.lower() in ("efectivo", "cash") else "57200001"
+            ledger_entry = {
+                "date": date_str,
+                "concept": f"Cobro fra {invoice_id}",
+                "entries": [
+                    {"account": account_debe, "debe": amount, "haber": 0},
+                    {"account": "43000000", "debe": 0, "haber": amount}
+                ]
+            }
+            LedgerService.record_journal_entry(ledger_entry)
+        except Exception as e:
+            tool_logger.warning("No se pudo registrar asiento del cobro: %s", str(e))
+
         # Publicar evento de pago registrado
         try:
             await event_bus.publish("PaymentRegistered", {
@@ -2355,6 +2411,7 @@ TOOLS = {
     "create_quote": create_quote,
     "get_quotes": get_quotes,
     "convert_quote_to_invoice": convert_quote_to_invoice,
+    "update_quote_status": update_quote_status,
     "sign_quote": sign_quote,
     "verify_quote_signature": verify_quote_signature,
     "register_payment": register_payment,
