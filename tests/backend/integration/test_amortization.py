@@ -14,6 +14,7 @@ def test_amortization_flow():
     from app.infrastructure.database.memory.memory import _get_connection
     with _get_connection(client_id) as conn:
         conn.execute("DELETE FROM assets")
+        conn.execute("DELETE FROM journal_entries")
         conn.commit()
     repo = MemoryAssetRepository()
     ds = DepreciationService(repo)
