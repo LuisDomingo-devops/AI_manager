@@ -20,6 +20,7 @@ from app.domain.ports.llm_port import LLMPort
 from app.domain.ports.memory_port import MemoryPort, VectorMemoryPort
 from app.domain.ports.bridge_port import BridgePort
 from app.domain.ports.calendar_port import CalendarPort
+# pyrefly: ignore [missing-import]
 from app.adapters.tool_registry import (
     get_tool,
     is_client_tool,
@@ -43,6 +44,7 @@ vector_memory = LazyAdapterProxy("app.adapters.memory.vector_memory", "vector_me
 bridge = LazyAdapterProxy("app.adapters.alfonso_bridge", "bridge")
 
 def extract_json_robust(raw: str) -> dict | None:
+    # pyrefly: ignore [missing-import]
     from app.adapters.llm_client import extract_json_robust as concrete
     return concrete(raw)
 
@@ -716,3 +718,67 @@ class PlannerOrchestrator:
             "type": "chat",
             "response": chat_response,
         }
+
+    async def run_stream(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
+        from app.utils.logger import app_logger, attach_request_id, error_logger
+        logger = attach_request_id(app_logger, request_id)
+        from app.adapters.memory.memory import tenant_context
+        token = tenant_context.set(client_id or "default")
+        try:
+            # 1. Rutas rápidas
+            routed = await self.agent_router.route_if_applicable(user_message, session_id, client_id, logger)
+            if routed:
+                import json
+                yield json.dumps({"type": "chat", "response": routed.get("response", "")})
+                return
+
+            # 2. Construir prompt
+            from app.infrastructure.adapters.llm_client import get_system_prompt
+            system_prompt = get_system_prompt("tool", client_id=client_id)
+            context, docs, facts = await self.context_service.build_context(user_message, session_id, client_id)
+            full_prompt = f"{system_prompt}\n\n<context>\n{context}\n</context>\n"
+            
+            messages = [{"role": "system", "content": full_prompt}]
+            recent_history = self.memory.get_history(session_id)
+            if len(recent_history) > 5:
+                recent_history = recent_history[-5:]
+            messages.extend(recent_history)
+            messages.append({"role": "user", "content": user_message})
+
+            # 3. Stream
+            buffer = ""
+            is_json = False
+            first_chunk = True
+            
+            import json
+            async for chunk in self.llm.stream_chat(messages):
+                if first_chunk:
+                    chunk_stripped = chunk.strip()
+                    if chunk_stripped.startswith("{") or chunk_stripped.startswith("```json"):
+                        is_json = True
+                    first_chunk = False
+                    
+                if is_json:
+                    buffer += chunk
+                else:
+                    buffer += chunk
+                    yield json.dumps({"type": "chunk", "text": chunk})
+            
+            # Si era JSON (Herramienta) lo ejecutamos al final
+            if is_json:
+                data = extract_json_robust(buffer)
+                if data and "tool" in data:
+                    res = await self.execution_engine.execute_tool(data["tool"], data.get("args", {}), session_id, client_id, request_id, logger, error_logger)
+                    yield json.dumps({"type": "tool", "tool": data["tool"], "result": res})
+                    return
+                else:
+                    # Falsa alarma, era texto que empezaba con {
+                    yield json.dumps({"type": "chat", "response": buffer})
+            else:
+                yield json.dumps({"type": "chat", "response": buffer})
+                
+            self.memory.add_message(session_id, "user", user_message)
+            self.memory.add_message(session_id, "assistant", buffer)
+
+        finally:
+            tenant_context.reset(token)

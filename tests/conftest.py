@@ -7,8 +7,8 @@ import os
 # Si app.adapters.memory tiene una instancia global 'memory', la parchearemos.
 # Forzamos a que cualquier instancia de SessionMemory use la base de datos de test local
 os.environ["ALFONSO_DB_PATH"] = "data/memory_test.db"
-os.environ["GEMINI_API_KEY"] = "mock_key_for_tests"
-os.environ["GEMINI_PROXY_URL"] = ""
+os.environ["GEMINI_PROXY_URL"] = "http://mock_proxy_for_tests"
+os.environ["ALFONSO_CLIENT_SECRET"] = "mock_secret"
 os.environ["ALFONSO_API_KEY"] = "test_api_key_default"
 os.environ["ALFONSO_BRIDGE_TOKEN"] = "test_bridge_token_default"
 os.environ["ALFONSO_DEV_PREMIUM_BYPASS"] = ""

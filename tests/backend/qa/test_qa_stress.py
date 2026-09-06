@@ -27,6 +27,18 @@ def clean_and_mock(monkeypatch):
             }
     monkeypatch.setattr(routes, "orchestrator", MockOrchestrator())
 
+    # Mockear GeminiClient para no saturar la API externa durante el test de estrés
+    class MockGemini:
+        async def generate(self, *args, **kwargs):
+            time.sleep(0.01)
+            return '{"iva_rate": 21.0, "irpf_rate": 0.0}', 10, 10
+        async def chat(self, *args, **kwargs):
+            time.sleep(0.01)
+            return "Respuesta simulada"
+
+    monkeypatch.setattr("app.infrastructure.adapters.llm_client.GeminiClient", lambda: MockGemini())
+
+
     # Teardown de base de datos e invoices
     pdf_dir = Path(__file__).resolve().parents[2] / "data" / "archivo fiscal" / "facturas pendientes"
     pre_existing_pdfs = set(pdf_dir.glob("Factura_*.pdf")) if pdf_dir.exists() else set()

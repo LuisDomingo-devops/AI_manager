@@ -35,3 +35,7 @@ data/
 outputs/
 business_strategy/
 .agy/
+graphify-out/
+node_modules/
+packages/
+graphify-out-prod/

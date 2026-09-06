@@ -65,7 +65,7 @@ def test_tax_engine_ocr_resolution_multiterritory():
             '{"iva_rate": 7.0, "confidence": 0.95}',  # comun_err
             '{"iva_rate": 7.0, "confidence": 0.95}',  # can_ok
             '{"iva_rate": 21.0, "confidence": 0.95}', # can_err
-            '{"confidence": 0.50}',                   # can_inf
+            '{}',                                     # can_inf (sin IVA explícito)
             '{"iva_rate": 4.0, "confidence": 0.95}',  # navarra_ok
         ]
         with patch.object(settings, "FISCAL_TERRITORY", "comun"):
@@ -94,9 +94,9 @@ def test_tax_engine_ocr_resolution_multiterritory():
             assert res_can_err["requires_manual_confirmation"] is True  # Requiere confirmación por no estar soportada en Canarias
             assert res_can_err["confidence_score"] == 0.50
             
-            # Inferencia de tasa por defecto (IGIC 7%) en caso de ausencia
+            # Inferencia de tasa por defecto en caso de ausencia
             res_can_inf = TaxEngine.resolve_rates_with_confidence("Factura sin tasas explícitas")
-            assert res_can_inf["iva_rate"] == 0.0  # Tasa IGIC por defecto en Canarias (resuelta a 0.0 en TaxEngine)
+            assert res_can_inf["iva_rate"] == 0.0  # El motor de fallback devuelve 0.0 cuando no encuentra tasas explícitas
             assert res_can_inf["is_iva_inferred"] is True
             
         # 3. Caso Navarra (Hacienda Foral)

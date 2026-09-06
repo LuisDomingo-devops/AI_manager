@@ -301,13 +301,13 @@ class GeminiClient(LLMPort):
             }
 
         headers = {}
-        if settings.GEMINI_PROXY_URL:
-            url = settings.GEMINI_PROXY_URL
-            headers["X-Alfonso-License-Token"] = settings.ALFONSO_CLIENT_SECRET
-            payload["model"] = settings.GEMINI_MODEL_NAME
-            payload["apiVersion"] = settings.GEMINI_API_VERSION
-        else:
-            url = f"https://generativelanguage.googleapis.com/{settings.GEMINI_API_VERSION}/models/{settings.GEMINI_MODEL_NAME}:generateContent?key={settings.GEMINI_API_KEY}"
+        if not settings.GEMINI_PROXY_URL:
+            raise RuntimeError("GEMINI_PROXY_URL no está configurado. La conexión directa a la API no está permitida.")
+        
+        url = settings.GEMINI_PROXY_URL
+        headers["X-Alfonso-License-Token"] = settings.ALFONSO_CLIENT_SECRET
+        payload["model"] = settings.GEMINI_MODEL_NAME
+        payload["apiVersion"] = settings.GEMINI_API_VERSION
         
         import asyncio
         for attempt in range(4):
@@ -356,7 +356,7 @@ class GeminiClient(LLMPort):
         model_name = settings.GEMINI_MODEL_NAME
 
         # Si hay GEMINI_API_KEY o GEMINI_PROXY_URL configurada, usar Gemini
-        if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
+        if settings.GEMINI_PROXY_URL:
             llm_logger.info("Utilizando la API de Gemini para chat (en la nube)")
             temp = kwargs.get("options", {}).get("temperature", 0.7)
             content, p_tok, c_tok = await self._call_gemini_api(anonymized_messages, temperature=temp)
@@ -406,6 +406,62 @@ class GeminiClient(LLMPort):
 
 
 
+
+    async def stream_chat(self, messages: list[dict[str, str]], **kwargs):
+        """Envía un listado completo de mensajes al modelo de lenguaje y devuelve un generador asíncrono (SSE)."""
+        anonymized_messages = messages
+        if settings.ANONYMIZE_LLM_CALLS:
+            from app.utils.anonymizer import DataAnonymizer
+            anonymizer = DataAnonymizer()
+            anonymized_messages = []
+            for msg in messages:
+                anonymized_messages.append({"role": msg.get("role"), "content": anonymizer.anonymize(msg.get("content", ""))[0]})
+
+        model_name = settings.GEMINI_MODEL_NAME
+
+        if settings.GEMINI_PROXY_URL:
+            # Asumimos que el proxy soporta stream enviando una flag o passthrough
+            url = settings.GEMINI_PROXY_URL
+            headers = {"X-Alfonso-License-Token": settings.ALFONSO_CLIENT_SECRET}
+            contents = []
+            for msg in anonymized_messages:
+                role = "model" if msg.get("role") == "assistant" else "user"
+                contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+                
+            payload = {
+                "contents": contents,
+                "model": model_name,
+                "apiVersion": settings.GEMINI_API_VERSION,
+                "stream": True # Flag para el worker
+            }
+            
+            # Usar streaming de httpx
+            import httpx
+            async with client.stream("POST", url, json=payload, headers=headers) as response:
+                if response.status_code != 200:
+                    yield f"Error: {response.status_code}"
+                    return
+                async for chunk in response.aiter_text():
+                    if chunk:
+                        yield chunk
+        else:
+            # Fallback a Ollama stream
+            payload = {
+                "model": model_name,
+                "messages": anonymized_messages,
+                "stream": True,
+                "keep_alive": -1,
+            }
+            async with client.stream("POST", f"{settings.OLLAMA_BASE_URL}/api/chat", json=payload) as response:
+                async for line in response.aiter_lines():
+                    if line:
+                        try:
+                            import json
+                            data = json.loads(line)
+                            yield data.get("message", {}).get("content", "")
+                        except:
+                            pass
+
     async def generate(
         self,
         message: str,
@@ -437,7 +493,7 @@ class GeminiClient(LLMPort):
 
         system_prompt = get_system_prompt(mode, client_id=client_id)
 
-        if settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL:
+        if settings.GEMINI_PROXY_URL:
             if mode == "tool":
                 from app.domain.prompt_generator import generate_tool_prompt
                 tool_template = generate_tool_prompt(client_id)
@@ -484,8 +540,8 @@ class GeminiClient(LLMPort):
         model_name = settings.GEMINI_MODEL_NAME
 
         try:
-            if not (settings.GEMINI_API_KEY or settings.GEMINI_PROXY_URL):
-                raise RuntimeError("GEMINI_API_KEY o GEMINI_PROXY_URL no están configurados.")
+            if not (settings.GEMINI_PROXY_URL):
+                raise RuntimeError("GEMINI_PROXY_URL no está configurado.")
                 
             logger.info("Utilizando la API de Gemini para generar (en la nube)")
             content, p_tok, c_tok = await self._call_gemini_api(messages, temperature=options_payload["temperature"])

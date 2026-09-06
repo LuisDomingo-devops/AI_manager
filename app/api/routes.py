@@ -27,17 +27,22 @@ from typing import Any, List, Optional
 from app.adapters.memory.memory import DB_PATH
 
 import secrets
-from fastapi import APIRouter, HTTPException, Query, Request, Depends, status, Form, File, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, status, Form, File, UploadFile, BackgroundTasks, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
 # Imports del núcleo
 from app.adapters import mail_db
+# pyrefly: ignore [missing-import]
 from app.adapters.calendar_db import create_event, delete_event, list_events
+# pyrefly: ignore [missing-import]
 from app.adapters.metrics import snapshot
+# pyrefly: ignore [missing-import]
 from app.adapters.tool_registry import get_tool, list_tools
+# pyrefly: ignore [missing-import]
 from app.utils.logger import app_logger, attach_request_id
+# pyrefly: ignore [missing-import]
 from app.utils.timer import Timer
 from app.config import settings
 
@@ -73,6 +78,48 @@ async def verify_api_key(
 
 # ── Routers ─────────────────────────────────────────────────────────────────
 router = APIRouter(prefix="")
+
+@router.get("/dashboard/sync", summary="Obtiene todos los datos del dashboard en una sola llamada para evitar saturación.")
+async def dashboard_sync(client_id: str = Depends(verify_api_key)):
+    from app.domain.services.tax_parser_service import TaxParserService
+    # pyrefly: ignore [missing-import]
+    from app.adapters.calendar_db import list_events
+    from app.domain.services.verifactu_service import VerifactuService
+    import datetime
+    
+    # 1. Aggregates
+    try:
+        aggregates = TaxParserService.get_quarterly_aggregates()
+    except Exception:
+        aggregates = []
+        
+    # 2. Events (current month)
+    try:
+        today = datetime.date.today()
+        start = today.replace(day=1)
+        # next month
+        if start.month == 12:
+            end = start.replace(year=today.year+1, month=1)
+        else:
+            end = start.replace(month=today.month+1)
+        events = list_events(start.isoformat(), end.isoformat())
+    except Exception:
+        events = []
+        
+    # 3. Compliance
+    try:
+        compliance = VerifactuService.get_compliance_declaration_dossier(client_id=client_id)
+    except Exception:
+        compliance = {}
+
+    return {
+        "status": "ok",
+        "aggregates": aggregates,
+        "events": events,
+        "compliance": compliance,
+        "customization": {} # Placeholder if needed
+    }
+
 router_browser = APIRouter(prefix="/browser", tags=["browser"], dependencies=[Depends(verify_api_key)])
 router_computer = APIRouter(prefix="/computer", tags=["computer"], dependencies=[Depends(verify_api_key)])
 router_calendar = APIRouter(prefix="/calendar", tags=["calendar"], dependencies=[Depends(verify_api_key)])
@@ -91,6 +138,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     client_info: Optional[dict] = None
+    stream: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -358,6 +406,24 @@ async def chat_endpoint(req: ChatRequest, request: Request):
     logger.info("SESSION_ID: %s", session_id)
     logger.info("CLIENT_ID: %s", client_id)
     logger.info("USER MESSAGE: %s", req.message)
+
+    if getattr(req, "stream", False):
+        async def event_stream():
+            try:
+                import json
+                async for chunk in orchestrator.run_stream(
+                    req.message,
+                    llm,
+                    request_id=request_id,
+                    session_id=session_id,
+                    client_id=client_id,
+                ):
+                    yield f"data: {chunk}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                import json
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     with Timer() as t:
         result = await orchestrator.run(

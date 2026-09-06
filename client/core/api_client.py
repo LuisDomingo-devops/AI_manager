@@ -30,7 +30,7 @@ class AlfonsoAPI:
         return False
 
 
-    def send_chat(self, message: str, session_id: str) -> dict:
+    def send_chat(self, message: str, session_id: str, stream: bool = False):
         # Obtener estructura fresca del escritorio en tiempo real
         desktop_structure = []
         try:
@@ -63,6 +63,7 @@ class AlfonsoAPI:
                 f"{self.base_url}/chat",
                 json={
                     "message": message,
+                    "stream": stream,
                     "client_info": {
                         "desktop_structure": desktop_structure,
                         "client_id": client_id
@@ -70,10 +71,28 @@ class AlfonsoAPI:
                 },
                 headers={"X-Session-ID": session_id},
                 timeout=300,
+                stream=stream
             )
             r.raise_for_status()
+            if stream:
+                def sse_generator():
+                    import json
+                    for line in r.iter_lines():
+                        if line:
+                            decoded_line = line.decode('utf-8')
+                            if decoded_line.startswith("data: "):
+                                data_str = decoded_line[6:]
+                                if data_str == "[DONE]":
+                                    break
+                                try:
+                                    yield json.loads(data_str)
+                                except:
+                                    pass
+                return sse_generator()
             return r.json()
         except Exception as e:
+            if stream:
+                return [{"type": "error", "message": str(e)}]
             return {"status": "error", "message": str(e)}
         
     def stt(self, audio_bytes):
@@ -408,3 +427,13 @@ class AlfonsoAPI:
             return r.json()
         except Exception as e:
             raise Exception(f"API DELETE error: {str(e)}")
+
+    def get_dashboard_sync(self) -> dict:
+        """Obtiene los datos del dashboard sincronizados para el arranque inicial."""
+        try:
+            r = self.session.get(f"{self.base_url}/dashboard/sync", timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except requests.exceptions.RequestException as e:
+            print(f"[API] Error obteniendo /dashboard/sync: {e}")
+            return {"status": "error", "message": str(e)}

@@ -25,7 +25,6 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     ENV: str = "development"
-    GEMINI_API_KEY: str = ""
     GEMINI_MODEL_NAME: str = "gemini-3.1-flash-lite"
     GEMINI_API_VERSION: str = "v1beta"
     GEMINI_PROXY_URL: str = ""

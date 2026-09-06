@@ -9,13 +9,16 @@ def clean_proxy_settings():
     # Guardar valores originales
     orig_url = settings.GEMINI_PROXY_URL
     orig_secret = settings.ALFONSO_CLIENT_SECRET
-    orig_key = settings.GEMINI_API_KEY
+    orig_key = getattr(settings, "GEMINI_API_KEY", None)
     orig_anon = settings.ANONYMIZE_LLM_CALLS
     yield
     # Restaurar
     settings.GEMINI_PROXY_URL = orig_url
     settings.ALFONSO_CLIENT_SECRET = orig_secret
-    settings.GEMINI_API_KEY = orig_key
+    if orig_key is not None:
+        settings.GEMINI_API_KEY = orig_key
+    elif hasattr(settings, "GEMINI_API_KEY"):
+        delattr(settings, "GEMINI_API_KEY")
     settings.ANONYMIZE_LLM_CALLS = orig_anon
 
 @pytest.mark.skip(reason="Needs AsyncMock for httpx.AsyncClient")

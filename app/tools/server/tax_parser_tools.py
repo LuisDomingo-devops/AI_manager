@@ -115,8 +115,39 @@ async def get_quarterly_aggregates(year: Optional[int] = None) -> dict:
 
 
 # Registro de herramientas exportado para la carga dinámica de plugins
+
+async def get_full_financial_report(year: Optional[int] = None) -> dict:
+    """
+    Obtiene un reporte financiero macro que incluye agregados trimestrales y el libro diario de forma simultánea.
+    Útil para consultas genéricas sobre impuestos pagados, gastos y evolución contable en un mismo año.
+    
+    Parámetros:
+    - year: Año opcional (ej. 2026).
+    """
+    try:
+        from app.domain.services.ledger_service import LedgerService
+        tool_logger.info(f"Generando reporte financiero completo (macro-herramienta) para el año: {year or 'todos'}")
+        
+        aggregates = TaxParserService.get_quarterly_aggregates(year=year)
+        libro_diario = []
+        if year:
+            libro_diario = LedgerService.get_libro_diario(year=year)
+            
+        return {
+            "status": "ok",
+            "year_filter": year,
+            "aggregates": aggregates,
+            "libro_diario": libro_diario
+        }
+    except Exception as e:
+        tool_logger.exception("Error al calcular el reporte financiero completo")
+        return {"status": "error", "message": f"Error al obtener el reporte: {str(e)}"}
+
+
+# Registro de herramientas exportado para la carga dinámica de plugins
 TOOLS = {
     "parse_invoice": parse_invoice,
     "parse_tax_model": parse_tax_model,
     "get_quarterly_aggregates": get_quarterly_aggregates,
+    "get_full_financial_report": get_full_financial_report,
 }
