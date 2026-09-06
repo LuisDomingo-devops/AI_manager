@@ -200,6 +200,8 @@ async def test_verify_api_key(monkeypatch):
     
     # Caso 2: API Key configurada y válida
     monkeypatch.setattr(settings, "ALFONSO_API_KEY", "secret_key_123")
+    from app.adapters.memory.memory import tenant_context
+    tenant_context.set("default")
     res = await verify_api_key("secret_key_123")
     assert res == "default"
     

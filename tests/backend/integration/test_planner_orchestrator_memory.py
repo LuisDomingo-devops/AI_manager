@@ -8,6 +8,8 @@ from app.adapters.memory import memory, vector_memory
 def clean_databases():
     # Limpiar memoria de sesión y vectorial
     vector_memory.clear()
+    from app.adapters.memory.memory import tenant_context
+    tenant_context.set("default")
     # Limpiar SQLite
     sessions = memory.list_sessions()
     for s in sessions:
