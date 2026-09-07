@@ -8,8 +8,10 @@ from .advisor_router import router as advisor_router
 from .tasks_router import router as tasks_router
 from .subscriptions_router import router as subscriptions_router
 from .onboarding_router import router as onboarding_router
+from .auth_router import router as auth_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(auth_router, tags=["Auth & Usuarios"])
 api_v1_router.include_router(billing_router, tags=["Billing & E-Invoice"])
 api_v1_router.include_router(accounting_router, tags=["Accounting PGC"])
 api_v1_router.include_router(banking_router, tags=["Open Banking PSD2"])
