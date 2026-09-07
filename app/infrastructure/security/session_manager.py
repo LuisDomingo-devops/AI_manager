@@ -13,7 +13,10 @@ class SessionManager:
 
     @classmethod
     def init_session_schema(cls) -> None:
-        """Inicializa la tabla de sesiones activas."""
+        """
+        DDL canónico en migrations/versions/013_infra_tables.py.
+        Se mantiene CREATE TABLE IF NOT EXISTS como red de seguridad para DBs existentes.
+        """
         if cls._db_initialized:
             return
         with cls._lock:

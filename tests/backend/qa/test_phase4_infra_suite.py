@@ -31,8 +31,20 @@ def test_migrations_runner_lifecycle():
     assert "010" in applied_first
 
     # 2. Verificar que se registraron en schema_migrations
+    # Se comprueba que las versiones core (001-010) y las de servicios (011-013)
+    # están todas presentes. Se usa issubset para ser resiliente a migraciones futuras.
     applied_in_db = MigrationRunner.get_applied_migrations(conn)
-    assert set(applied_in_db) == {"001", "002", "003", "004", "005", "006", "007", "008", "009", "010"}
+    expected_versions = {
+        "000",  # baseline marker
+        "001", "002", "003", "004", "005",
+        "006", "007", "008", "009", "010",
+        "011",  # employee/payroll schema
+        "012",  # verifactu/sif schema
+        "013",  # infra tables (audit, metrics, sessions)
+    }
+    assert expected_versions.issubset(set(applied_in_db)), (
+        f"Versiones faltantes en schema_migrations: {expected_versions - set(applied_in_db)}"
+    )
 
     # 3. Idempotencia: segunda ejecución consecutiva no debe reaplicar nada
     applied_second = MigrationRunner.run_pending_migrations(conn)

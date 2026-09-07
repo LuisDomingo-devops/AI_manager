@@ -7,7 +7,8 @@ from app.utils.encryption import encryptor
 from app.domain.services.tax_parser_service import TaxParserService
 from app.domain.services.verifactu_service import VerifactuService
 from app.adapters.memory.memory import _get_connection, memory
-from app.adapters.mail_db import create_email, list_emails
+# pyre-ignore [Pyre-ignore]
+from app.adapters.mail_db import create_email, list_emails  
 
 @pytest.fixture(autouse=True)
 def clean_system_state(tmp_path, monkeypatch):
@@ -44,7 +45,9 @@ def clean_system_state(tmp_path, monkeypatch):
         
         # Recrear todas las tablas
         from app.adapters.memory.memory import _init_db_schema
-        from app.adapters.mail_db import _init_mail_schema
+        # pyre-ignore [Pyre-ignore] 
+        from app.adapters.mail_db import _init_mail_schema  
+        # pyrefly: ignore [missing-import]
         from app.adapters.calendar_db import _init_calendar_schema
         from app.domain.services.verifactu_service import VerifactuService
         

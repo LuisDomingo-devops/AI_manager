@@ -16,7 +16,10 @@ class AuditLedgerService:
 
     @classmethod
     def init_ledger_schema(cls) -> None:
-        """Inicializa la tabla de log de auditoría inmutable si no existe."""
+        """
+        DDL canónico en migrations/versions/013_infra_tables.py.
+        Se mantiene CREATE TABLE IF NOT EXISTS como red de seguridad para DBs existentes.
+        """
         with cls._lock:
             conn = _get_connection()
             try:

@@ -16,7 +16,10 @@ class MetricsService:
 
     @classmethod
     def init_metrics_schema(cls) -> None:
-        """Inicializa la tabla de métricas de consumo de LLM."""
+        """
+        DDL canónico en migrations/versions/013_infra_tables.py.
+        Se mantiene CREATE TABLE IF NOT EXISTS como red de seguridad para DBs existentes.
+        """
         with cls._lock:
             conn = _get_connection()
             try:

@@ -37,28 +37,33 @@ def upgrade(conn: sqlite3.Connection):
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS invoices (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id     TEXT NOT NULL,
-            date           TEXT NOT NULL,
-            issuer_name    TEXT NOT NULL,
-            issuer_nif     TEXT NOT NULL,
-            receiver_name  TEXT,
-            receiver_nif   TEXT,
-            base_imponible REAL,
-            iva_rate       REAL,
-            iva_amount     REAL,
-            irpf_rate      REAL,
-            irpf_amount    REAL,
-            total_amount   REAL NOT NULL,
-            category       TEXT,
-            quarter        INTEGER,
-            year           INTEGER,
-            file_path      TEXT,
-            status         TEXT DEFAULT 'pending',
-            concept        TEXT,
-            blind_index    TEXT
+            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id                  TEXT NOT NULL,
+            date                        TEXT NOT NULL,
+            issuer_name                 TEXT NOT NULL,
+            issuer_nif                  TEXT NOT NULL,
+            receiver_name               TEXT,
+            receiver_nif                TEXT,
+            base_imponible              REAL,
+            iva_rate                    REAL,
+            iva_amount                  REAL,
+            irpf_rate                   REAL,
+            irpf_amount                 REAL,
+            total_amount                REAL NOT NULL,
+            category                    TEXT,
+            quarter                     INTEGER,
+            year                        INTEGER,
+            file_path                   TEXT,
+            status                      TEXT DEFAULT 'firmada',
+            concept                     TEXT,
+            blind_index                 TEXT,
+            contact_id                  INTEGER,
+            tax_engine_version          TEXT,
+            requires_manual_confirmation INTEGER DEFAULT 0,
+            created_at                  TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pgc_accounts (
             code TEXT PRIMARY KEY,

@@ -21,7 +21,7 @@ class CollectionService:
             if not invoice_data:
                 return {"status": "error", "message": f"Factura '{invoice_id}' no encontrada."}
 
-            invoice_db_id = invoice_data["id"]
+            invoice_db_id = invoice_data.get("db_id", invoice_data.get("id"))
             total_invoice = invoice_data["total_amount"]
             
             # Verificar año cerrado (asumiendo que date es YYYY-MM-DD o DD/MM/YYYY)
