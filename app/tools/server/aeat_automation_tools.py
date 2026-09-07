@@ -49,6 +49,8 @@ async def get_aeat_aggregated_data(year: int, quarter: int) -> Dict[str, Any]:
             "net_result": 0.0
         }
         
+    quarter_data["legal_disclaimer"] = "AVISO LEGAL: Esta cifra es una estimación provisional y no vinculante basada en los datos actuales. No constituye asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado en el borrador oficial de la AEAT antes de su presentación."
+        
     return quarter_data
 
 
@@ -567,7 +569,8 @@ async def generate_modelo_390_summary(year: int) -> dict:
                 "operaciones_interiores_deducibles_base": total_expense_base,
                 "operaciones_interiores_deducibles_iva": total_expense_iva,
                 "resultado_declaraciones_anual": result_anual
-            }
+            },
+            "legal_disclaimer": "AVISO LEGAL: Esta cifra es una estimación provisional y no vinculante basada en los datos actuales. No constituye asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado en el borrador oficial de la AEAT antes de su presentación."
         }
     except Exception as e:
         tool_logger.exception("Error al generar resumen del Modelo 390")
@@ -690,7 +693,8 @@ async def generate_modelo_200_summary(year: int) -> dict:
                 "resultado_antes_impuestos": profit,
                 "tipo_impositivo": "25%",
                 "estimacion_impuesto_sociedades": tax_estimate
-            }
+            },
+            "legal_disclaimer": "AVISO LEGAL: Esta cifra es una estimación provisional y no vinculante basada en los datos actuales. No constituye asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado en el borrador oficial de la AEAT antes de su presentación."
         }
     except Exception as e:
         tool_logger.exception("Error al generar resumen del Modelo 200")
@@ -825,7 +829,8 @@ async def generate_modelo_390_summary(year: int) -> dict:
         return {
             "status": "ok",
             "year": year,
-            "summary": data
+            "summary": data,
+            "legal_disclaimer": "AVISO LEGAL: Esta cifra es una estimación provisional y no vinculante basada en los datos actuales. No constituye asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado en el borrador oficial de la AEAT antes de su presentación."
         }
     except Exception as e:
         tool_logger.exception("Error al generar resumen del Modelo 390")

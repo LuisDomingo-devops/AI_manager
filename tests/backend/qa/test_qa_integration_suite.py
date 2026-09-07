@@ -14,9 +14,23 @@ def clean_system_state(tmp_path, monkeypatch):
     """Limpia el estado de la base de datos de test antes de cada ejecución."""
     import sys
     import app.infrastructure.database.memory.memory
+    from app.infrastructure.database.mail_db import get_connection as get_mail_connection
+    from app.domain.services.verifactu_service import VerifactuService
+    
+    # Disable background worker to avoid race conditions in tests
+    VerifactuService._worker_started = True
+
     memory_module = sys.modules["app.infrastructure.database.memory.memory"]
     test_db = tmp_path / "memory_test_qa_integration.db"
     monkeypatch.setattr(memory_module, "DB_PATH", test_db)
+    
+    # Clean mail database
+    with get_mail_connection() as conn:
+        try:
+            conn.execute("DELETE FROM emails")
+            conn.commit()
+        except Exception:
+            pass
 
     with _get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS messages")
@@ -200,6 +214,7 @@ def test_integration_mail_database_encryption_and_retrieval():
     assert mail_id > 0
     
     # Comprobar cifrado en disco
+    # pyrefly: ignore [missing-import]
     from app.adapters.mail_db import get_connection as get_mail_connection
     with get_mail_connection() as conn:
         raw_mail = conn.execute("SELECT sender, body FROM emails WHERE id = ?", (mail_id,)).fetchone()

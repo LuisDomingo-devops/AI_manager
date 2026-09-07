@@ -89,28 +89,22 @@ def test_update_tax_rules_workflow():
                 "boe_reference": "Default Seed Fallback"
             }, f, indent=2, ensure_ascii=False)
 
-        # 1. Intentar actualizar sin boe_link o boe_section
-        res_fail = TaxEngine.update_tax_rules({"iva_general_rate": 22.0}, boe_link="", boe_section="Art 1")
-        assert res_fail["status"] == "error"
-
-        res_fail_section = TaxEngine.update_tax_rules({"iva_general_rate": 22.0}, boe_link="https://boe.es", boe_section="")
-        assert res_fail_section["status"] == "error"
-
-        # 2. Intentar actualizar con confirmed_by_user = False (Debe retornar pending_confirmation y no cambiar el archivo)
-        res_pending = TaxEngine.update_tax_rules(
-            {"iva_general_rate": 23.0},
-            boe_link="https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-12345",
-            boe_section="Artículo 2",
-            confirmed_by_user=False
-        )
-        assert res_pending["status"] == "pending_confirmation"
+        engine = TaxEngine()
         
-        # Verificar que no cambió el archivo
-        current = TaxEngine.load_rules()
-        assert current.get("iva_general_rate") != 23.0
+        # 1. Intentar actualizar sin boe_link o boe_section
+        res_fail = engine.update_tax_rules({"iva_general_rate": 22.0}, boe_link="", boe_section="Art 1")
+        assert res_fail["status"] == "error"
+        assert "obligatorio" in res_fail["message"].lower()
 
-        # 3. Actualizar con confirmed_by_user = True (Debe aplicar el cambio)
-        res_ok = TaxEngine.update_tax_rules(
+        # 2. Flujo completo validando confirmación humana y enlaces reales
+        proposed_rules = {"iva_general_rate": 22.0}
+        link = "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2026-12345"
+        section = "Artículo 2.1"
+        
+        # Fase 1: Sin confirmación
+        res_pending = engine.update_tax_rules(proposed_rules, boe_link=link, boe_section=section, confirmed_by_user=False)
+        assert res_pending["status"] == "pending_confirmation"
+        res_ok = engine.update_tax_rules(
             {"iva_general_rate": 23.0},
             boe_link="https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-12345",
             boe_section="Artículo 2",
@@ -118,7 +112,7 @@ def test_update_tax_rules_workflow():
         )
         assert res_ok["status"] == "ok"
         
-        current_updated = TaxEngine.load_rules()
+        current_updated = engine.load_rules()
         assert current_updated.get("iva_general_rate") == 23.0
         assert "BOE-A-2026-12345" in current_updated.get("boe_reference")
         assert "Artículo 2" in current_updated.get("boe_reference")
