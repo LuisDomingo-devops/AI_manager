@@ -84,11 +84,16 @@ async def setup_user(payload: SetupRequest):
     }
 
 
+from fastapi import Request
+# Usaremos el limiter configurado en app.api.limiter
+from app.api.limiter import limiter
+
 @router.post(
     "/login",
     summary="Iniciar sesión y obtener JWT",
 )
-async def login(payload: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, payload: LoginRequest):
     """
     Autentica al usuario con username + password.
     Devuelve un access_token (8h) y un refresh_token (30 días).

@@ -27,93 +27,8 @@ class VerifactuService:
     @classmethod
     def init_verifactu_schema(cls) -> None:
         """
-        El DDL canónico está en migrations/versions/012_verifactu_sif_canonical.py.
-        Se mantiene CREATE TABLE IF NOT EXISTS como red de seguridad para DBs existentes
-        y se incluye la migración de datos legacy (invoice_hash -> current_hash).
+        El DDL canónico está delegado a migrations/versions/012_verifactu_sif_canonical.py.
         """
-        import sqlite3
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-
-            # Fallback: garantiza que las tablas existen aunque la migración no se haya aplicado
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS verifactu_invoices (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    invoice_number  TEXT NOT NULL UNIQUE,
-                    date_of_issue   TEXT NOT NULL,
-                    issuer_nif      TEXT NOT NULL,
-                    receiver_nif    TEXT NOT NULL DEFAULT '',
-                    base_imponible  REAL NOT NULL DEFAULT 0.0,
-                    iva_amount      REAL NOT NULL DEFAULT 0.0,
-                    total_amount    REAL NOT NULL,
-                    prev_hash       TEXT,
-                    current_hash    TEXT NOT NULL,
-                    signature       TEXT,
-                    status          TEXT NOT NULL DEFAULT 'ALTA',
-                    delivery_status TEXT DEFAULT 'PENDIENTE',
-                    delivery_error  TEXT,
-                    csv             TEXT,
-                    aeat_error_code TEXT,
-                    aeat_error_desc TEXT,
-                    aeat_response_raw TEXT,
-                    retry_count     INTEGER DEFAULT 0,
-                    last_attempt_at TEXT,
-                    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS sif_event_log (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_type      TEXT NOT NULL,
-                    description     TEXT NOT NULL,
-                    prev_event_hash TEXT,
-                    current_hash    TEXT NOT NULL,
-                    signature       TEXT NOT NULL,
-                    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-                )
-            """)
-
-            # Migración de datos legacy: de esquema con invoice_hash al nuevo current_hash
-            cols_info = cursor.execute("PRAGMA table_info(verifactu_invoices)").fetchall()
-            col_names = [c["name"] for c in cols_info] if cols_info else []
-            if cols_info and "invoice_hash" in col_names and "current_hash" not in col_names:
-                conn.execute("""
-                    CREATE TABLE verifactu_invoices_migration (
-                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                        invoice_number  TEXT NOT NULL UNIQUE,
-                        date_of_issue   TEXT NOT NULL,
-                        issuer_nif      TEXT NOT NULL,
-                        receiver_nif    TEXT NOT NULL DEFAULT '',
-                        base_imponible  REAL NOT NULL DEFAULT 0.0,
-                        iva_amount      REAL NOT NULL DEFAULT 0.0,
-                        total_amount    REAL NOT NULL,
-                        prev_hash       TEXT,
-                        current_hash    TEXT NOT NULL,
-                        signature       TEXT,
-                        status          TEXT NOT NULL DEFAULT 'ALTA',
-                        delivery_status TEXT DEFAULT 'PENDIENTE',
-                        delivery_error  TEXT,
-                        csv             TEXT,
-                        aeat_error_code TEXT,
-                        aeat_error_desc TEXT,
-                        aeat_response_raw TEXT,
-                        retry_count     INTEGER DEFAULT 0,
-                        last_attempt_at TEXT,
-                        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-                    )
-                """)
-                conn.execute("""
-                    INSERT INTO verifactu_invoices_migration (
-                        id, invoice_number, date_of_issue, issuer_nif, total_amount,
-                        prev_hash, current_hash, signature, status, created_at
-                    ) SELECT id, invoice_number, date_of_issue, issuer_nif, total_amount,
-                        previous_hash, invoice_hash, signed_xml, status, created_at
-                      FROM verifactu_invoices
-                """)
-                conn.execute("DROP TABLE verifactu_invoices")
-                conn.execute("ALTER TABLE verifactu_invoices_migration RENAME TO verifactu_invoices")
-            conn.commit()
-
         # Iniciar worker de reintentos en segundo plano si no está corriendo
         if not cls._worker_started:
             cls._worker_started = True
@@ -191,7 +106,7 @@ class VerifactuService:
     @classmethod
     def get_last_invoice_hash(cls) -> Optional[str]:
         """Obtiene el hash criptográfico de la última factura registrada."""
-        cls.init_verifactu_schema()
+
         with _get_connection() as conn:
             row = conn.execute(
                 "SELECT current_hash FROM verifactu_invoices ORDER BY id DESC LIMIT 1"
@@ -252,7 +167,7 @@ class VerifactuService:
             invoice_data["issuer_nif"] = str(invoice_data.get("issuer_nif", "")).strip().upper()
             invoice_data["receiver_nif"] = str(invoice_data.get("receiver_nif", "")).strip().upper()
 
-            cls.init_verifactu_schema()
+
             prev_hash = cls.get_last_invoice_hash()
             current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
 
@@ -440,7 +355,7 @@ class VerifactuService:
         Genera el XML oficial de anulación y calcula su hash encadenado.
         """
         with cls._lock:
-            cls.init_verifactu_schema()
+
             
             # Obtener datos de la factura original
             with _get_connection() as conn:
@@ -898,7 +813,7 @@ class VerifactuService:
         Aplica control de reintentos y backoff para no sobrecargar los servicios de la AEAT.
         """
         with cls._lock:
-            cls.init_verifactu_schema()
+
             with _get_connection() as conn:
                 rows = conn.execute(
                     """
@@ -951,7 +866,7 @@ class VerifactuService:
         Verifica la integridad de toda la cadena de facturas registradas.
         Detecta cualquier modificación o manipulación de datos históricos.
         """
-        cls.init_verifactu_schema()
+
         with _get_connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM verifactu_invoices ORDER BY id ASC"
@@ -1016,7 +931,7 @@ class VerifactuService:
     @classmethod
     def get_last_event_log_hash(cls) -> Optional[str]:
         """Obtiene el hash del último evento registrado en el log SIF."""
-        cls.init_verifactu_schema()
+
         with _get_connection() as conn:
             row = conn.execute(
                 "SELECT current_hash FROM sif_event_log ORDER BY id DESC LIMIT 1"
@@ -1029,7 +944,7 @@ class VerifactuService:
         Registra un evento del sistema de facturación en el log de auditoría (SIF),
         calculando el hash del evento actual y encadenándolo con el anterior, firmado con la clave privada.
         """
-        cls.init_verifactu_schema()
+
         prev_hash = cls.get_last_event_log_hash()
         
         # Generar contenido único para el hash

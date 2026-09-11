@@ -11,14 +11,14 @@ from app.config import settings
 
 @pytest.fixture(autouse=True)
 def limpiar_usuario():
-    """Limpia usuario y tokens antes/después de cada test."""
+    """Limpia usuario y tokens antes/después de cada test en el tenant por defecto."""
     from app.adapters.memory.memory import _get_connection
-    with _get_connection() as conn:
+    with _get_connection("default") as conn:
         conn.execute("DELETE FROM app_user")
         conn.execute("DELETE FROM refresh_tokens")
         conn.commit()
     yield
-    with _get_connection() as conn:
+    with _get_connection("default") as conn:
         conn.execute("DELETE FROM app_user")
         conn.execute("DELETE FROM refresh_tokens")
         conn.commit()

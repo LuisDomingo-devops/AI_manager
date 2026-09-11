@@ -12,13 +12,13 @@ from app.domain.services.user_service import UserService
 def limpiar_usuario():
     """Aislamiento: limpia usuario y tokens antes y después de cada test."""
     from app.adapters.memory.memory import _get_connection
-    with _get_connection() as conn:
+    with _get_connection("default") as conn:
         conn.execute("DELETE FROM app_user")
         conn.execute("DELETE FROM refresh_tokens")
         conn.commit()
     UserService.setup_user("admin", "password123", email="test@test.com")
     yield
-    with _get_connection() as conn:
+    with _get_connection("default") as conn:
         conn.execute("DELETE FROM app_user")
         conn.execute("DELETE FROM refresh_tokens")
         conn.commit()

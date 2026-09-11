@@ -12,28 +12,11 @@ from app.domain.schemas import EmployeeCreateSchema
 
 class EmployeeService:
 
-    @classmethod
-    def init_schema(cls) -> None:
-        """
-        DELEGADO A MIGRACIÓN 011.
-        El DDL de employees, payrolls, settlements y tgss_afi_records está
-        gestionado por migrations/versions/011_employee_payroll_schema.py,
-        que se aplica automáticamente en el arranque vía MigrationRunner.
-        Se mantienen únicamente los seeds de cuentas PGC necesarios para nóminas.
-        """
-        with _get_connection() as conn:
-            # Seeds de cuentas PGC para nóminas (datos, no schema)
-            conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64000000', 'Sueldos y Salarios', 'gasto')")
-            conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64100000', 'Indemnizaciones por despido', 'gasto')")
-            conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64200000', 'Seguridad Social a cargo de la empresa', 'gasto')")
-            conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47600000', 'Organismos de la Seguridad Social acreedores', 'pasivo')")
-            conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47511100', 'H.P. Acreedora por retenciones de trabajo (Modelo 111)', 'pasivo')")
-            conn.commit()
+    # init_schema() ha sido delegado completamente al MigrationRunner
 
     @classmethod
     def create_employee(cls, data: Dict[str, Any]) -> int:
         """Valida, cifra e inserta un nuevo empleado en la base de datos."""
-        cls.init_schema()
         schema = EmployeeCreateSchema(**data)
         
         monthly_salary = round(schema.gross_annual_salary / schema.num_paychecks, 2)
@@ -72,7 +55,6 @@ class EmployeeService:
     @classmethod
     def get_employee(cls, employee_id: int) -> Optional[Dict[str, Any]]:
         """Recupera y descifra los datos de un empleado por su ID."""
-        cls.init_schema()
         with _get_connection() as conn:
             row = conn.execute("SELECT * FROM employees WHERE id = ?", (employee_id,)).fetchone()
             if not row:
@@ -82,7 +64,6 @@ class EmployeeService:
     @classmethod
     def list_employees(cls, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lista todos los empleados descifrados (filtrado opcional por status)."""
-        cls.init_schema()
         query = "SELECT * FROM employees"
         params = []
         if status:
@@ -97,7 +78,6 @@ class EmployeeService:
     @classmethod
     def update_employee_status(cls, employee_id: int, status: str, end_date: Optional[str] = None) -> bool:
         """Actualiza el estado de un empleado (ACTIVE, DISMISSED, RESIGNED)."""
-        cls.init_schema()
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with _get_connection() as conn:
             conn.execute("""

@@ -90,3 +90,8 @@ def upgrade(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (employee_id) REFERENCES employees(id)
         )
     """)
+    conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64000000', 'Sueldos y Salarios', 'gasto')")
+    conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64100000', 'Indemnizaciones por despido', 'gasto')")
+    conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('64200000', 'Seguridad Social a cargo de la empresa', 'gasto')")
+    conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47600000', 'Organismos de la Seguridad Social acreedores', 'pasivo')")
+    conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47511100', 'H.P. Acreedora por retenciones de trabajo (Modelo 111)', 'pasivo')")

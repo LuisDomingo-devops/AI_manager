@@ -4,11 +4,6 @@ import sqlite3
 import contextvars
 from pathlib import Path
 
-from app.infrastructure.database.schemas.core_schema import init_core_schema
-from app.infrastructure.database.schemas.billing_schema import init_billing_schema
-from app.infrastructure.database.schemas.accounting_schema import init_accounting_schema
-from app.infrastructure.database.schemas.ai_memory_schema import init_ai_memory_schema
-
 tenant_context = contextvars.ContextVar("tenant_context", default="default")
 
 IS_TESTING = "pytest" in sys.modules or os.getenv("TESTING") == "true"
@@ -24,17 +19,14 @@ _initialized_dbs = set()
 _active_tenant = None
 
 def init_all_schemas(conn: sqlite3.Connection) -> None:
-    init_ai_memory_schema(conn)
-    init_core_schema(conn)
-    init_billing_schema(conn)
-    init_accounting_schema(conn)
-    
-    # Run dynamic migrations if any (from original logic)
+    # Delegate 100% of schema initialization to the MigrationRunner
     try:
         from app.infrastructure.database.migrations import MigrationRunner
         MigrationRunner.run_pending_migrations(conn)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("migrations").error(f"Error executing migrations: {e}")
+        raise
 
 def _get_connection(client_id: str = None) -> sqlite3.Connection:
     global _active_tenant
