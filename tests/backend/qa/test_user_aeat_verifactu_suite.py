@@ -41,29 +41,27 @@ def setup_test_environment(tmp_path, monkeypatch):
     
     # Inicializar base de datos
     with _get_connection() as conn:
+        from app.adapters.memory.memory import _init_db_schema
+        from app.adapters.mail_db import _init_mail_schema
+        _init_db_schema(conn)
+        _init_mail_schema(conn)
+        
         conn.execute("DELETE FROM verifactu_invoices")
         conn.execute("DELETE FROM invoices")
         conn.execute("DELETE FROM emails")
         conn.execute("DELETE FROM user_profile")
         conn.commit()
-        
-        from app.adapters.memory.memory import _init_db_schema
-        from app.adapters.mail_db import _init_mail_schema
-        _init_db_schema(conn)
-        _init_mail_schema(conn)
 
         
         # Insertar perfil de usuario para los tests (nombres de columna correctos de user_profile)
         from app.utils.encryption import encryptor
         conn.execute("""
-            INSERT INTO user_profile (user_type, razon_social, nif, cert_path, cert_password)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO user_profile (user_type, razon_social, nif)
+            VALUES (?, ?, ?)
         """, (
             encryptor.encrypt("autonomo"),
             encryptor.encrypt("Luis Domingo Pérez"),
-            encryptor.encrypt("12345678Z"),
-            encryptor.encrypt(""), # Dejamos vacío para que use las variables de entorno configuradas arriba
-            encryptor.encrypt("")
+            encryptor.encrypt("12345678Z")
         ))
         conn.commit()
         

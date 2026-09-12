@@ -1,0 +1,34 @@
+INFO     migrations:migrations.py:49 Aplicando migración: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO     migrations:migrations.py:58 Migración 000 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 001 - Esquema base inicial: conversaciones, memoria, facturación, cuentas PGC y conciliación bancaria
+INFO     migrations:migrations.py:58 Migración 001 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 002 - Esquema Veri*Factu, registro de auditoría del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO     migrations:migrations.py:58 Migración 002 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retención IRPF
+INFO     migrations:migrations.py:58 Migración 003 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO     migrations:migrations.py:58 Migración 004 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 005 - Reconstrucción y normalización atómica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO     migrations:migrations.py:58 Migración 005 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 006 - Tabla de personalización de documentos (logo, colores y plantillas)
+INFO     migrations:migrations.py:58 Migración 006 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 007 - Tabla de bienes de inversión y activos para cálculo de amortizaciones
+INFO     migrations:migrations.py:58 Migración 007 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO     migrations:migrations.py:58 Migración 008 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO     migrations:migrations.py:58 Migración 009 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 010 - Añadir campos de auditoría del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO     migrations:migrations.py:58 Migración 010 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO     migrations:migrations.py:58 Migración 011 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO     migrations:migrations.py:58 Migración 012 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO     migrations:migrations.py:58 Migración 013 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 014 - 014_user_credentials
+INFO     migrations:migrations.py:58 Migración 014 aplicada con éxito.
+INFO     httpx:_client.py:1025 HTTP Request: POST https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP "HTTP/1.0 302 Moved Temporarily"
+INFO     excel_sync:excel_sync.py:146 Excel sincronizado correctamente en data/facturas_alfonso.xlsx. Ingresos: 0, Gastos: 0
+INFO     excel_sync:excel_sync.py:146 Excel sincronizado correctamente en data/facturas_alfonso.xlsx. Ingresos: 0, Gastos: 0
+INFO     app:test_user_aeat_verifactu_suite.py:247 Auditoria de test: Alfonso ha ejecutado el modulo de AEAT correctamente.
