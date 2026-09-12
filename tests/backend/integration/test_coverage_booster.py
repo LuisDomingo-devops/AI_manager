@@ -45,7 +45,7 @@ def test_tax_parser_aggregation_decryption_exception():
     para cubrir el bloque try/except y asegurar la robustez de TaxParserService.
     """
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS invoices")
+        conn.execute("DELETE FROM invoices")
         # Inicializar esquema
         from app.adapters.memory.memory import _init_db_schema
         _init_db_schema(conn)
@@ -74,7 +74,7 @@ def test_tax_parser_aggregation_decryption_exception():
 def test_verifactu_integrity_verification_empty():
     """Verifica que la auditoría Verifactu sea válida si no hay facturas registradas."""
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         
     audit = VerifactuService.verify_chain_integrity()

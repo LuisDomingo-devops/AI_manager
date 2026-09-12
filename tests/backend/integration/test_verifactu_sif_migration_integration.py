@@ -49,7 +49,7 @@ def test_migration_005_upgrades_legacy_sif_event_log():
 
 def test_sif_event_lifecycle_startup_and_shutdown_integration():
     """Prueba de integración: Ciclo de vida completo de arranque y parada registrando eventos SIF sin errores."""
-    VerifactuService.init_verifactu_schema()
+
     
     with _get_connection() as conn:
         conn.execute("DELETE FROM sif_event_log")

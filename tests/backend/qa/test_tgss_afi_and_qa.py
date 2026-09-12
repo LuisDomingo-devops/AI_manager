@@ -13,7 +13,7 @@ from app.domain.services.tgss_affiliation_service import TgssAffiliationService
 def test_tgss_alta_afi_generation_format():
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
+
 
     emp_id = EmployeeService.create_employee({
         "nif": "12345678Z",
@@ -39,7 +39,7 @@ def test_tgss_alta_afi_generation_format():
 def test_tgss_baja_afi_generation_with_cause_codes_and_l13():
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
+
 
     emp_id = EmployeeService.create_employee({
         "nif": "87654321A",

@@ -12,7 +12,7 @@ from app.adapters.memory.memory import _get_connection, _init_db_schema
 def setup_test_db():
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
+
         conn.execute("DELETE FROM settlements")
         conn.execute("DELETE FROM payrolls")
         conn.execute("DELETE FROM tgss_afi_records")

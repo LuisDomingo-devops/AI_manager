@@ -14,7 +14,7 @@ from app.core.websocket_manager import guardian_ws_manager
 def clean_db_and_excel():
     """Limpia el estado de la base de datos de test antes de cada ejecución."""
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS invoices")
+        conn.execute("DELETE FROM invoices")
         conn.commit()
         
         # Recrear tabla de facturas

@@ -15,13 +15,13 @@ def clean_db(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_module, "DB_PATH", test_db)
     
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS invoices")
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM invoices")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         
         from app.adapters.memory.memory import _init_db_schema
         _init_db_schema(conn)
-        VerifactuService.init_verifactu_schema()
+
     yield
 
 @pytest.mark.asyncio

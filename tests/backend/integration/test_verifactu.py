@@ -12,7 +12,7 @@ def clean_db(tmp_path, monkeypatch):
     
     # Limpiar tabla verifactu antes de cada test
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     yield
 
@@ -90,7 +90,7 @@ def test_verifactu_chain_corruption():
 def test_sif_event_logging():
     # Limpiar tabla sif_event_log antes de probar
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS sif_event_log")
+        conn.execute("DELETE FROM sif_event_log")
         conn.commit()
 
     h1 = VerifactuService.log_sif_event("SYSTEM_START", "El sistema informático de facturación Alfonso ha iniciado.")

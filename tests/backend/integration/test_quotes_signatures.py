@@ -7,7 +7,7 @@ from app.utils.encryption import encryptor
 async def test_quote_digital_signature_flow():
     # 1. Limpiar base de datos
     from app.domain.services.verifactu_service import VerifactuService
-    VerifactuService.init_verifactu_schema()
+
     conn = _get_connection()
     try:
         cursor = conn.cursor()

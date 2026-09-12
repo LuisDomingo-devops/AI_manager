@@ -15,7 +15,7 @@ def setup_test_db():
     tenant_context.set("default")
     MetricsService._db_initialized = False
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS llm_metrics_log")
+        conn.execute("DELETE FROM llm_metrics_log")
         conn.commit()
 
 def test_metrics_logging_and_api():

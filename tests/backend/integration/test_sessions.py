@@ -15,7 +15,7 @@ def setup_test_env():
     from app.infrastructure.security.session_manager import SessionManager
     SessionManager._db_initialized = False
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS user_sessions")
+        conn.execute("DELETE FROM user_sessions")
         conn.commit()
 
 def test_session_auth_flow():

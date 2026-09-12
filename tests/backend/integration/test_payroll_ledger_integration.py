@@ -19,7 +19,7 @@ from app.tools.server.payroll_tools import (
 def setup_test_db():
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
+
         try:
             conn.execute("DELETE FROM ledger_entries")
             conn.execute("DELETE FROM journal_entries")

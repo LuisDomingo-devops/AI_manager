@@ -16,7 +16,7 @@ from app.utils.encryption import encryptor
 def setup_test_env():
     # Establecer tenant para tests
     token = tenant_context.set("compliance_tenant")
-    VerifactuService.init_verifactu_schema()
+
     with _get_connection() as conn:
         _init_db_schema(conn)
         conn.execute("DELETE FROM invoices")

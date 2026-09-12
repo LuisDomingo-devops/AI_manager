@@ -11,7 +11,7 @@ from app.domain.services.tgss_affiliation_service import TgssAffiliationService
 def test_tgss_afi_structure_compliance_full_lifecycle():
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
+
 
     emp_id = EmployeeService.create_employee({
         "nif": "12345678Z",

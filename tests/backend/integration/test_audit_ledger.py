@@ -13,8 +13,8 @@ def clean_test_db():
     
     # Limpiar tabla de logs
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS audit_ledger_log")
-        conn.execute("DROP TABLE IF EXISTS clients")
+        conn.execute("DELETE FROM audit_ledger_log")
+        conn.execute("DELETE FROM clients")
         # Re-inicializar esquema de clientes si es necesario
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clients (

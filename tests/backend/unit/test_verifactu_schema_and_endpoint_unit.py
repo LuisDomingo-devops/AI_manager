@@ -8,7 +8,7 @@ from app.config import settings
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    VerifactuService.init_verifactu_schema()
+
     with _get_connection() as conn:
         conn.execute("DELETE FROM sif_event_log")
         conn.execute("DELETE FROM verifactu_invoices")

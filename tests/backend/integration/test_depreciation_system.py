@@ -106,7 +106,7 @@ async def test_sqlite_asset_repository_and_tools():
     tenant_context.set("default")
     # Ejecutar migración de assets
     with _get_connection("default") as conn:
-        conn.execute("DROP TABLE IF EXISTS assets")
+        conn.execute("DELETE FROM assets")
         # Re-inicializar a través de la migración
         import importlib
         mod_mig = importlib.import_module("migrations.versions.007_asset_depreciation")

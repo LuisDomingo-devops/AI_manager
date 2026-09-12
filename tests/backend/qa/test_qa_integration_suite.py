@@ -34,13 +34,13 @@ def clean_system_state(tmp_path, monkeypatch):
             pass
 
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS messages")
-        conn.execute("DROP TABLE IF EXISTS conversation_metadata")
-        conn.execute("DROP TABLE IF EXISTS invoices")
-        conn.execute("DROP TABLE IF EXISTS emails")
-        conn.execute("DROP TABLE IF EXISTS settings")
-        conn.execute("DROP TABLE IF EXISTS calendar_events")
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM messages")
+        conn.execute("DELETE FROM conversation_metadata")
+        conn.execute("DELETE FROM invoices")
+        conn.execute("DELETE FROM emails")
+        conn.execute("DELETE FROM settings")
+        conn.execute("DELETE FROM calendar_events")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         
         # Recrear todas las tablas
@@ -54,7 +54,7 @@ def clean_system_state(tmp_path, monkeypatch):
         _init_db_schema(conn)
         _init_mail_schema(conn)
         _init_calendar_schema(conn)
-        VerifactuService.init_verifactu_schema()
+
         
     # Reset in-memory cache
     memory._cache.clear()

@@ -15,11 +15,11 @@ def clean_verifactu_db(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_module, "DB_PATH", test_db)
 
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     yield
     with _get_connection() as conn:
-        conn.execute("DROP TABLE IF EXISTS verifactu_invoices")
+        conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
 
 def test_invoice_cancellation_flow():

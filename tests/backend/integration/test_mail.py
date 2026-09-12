@@ -47,7 +47,7 @@ def setup_test_db():
     
     # Asegurar esquema limpio antes de cada test
     try:
-        _test_conn.execute("DROP TABLE IF EXISTS emails")
+        _test_conn.execute("DELETE FROM emails")
         _test_conn.commit()
     except Exception:
         pass

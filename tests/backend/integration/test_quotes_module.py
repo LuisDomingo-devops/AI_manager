@@ -8,7 +8,7 @@ from app.adapters.memory.memory import _get_connection
 async def test_quotes_flow():
     # 1. Limpiar base de datos para pruebas
     from app.domain.services.verifactu_service import VerifactuService
-    VerifactuService.init_verifactu_schema()
+
     conn = _get_connection()
     try:
         cursor = conn.cursor()

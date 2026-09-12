@@ -25,11 +25,11 @@ class VerifactuService:
     _worker_started = False
 
     @classmethod
-    def init_verifactu_schema(cls) -> None:
+    def start_background_worker(cls) -> None:
         """
-        El DDL canónico está delegado a migrations/versions/012_verifactu_sif_canonical.py.
+        Inicia el worker de reintentos en segundo plano (si no está corriendo).
+        El DDL fue delegado a migraciones (012).
         """
-        # Iniciar worker de reintentos en segundo plano si no está corriendo
         if not cls._worker_started:
             cls._worker_started = True
             def run_worker():
@@ -151,6 +151,7 @@ class VerifactuService:
         Calcula el hash de encadenamiento oficial y firma criptográficamente con XMLDSig estructurado.
         Soporta facturas ordinarias (F1) y rectificativas (R1-R5).
         """
+        cls.start_background_worker()
         with cls._lock:
             # 1. Validación fiscal determinista previa (evita que datos corruptos entren a la cadena)
             from app.domain.services.fiscal_validator import validate_invoice_for_sif
@@ -354,6 +355,7 @@ class VerifactuService:
         Anula una factura registrada en Verifactu.
         Genera el XML oficial de anulación y calcula su hash encadenado.
         """
+        cls.start_background_worker()
         with cls._lock:
 
             
