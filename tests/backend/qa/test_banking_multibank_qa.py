@@ -51,14 +51,21 @@ def test_multibank_qa_end_to_end_lifecycle():
     with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO invoices (invoice_id, date, issuer_name, receiver_name, total_amount, category, file_path)
-            VALUES (?, ?, ?, ?, ?, 'ingreso', NULL)
+            INSERT INTO invoices (invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif, base_imponible, iva_rate, iva_amount, total_amount, category, file_path, quarter, year)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ingreso', NULL, ?, ?)
         """, (
             encryptor.encrypt(inv_id),
             encryptor.encrypt(today_str),
             encryptor.encrypt("Mi Empresa SL"),
+            encryptor.encrypt("B12345678"),
             encryptor.encrypt("Cliente Internacional"),
-            encryptor.encrypt("2500.00")
+            encryptor.encrypt("B87654321"),
+            2500.00,
+            0.0,
+            0.0,
+            2500.00,
+            1,
+            2026
         ))
         conn.commit()
 

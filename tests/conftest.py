@@ -63,10 +63,10 @@ def reset_db_caches():
     Esto permite que si un test hace DROP TABLE en su teardown/setup,
     el siguiente test vuelva a ejecutar CREATE TABLE IF NOT EXISTS.
     """
-    # 1. Reset memory.py _initialized_dbs
+    # 1. Reset connection_manager._initialized_dbs
     try:
-        from app.infrastructure.database.memory import memory
-        memory._initialized_dbs.clear()
+        from app.infrastructure.database import connection_manager
+        connection_manager._initialized_dbs.clear()
     except Exception:
         pass
         

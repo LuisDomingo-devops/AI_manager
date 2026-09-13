@@ -332,13 +332,14 @@ async def create_product(sku: str = None, name: str = "", price: float = 0.0, de
                 sku_final = sku.strip().upper()
                 
             cursor.execute("""
-                INSERT INTO products (sku, name, description, price, iva_rate, item_type)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (sku_final, name.strip(), description.strip(), float(price), float(iva_rate), item_type))
+                INSERT INTO products (sku, name, description, price, iva_rate, item_type, unit_price, tax_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sku_final, name.strip(), description.strip(), float(price), float(iva_rate), item_type, float(price), float(iva_rate)))
             conn.commit()
             return {"status": "ok", "message": f"Producto '{name}' con SKU '{sku_final}' registrado exitosamente."}
-        except sqlite3.IntegrityError:
-            return {"status": "error", "message": f"El producto/servicio con SKU '{sku_final}' ya existe."}
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            return {"status": "error", "message": f"El producto/servicio con SKU '{sku_final}' ya existe. Detalle: {str(e)}"}
         finally:
             conn.close()
     except Exception as e:
@@ -807,8 +808,9 @@ async def create_quote(
             cursor.execute("""
                 INSERT INTO quotes (
                     quote_id, date, client_name, client_nif, base_imponible, iva_rate, iva_amount,
-                    irpf_rate, irpf_amount, total_amount, concept, file_path, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    irpf_rate, irpf_amount, total_amount, concept, file_path, status,
+                    quote_number, quote_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 encryptor.encrypt(quote_id),
                 encryptor.encrypt(date_str),
@@ -822,7 +824,9 @@ async def create_quote(
                 encryptor.encrypt(str(total_amount)),
                 encryptor.encrypt(concept),
                 encryptor.encrypt(str(pdf_path)),
-                status
+                status,
+                quote_id,  # Para cumplir quote_number NOT NULL
+                date_str   # Para cumplir quote_date NOT NULL
             ))
             db_id = cursor.lastrowid
             

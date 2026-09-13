@@ -527,6 +527,7 @@ class LedgerService:
                 JOIN journal_entries j ON l.journal_entry_id = j.id
             """)
             rows = cursor.fetchall()
+            print(f"DEBUG: Fetched {len(rows)} rows for year {year}, quarter {quarter}")
 
             for r in rows:
                 entry_date_raw = r["entry_date"]

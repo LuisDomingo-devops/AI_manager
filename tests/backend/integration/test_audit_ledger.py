@@ -59,8 +59,8 @@ def test_audit_ledger_tampering_detection():
     
     # 2. Manipular la DB directamente simulando un ataque o alteración
     with _get_connection() as conn:
-        # Cambiar el tipo de evento en el registro 1
-        conn.execute("UPDATE audit_ledger_log SET description = 'Ataque malicioso' WHERE id = 1")
+        # Cambiar el tipo de evento en el registro inicial de este test
+        conn.execute("UPDATE audit_ledger_log SET description = 'Ataque malicioso' WHERE description = 'Modificación inicial'")
         conn.commit()
         
     # 3. Validar integridad -> Debería retornar "corrupted"

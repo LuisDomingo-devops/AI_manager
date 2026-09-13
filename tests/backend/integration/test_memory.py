@@ -12,12 +12,12 @@ def mem(tmp_path, monkeypatch):
     para que los tests no interfieran con la base de datos real.
     """
     import sys
-    memory_module = sys.modules["app.adapters.memory.memory"]
+    import app.infrastructure.database.connection_manager
+    manager_module = sys.modules["app.infrastructure.database.connection_manager"]
     db_path = tmp_path / "test_memory.db"
-    monkeypatch.setattr(memory_module, "DB_PATH", db_path)
-    # Re-inicializar la base de datos en la ruta temporal
-    memory_module._db_initialized = False
-    with memory_module._get_connection() as conn:
+    monkeypatch.setattr(manager_module, "DB_PATH", db_path)
+    manager_module._initialized_dbs.clear()
+    with manager_module._get_connection() as conn:
         pass
     return SessionMemory(max_messages=5)
 
@@ -71,11 +71,12 @@ def test_persistence_across_instances(tmp_path, monkeypatch):
     simulando un reinicio del servidor.
     """
     import sys
-    memory_module = sys.modules["app.adapters.memory.memory"]
+    import app.infrastructure.database.connection_manager
+    manager_module = sys.modules["app.infrastructure.database.connection_manager"]
     db_path = tmp_path / "persist_test.db"
-    monkeypatch.setattr(memory_module, "DB_PATH", db_path)
-    memory_module._db_initialized = False
-    with memory_module._get_connection() as conn:
+    monkeypatch.setattr(manager_module, "DB_PATH", db_path)
+    manager_module._initialized_dbs.clear()
+    with manager_module._get_connection() as conn:
         pass
 
     # Primera instancia: escribe datos

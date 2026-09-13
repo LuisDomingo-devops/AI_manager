@@ -9,6 +9,7 @@ def clean_db():
     with _get_connection() as conn:
         conn.execute("DELETE FROM bank_movements")
         conn.execute("DELETE FROM bank_connections")
+        conn.execute("DELETE FROM invoices")
         conn.commit()
     yield
 

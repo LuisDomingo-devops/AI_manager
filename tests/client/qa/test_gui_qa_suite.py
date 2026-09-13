@@ -247,12 +247,21 @@ def test_qa_ledger_empty_account_and_toggle_stress(qapp):
     count_all = ledger.cmb_mayor_account.count()
     assert count_all >= count_active
 
-    # 2. Forzar selección de subcuenta sin apuntes (ej: 10000000)
-    ledger.populate_mayor_accounts(preferred_code="10000000", only_active=False)
+    # 2. Forzar selección de subcuenta sin apuntes
+    ledger.populate_mayor_accounts(preferred_code="43000000", only_active=False) # Fallback code
+    # Find an account with no entries (e.g. from the dropdown)
+    empty_code = "10000000"
+    for i in range(ledger.cmb_mayor_account.count()):
+        text = ledger.cmb_mayor_account.itemText(i)
+        if "(0 apuntes)" in text:
+            empty_code = ledger.cmb_mayor_account.itemData(i)
+            break
+            
+    ledger.populate_mayor_accounts(preferred_code=empty_code, only_active=False)
     ledger.load_mayor_data()
     assert ledger.table_mayor.rowCount() == 1
     info_item = ledger.table_mayor.item(0, 2)
-    assert "no tiene apuntes" in info_item.text() or "10000000" in info_item.text()
+    assert "no tiene apuntes" in info_item.text() or empty_code in info_item.text()
     assert "0.00 €" in ledger.lbl_mayor_total_debe.text()
 
     # 3. Caso borde: combobox vacío o sin selección

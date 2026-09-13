@@ -12,7 +12,8 @@ from app.tools.server.billing_tools import (
     get_b2b_invoice_status_history_tool,
     export_advisor_pack_tool
 )
-from app.adapters.memory.memory import _get_connection, tenant_context, _init_db_schema
+from app.adapters.memory.memory import _get_connection, tenant_context
+from app.infrastructure.database.migrations import MigrationRunner
 from app.utils.encryption import encryptor
 from app.domain.planner_orchestrator import PlannerOrchestrator
 
@@ -20,7 +21,7 @@ from app.domain.planner_orchestrator import PlannerOrchestrator
 def setup_test_env():
     token = tenant_context.set("b2b_phase3_tenant")
     with _get_connection() as conn:
-        _init_db_schema(conn)
+        MigrationRunner.run_pending_migrations(conn)
         conn.execute("DELETE FROM invoices")
         conn.execute("DELETE FROM journal_entries")
         conn.execute("DELETE FROM ledger_entries")

@@ -7,14 +7,15 @@ from app.tools.server.billing_tools import (
     get_profit_and_loss_report,
     close_fiscal_year_tool
 )
-from app.adapters.memory.memory import _get_connection, tenant_context, _init_db_schema
+from app.adapters.memory.memory import _get_connection, tenant_context
+from app.infrastructure.database.migrations import MigrationRunner
 from app.utils.encryption import encryptor
 
 @pytest.fixture(autouse=True)
 def setup_test_env():
     token = tenant_context.set("accounting_phase2_tenant")
     with _get_connection() as conn:
-        _init_db_schema(conn)
+        MigrationRunner.run_pending_migrations(conn)
         conn.execute("DELETE FROM invoices")
         conn.execute("DELETE FROM journal_entries")
         conn.execute("DELETE FROM ledger_entries")
@@ -71,6 +72,13 @@ def test_profit_and_loss_statement():
         "iva_amount": 630.0,
         "total_amount": 3630.0
     })
+
+    with _get_connection() as conn:
+        c = conn.cursor()
+        c.execute("SELECT account_code FROM ledger_entries")
+        print("LEDGER CODES:", [row[0] for row in c.fetchall()])
+        c.execute("SELECT code FROM pgc_accounts")
+        print("PGC CODES:", [row[0] for row in c.fetchall()])
 
     # 2. Registrar gastos (1000 € base)
     LedgerService.record_invoice_asiento({

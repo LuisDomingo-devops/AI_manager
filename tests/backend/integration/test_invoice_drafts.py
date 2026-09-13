@@ -9,18 +9,17 @@ from app.domain.services.verifactu_service import VerifactuService
 @pytest.fixture(autouse=True)
 def clean_db(tmp_path, monkeypatch):
     import sys
-    import app.infrastructure.database.memory.memory
-    memory_module = sys.modules["app.infrastructure.database.memory.memory"]
+    import app.infrastructure.database.connection_manager
+    manager_module = sys.modules["app.infrastructure.database.connection_manager"]
     test_db = tmp_path / "memory_test_invoice_drafts.db"
-    monkeypatch.setattr(memory_module, "DB_PATH", test_db)
+    monkeypatch.setattr(manager_module, "DB_PATH", test_db)
+    manager_module._initialized_dbs.clear()
     
     with _get_connection() as conn:
         conn.execute("DELETE FROM invoices")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         
-        from app.adapters.memory.memory import _init_db_schema
-        _init_db_schema(conn)
 
     yield
 

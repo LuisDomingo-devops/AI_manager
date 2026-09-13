@@ -13,7 +13,7 @@ async def test_backup_and_restore_cycle():
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM products")
-        cursor.execute("INSERT INTO products (sku, name, price, description, iva_rate) VALUES ('TEST-BKP', 'Producto Backup', 10.0, 'Desc', 21.0)")
+        cursor.execute("INSERT INTO products (sku, name, price, unit_price, description, iva_rate) VALUES ('TEST-BKP', 'Producto Backup', 10.0, 10.0, 'Desc', 21.0)")
         conn.commit()
     finally:
         conn.close()

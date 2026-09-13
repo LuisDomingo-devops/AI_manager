@@ -34,10 +34,12 @@ from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.adapters.alfonso_bridge import bridge as alfonso_bridge
 from app.tools.client.browser_tools import _close as _close_playwright
 from app.utils.logger import LOG_DIR, app_logger, attach_request_id
+from app.infrastructure.security.license_features import ROUTE_FEATURE_MAP, check_feature_access
 
 import asyncio
 from app.domain.agents.security.security_agent import security_agent
 from app.config import settings
+
 
 # EventBus e Integración
 from app.core.events import event_bus
@@ -273,7 +275,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.middleware("http")
+async def license_validation_middleware(request: Request, call_next):
+    path = request.url.path
+    
+    # Comprobar si la ruta coincide con un feature restringido
+    for route_prefix, feature in ROUTE_FEATURE_MAP.items():
+        if path.startswith(route_prefix):
+            is_allowed, status_code, detail = check_feature_access(feature)
+            if not is_allowed:
+                request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+                return JSONResponse(
+                    status_code=status_code,
+                    content={"status": "error", "request_id": request_id, "detail": detail}
+                )
+            break
+            
+    return await call_next(request)
 
 
 @app.middleware("http")

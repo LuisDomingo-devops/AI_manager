@@ -76,6 +76,8 @@ async def test_soft_delete_clients_and_products():
     assert r_cli["status"] == "ok"
 
     r_prod = await create_product(f"SKU-AUDIT-{uid}", "Servicio Auditoría", 500.0)
+    if r_prod["status"] != "ok":
+        print(f"\nCREATE PRODUCT FAILED: {r_prod['message']}\n")
     assert r_prod["status"] == "ok"
 
     # Obtener ID del cliente

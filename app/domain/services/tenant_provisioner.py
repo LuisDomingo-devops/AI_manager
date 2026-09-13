@@ -68,10 +68,17 @@ class TenantProvisioningService:
 
             # 4. Configurar estado de suscripción
             today_str = datetime.now().strftime("%Y-%m-%d")
-            cursor.execute("""
-                UPDATE subscription_status
-                SET tier = ?, billing_cycle_start = ?
-            """, (plan_tier, today_str))
+            cursor.execute("SELECT COUNT(*) FROM subscription_status")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("""
+                    INSERT INTO subscription_status (tier, billing_cycle_start)
+                    VALUES (?, ?)
+                """, (plan_tier, today_str))
+            else:
+                cursor.execute("""
+                    UPDATE subscription_status
+                    SET tier = ?, billing_cycle_start = ?
+                """, (plan_tier, today_str))
 
             conn.commit()
 

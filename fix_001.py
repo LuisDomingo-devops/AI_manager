@@ -22,8 +22,10 @@ for f in files:
             inside_def = True
             continue
         if inside_def:
-            if line.startswith('    conn.execute') or line.startswith('    cursor') or line.startswith('    if') or line.startswith('    #') or line.startswith('        ') or line.startswith('    except'):
-                all_code += line + '\n'
+            if line.startswith('    conn.execute') or line.startswith('    cursor') or line.startswith('    if') or line.startswith('    #') or line.startswith('        ') or line.startswith('    except') or line.startswith('    """') or line.startswith('    else:') or line.startswith('    conn.commit()'):
+                # skip conn.commit()
+                if not line.startswith('    conn.commit()'):
+                    all_code += line + '\n'
 
 with open("migrations/versions/001_initial_core_schema.py", "w", encoding="utf-8") as out:
     out.write(all_code)
