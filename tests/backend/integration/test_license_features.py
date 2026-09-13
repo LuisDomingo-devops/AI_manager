@@ -95,12 +95,19 @@ def test_require_feature_lanza_402_sin_licencia():
     Sin licencia operativa, require_feature lanza 402 Payment Required.
     """
     from fastapi import HTTPException
+    import os
     with patch("app.infrastructure.security.license_features.get_active_license_tier", return_value="none"):
-        dep = require_feature("billing")
-        inner_fn = dep.dependency
-        with pytest.raises(HTTPException) as exc_info:
-            inner_fn()
-        assert exc_info.value.status_code == 402
+        with patch.dict(os.environ, {}, clear=False):
+            if "ALFONSO_IS_TESTING" in os.environ:
+                del os.environ["ALFONSO_IS_TESTING"]
+            if "PYTEST_CURRENT_TEST" in os.environ:
+                del os.environ["PYTEST_CURRENT_TEST"]
+                
+            dep = require_feature("billing")
+            inner_fn = dep.dependency
+            with pytest.raises(HTTPException) as exc_info:
+                inner_fn()
+            assert exc_info.value.status_code == 402
 
 
 def test_verifactu_no_bloqueado_en_basic():
