@@ -28,9 +28,9 @@ def test_no_license_file():
     assert is_premium_license_valid() is False
 
 def test_dev_bypass_env():
-    # Si la variable de bypass de desarrollo está activa, debe retornar True
+    # Verificamos que el antiguo bypass de desarrollo ya no funciona
     with patch.dict("os.environ", {"ALFONSO_DEV_PREMIUM_BYPASS": "AlfonsoDevelopmentToken2026!"}):
-        assert is_premium_license_valid() is True
+        assert is_premium_license_valid() is False
 
 def test_corrupted_license_signature():
     # Crear un archivo de licencia con firma inválida
@@ -74,6 +74,6 @@ def test_invalid_license_type():
     )
     
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        status = check_license_status(ignore_dev_bypass=True)
+        status = check_license_status()
         assert status.is_operational is False
         assert status.status == "invalid_type"

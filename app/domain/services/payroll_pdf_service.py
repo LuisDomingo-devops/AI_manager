@@ -66,7 +66,8 @@ def _apply_pdf_customization(c, canvas_height: float = 841.89) -> dict:
                 # Dibujar logo arriba a la derecha con ancho dinámico
                 c.drawImage(logo_img, 550 - l_width, canvas_height - l_height - 35, width=l_width, height=l_height, mask='auto')
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
                 
         return {
             "primary_rgb": service.hex_to_rgb(custom.get("primary_color")),

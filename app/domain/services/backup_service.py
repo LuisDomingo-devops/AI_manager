@@ -107,7 +107,8 @@ class BackupService:
                 try:
                     os.unlink(temp_path)
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             raise RuntimeError(f"Error escribiendo el archivo de base de datos: {e}") from e
 
         return True

@@ -82,7 +82,8 @@ def get_system_prompt(mode: str, client_id: str | None = None) -> str:
             client_ctx = get_client_context_str(client_id)
             template = template + "\n\n" + client_ctx
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
     elif mode == "raw":
         return "Eres un asistente de procesamiento de datos útil y preciso."
     else:
@@ -140,7 +141,8 @@ def extract_json_robust(raw: str) -> dict | None:
     try:
         return json.loads(raw)
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 0.1. Fix robusto para "no_op" con comillas sin escapar en el mensaje
     if "no_op" in raw and "message" in raw:
@@ -156,7 +158,8 @@ def extract_json_robust(raw: str) -> dict | None:
                     }
                 }
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 0.5. Si hay múltiples líneas (ej. múltiples herramientas generadas), probar línea por línea
     if "\n" in raw:
@@ -168,7 +171,8 @@ def extract_json_robust(raw: str) -> dict | None:
                     if isinstance(data, dict) and "tool" in data:
                         return data
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 1. JSON block (fallback regex)
     m = _JSON_BLOCK.search(raw)
@@ -184,7 +188,8 @@ def extract_json_robust(raw: str) -> dict | None:
     try:
         return json.loads(clean)
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 3. tool: {json}
     m = _TOOL_SPLIT_COLON.match(clean)
@@ -234,7 +239,8 @@ def extract_json_robust(raw: str) -> dict | None:
                                     "args": {params[0]: val}
                                 }
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
                 # Mapeo manual alternativo para herramientas comunes
                 CLIENT_ARGS_MAPPING = {
@@ -460,7 +466,8 @@ class GeminiClient(LLMPort):
                             data = json.loads(line)
                             yield data.get("message", {}).get("content", "")
                         except:
-                            pass
+                            from app.utils.logger import error_logger
+                            error_logger.warning("Excepción anónima interceptada silenciosamente.")
 
     async def generate(
         self,

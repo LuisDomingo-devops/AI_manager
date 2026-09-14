@@ -125,7 +125,8 @@ class Settings(BaseSettings):
                 load_dotenv(override=True)
                 self.ALFONSO_CLIENT_ROLES = os.getenv("ALFONSO_CLIENT_ROLES", self.ALFONSO_CLIENT_ROLES)
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         default_role = "guest"
 

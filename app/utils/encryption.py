@@ -19,11 +19,13 @@ def get_or_create_key() -> bytes:
                 if len(decoded) == 32:
                     return decoded
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
             # Fallback si no es base64 de 32 bytes directo: derivar con SHA-256
             return hashlib.sha256(key_str.encode('utf-8')).digest()
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 1. Intentar obtener la clave desde el Keyring del sistema
     try:
@@ -34,17 +36,20 @@ def get_or_create_key() -> bytes:
                 try:
                     KEY_PATH.unlink()
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return base64.b64decode(stored_key_b64.encode('utf-8'))
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 2. Si no está en el Keyring, comprobar el archivo de clave local como fallback
     if KEY_PATH.exists():
         try:
             return KEY_PATH.read_bytes()
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 3. Verificación de seguridad para entorno de producción (Fail-Fast)
     alfonso_env = os.getenv("ALFONSO_ENV", "").strip().lower()
@@ -67,7 +72,8 @@ def get_or_create_key() -> bytes:
             "a tu archivo .env como DATABASE_ENCRYPTION_KEY:\n%s", new_key_b64
         )
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
     
     # 4. Intentar guardar en el Keyring del sistema
     saved_in_keyring = False
@@ -76,7 +82,8 @@ def get_or_create_key() -> bytes:
         keyring.set_password("alfonso_autonomo", "db_encryption_key", new_key_b64)
         saved_in_keyring = True
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
         
     # 5. Si falló el keyring, guardar en archivo local
     if not saved_in_keyring:
@@ -84,7 +91,8 @@ def get_or_create_key() -> bytes:
         try:
             KEY_PATH.write_bytes(new_key)
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
     return new_key
 

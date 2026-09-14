@@ -34,7 +34,8 @@ def get_client_context(client_id: str | None = None) -> dict:
             if info_file.exists():
                 client_info = json.loads(info_file.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     if client_info:
         return {

@@ -560,6 +560,17 @@ class PlannerOrchestrator:
 
         logger.info("PlannerOrchestrator.run() — request_id=%s, session_id=%s, client_id=%s", request_id, session_id, client_id)
         user_message = _normalize_message(user_message)
+        
+        # 0. Validación de Seguridad (Prompt Injection)
+        from app.domain.agents.security.prompt_injection import PromptInjectionFilter
+        is_safe, reason = await PromptInjectionFilter.is_safe(user_message)
+        if not is_safe:
+            error.warning("Bloqueo por Prompt Injection: %s", reason)
+            return {
+                "status": "error",
+                "type": "chat",
+                "response": "Por motivos de seguridad, no puedo procesar esa solicitud."
+            }
 
         if session_id:
             self.memory.add_message(session_id, "user", user_message, client_id=client_id)
@@ -725,6 +736,15 @@ class PlannerOrchestrator:
         from app.adapters.memory.memory import tenant_context
         token = tenant_context.set(client_id or "default")
         try:
+            # 0. Validación de Seguridad (Prompt Injection)
+            from app.domain.agents.security.prompt_injection import PromptInjectionFilter
+            is_safe, reason = await PromptInjectionFilter.is_safe(user_message)
+            if not is_safe:
+                import json
+                error_logger.warning("Bloqueo por Prompt Injection: %s", reason)
+                yield json.dumps({"type": "chat", "response": "Por motivos de seguridad, no puedo procesar esa solicitud."})
+                return
+
             # 1. Rutas rápidas
             routed = await self.agent_router.route_if_applicable(user_message, session_id, client_id, logger)
             if routed:

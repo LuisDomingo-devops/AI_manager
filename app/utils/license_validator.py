@@ -161,7 +161,8 @@ def get_machine_fingerprint() -> str:
                 if guid:
                     raw_components.append(f"win_guid:{guid.strip()}")
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 2. Linux Machine ID
     elif platform.system() == "Linux":
@@ -171,14 +172,16 @@ def get_machine_fingerprint() -> str:
                     raw_components.append(f"linux_id:{Path(p).read_text().strip()}")
                     break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 3. Fallbacks de hardware universales
     try:
         node_mac = hex(uuid.getnode())
         raw_components.append(f"mac:{node_mac}")
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     raw_components.append(f"host:{platform.node()}")
     raw_components.append(f"arch:{platform.machine()}")
@@ -204,7 +207,8 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
             if now_epoch < (last_seen_epoch - 300):
                 return False
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     try:
         CLOCK_INTEGRITY_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -216,7 +220,8 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
             encoding="utf-8"
         )
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     return True
 

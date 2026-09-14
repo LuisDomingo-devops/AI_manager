@@ -45,7 +45,8 @@ def get_client_context_str(client_id: str | None = None) -> str:
                 with open("data/last_client_info.json", "r", encoding="utf-8") as f:
                     client_info = json.load(f)
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
     if client_info:
         sys_name = client_info.get("system", platform.system())
@@ -63,7 +64,8 @@ def get_client_context_str(client_id: str | None = None) -> str:
         try:
             is_wsl = "microsoft" in platform.uname().release.lower() or os.path.exists("/proc/sys/fs/binfmt_misc/WSLInterop")
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # Normalizar barras a barra inclinada
     home_dir_str = home_dir_str.replace("\\", "/")

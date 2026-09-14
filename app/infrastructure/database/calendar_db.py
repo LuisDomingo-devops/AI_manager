@@ -143,7 +143,8 @@ def list_events(start_date: Optional[str] = None, end_date: Optional[str] = None
             results.extend(fiscal_deadlines)
             results.sort(key=lambda x: x.get("start_time", ""))
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
         return results
 

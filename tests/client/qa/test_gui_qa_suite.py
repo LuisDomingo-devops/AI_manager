@@ -311,7 +311,8 @@ def test_qa_footer_recent_movements_and_quick_access_stress(qapp, mock_dashboard
     """QA Stress Test: Verifica la resiliencia y estabilidad visual de los paneles inferiores ante redimensionamientos extremos."""
     with patch("client.gui.app.AlfonsoHUDDashboard.start_agent"), \
          patch("client.gui.app.AlfonsoHUDDashboard.start_assistant"), \
-         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"):
+         patch("client.gui.app.AlfonsoHUDDashboard.check_onboarding"), \
+         patch("client.gui.app.AlfonsoHUDDashboard.update_business_metrics"):
         
         dashboard = AlfonsoHUDDashboard(mock_dashboard_config)
         dashboard.show()

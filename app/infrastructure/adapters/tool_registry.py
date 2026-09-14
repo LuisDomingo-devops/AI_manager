@@ -406,7 +406,8 @@ def get_tool_schemas() -> list[dict]:
                     if param.default == inspect.Parameter.empty:
                         required.append(param_name)
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
             parameters = {
                 "type": "object",
                 "properties": properties,

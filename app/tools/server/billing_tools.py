@@ -309,7 +309,8 @@ async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict
                 client_id=cid
             )
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
     return res
 
@@ -571,7 +572,8 @@ def _generate_unique_quote_id(is_draft: bool, quote_id: str = None) -> str:
                 if dec_id.startswith(prefix):
                     count += 1
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
         return f"{prefix}{count + 101:03d}"
     finally:
         conn.close()
@@ -616,7 +618,8 @@ async def create_quote(
                     if row["nif"]:
                         emisor_nif = encryptor.decrypt(row["nif"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         iva_amount = round(amount * (iva_rate / 100.0), 2)
         irpf_amount = round(amount * (irpf_rate / 100.0), 2)
@@ -652,7 +655,8 @@ async def create_quote(
                 import json
                 elements_layout = json.loads(cust["quote_elements_layout"])
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
         if not elements_layout or not isinstance(elements_layout, list):
             elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
 
@@ -892,7 +896,8 @@ async def get_quotes() -> dict:
                         "status": r["status"]
                     })
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return {"status": "ok", "quotes": quotes}
         finally:
             conn.close()
@@ -918,7 +923,8 @@ async def update_quote_status(quote_id: str, new_status: str) -> dict:
                         db_id = r["id"]
                         break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
             if not db_id:
                 return {"status": "error", "message": f"No se encontró el presupuesto '{quote_id}'."}
@@ -966,7 +972,8 @@ async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = Fals
                         
                         break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
             if not quote_data:
                 return {"status": "error", "message": f"No se encontró el presupuesto con ID '{quote_id}'."}
@@ -1077,7 +1084,8 @@ async def generate_invoice_pdf(
                     if row["direccion"]:
                         emisor_direccion = encryptor.decrypt(row["direccion"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         # Si es factura firme (no borrador), verificar obligatoriamente que emisor_nif no esté vacío
         if not is_draft and not emisor_nif:
@@ -1134,7 +1142,8 @@ async def generate_invoice_pdf(
                 import json
                 elements_layout = json.loads(cust["elements_layout"])
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
         if not elements_layout or not isinstance(elements_layout, list):
             elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
 
@@ -1361,7 +1370,8 @@ async def generate_invoice_pdf(
             try:
                 os.remove(qr_temp_path)
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         # Si el archivo PDF viejo existe y el nombre/ruta cambió, lo borramos
         if existing_file_path and existing_file_path != str(pdf_path):
@@ -1468,7 +1478,8 @@ async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         subject = f"Factura {invoice_id} emitida por {emisor_name.upper()}"
         body = (
@@ -1520,7 +1531,8 @@ async def send_quote_email(quote_id: str, recipient_email: str) -> dict:
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         subject = f"Presupuesto {quote_id} de {emisor_name.upper()}"
         body = (
@@ -1570,7 +1582,8 @@ async def sign_quote(quote_id: str) -> dict:
                         }
                         break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
         finally:
             conn.close()
 
@@ -1642,7 +1655,8 @@ async def verify_quote_signature(quote_id: str) -> dict:
                         }
                         break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
         finally:
             conn.close()
 
@@ -1914,7 +1928,8 @@ async def send_payment_reminder_email(invoice_id: str) -> dict:
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         from app.tools.server.mail_tools import mail_send_email
         subject = f"Recordatorio de pago pendiente — Factura {invoice_id}"
@@ -1999,7 +2014,8 @@ async def create_rectificativa_invoice(
                     if row["direccion"]:
                         emisor_direccion = encryptor.decrypt(row["direccion"])
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         if not is_draft and not emisor_nif:
             if settings.ENV == "development" or "pytest" in sys.modules:

@@ -314,7 +314,8 @@ async def request_id_middleware(request: Request, call_next):
                 return {"type": "http.request", "body": body_bytes, "more_body": False}
             request._receive = receive
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     # 2. Inspección del WAF
     headers_dict = {k: v for k, v in request.headers.items()}

@@ -11,17 +11,6 @@ def test_tool_registry_loads_plugins():
     assert "append_file" in tools
     assert "list_directory" in tools
     assert "delete_file" in tools
-    
-    assert "run_command" in tools
-    assert "open_application" in tools
-    assert "close_application" in tools
-    assert "system_info" in tools
-    assert "get_current_datetime" in tools
-    
-    assert "browser_navigate" in tools
-    assert "browser_search" in tools
-    
-    assert "mouse_click" in tools
 
 def test_get_tool_existing():
     load_plugins()

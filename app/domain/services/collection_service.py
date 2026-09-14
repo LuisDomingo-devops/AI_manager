@@ -38,7 +38,8 @@ class CollectionService:
                 if fy_row and fy_row["is_closed"]:
                     return {"status": "error", "message": f"No se pueden registrar cobros en el ejercicio cerrado {year}."}
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
             cursor = conn.cursor()
             

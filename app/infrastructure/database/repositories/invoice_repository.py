@@ -175,7 +175,8 @@ class InvoiceRepository:
                                     concept = dec_concept
                             break
                     except Exception:
-                        pass
+                        from app.utils.logger import error_logger
+                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
             finally:
                 conn.close()
         return existing_id_db, existing_file_path, client_name, client_nif, amount, concept
@@ -217,7 +218,8 @@ class InvoiceRepository:
                             "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else ""
                         }
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return None
         finally:
             conn.close()
@@ -239,7 +241,8 @@ class InvoiceRepository:
                     if dec_id.startswith(prefix):
                         count += 1
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return f"{prefix}{count + 101:03d}"
         finally:
             conn.close()
@@ -260,7 +263,8 @@ class InvoiceRepository:
                             if dec_id.startswith("BORRADOR-"):
                                 draft_count += 1
                         except Exception:
-                            pass
+                            from app.utils.logger import error_logger
+                            error_logger.warning("Excepción genérica interceptada silenciosamente.")
                     invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
                 finally:
                     conn.close()
@@ -278,7 +282,8 @@ class InvoiceRepository:
                             if dec_id.startswith("F-"):
                                 firm_count += 1
                         except Exception:
-                            pass
+                            from app.utils.logger import error_logger
+                            error_logger.warning("Excepción genérica interceptada silenciosamente.")
                     invoice_id = f"F-2026-{firm_count + 101:03d}"
                 finally:
                     conn.close()
@@ -297,7 +302,8 @@ class InvoiceRepository:
                     if dec_id.upper() == invoice_id.upper():
                         return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return None
         finally:
             conn.close()
@@ -337,7 +343,8 @@ class InvoiceRepository:
                         "date": encryptor.decrypt(r["date"]) if r["date"] else ""
                     })
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             return invoices
         finally:
             conn.close()

@@ -40,7 +40,8 @@ def _sync_from_gmail_blocking() -> int:
             import keyring
             gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD")
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
     if not gmail_user or not gmail_pass:
         return 0

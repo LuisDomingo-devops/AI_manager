@@ -273,7 +273,8 @@ def parse_calendar_delete_directly(msg: str) -> dict | None:
                                 if loop.is_running():
                                     loop.create_task(bridge.send_command("calendar.sync", {"action": "delete_all"}))
                             except Exception:
-                                pass
+                                from app.utils.logger import error_logger
+                                error_logger.warning("Excepción genérica interceptada silenciosamente.")
                         return {
                             "type": "chat",
                             "response": f"Se han eliminado todas las citas del mes de {tgt_month_name} ({deleted_count} en total) correctamente."
@@ -672,7 +673,8 @@ def parse_file_operation_directly(msg: str, client_info: dict | None, history: l
                             last_folder = "/".join(path_val.split("/")[:-1])
                             break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
             if last_folder:
                 return f"{last_folder}/{p}"
 
@@ -744,7 +746,8 @@ def parse_file_operation_directly(msg: str, client_info: dict | None, history: l
                         final_filename = f
                         break
         except Exception:
-            pass
+            from app.utils.logger import error_logger
+            error_logger.warning("Excepción genérica interceptada silenciosamente.")
             
         final_path = f"{folder_res}/{final_filename}"
         action = "delete_file" if any(x in msg_clean.lower() for x in ["elimina", "elmina", "borra"]) else "read_file"
@@ -773,7 +776,8 @@ def parse_file_operation_directly(msg: str, client_info: dict | None, history: l
                         folder = h_data.get("args", {}).get("path")
                         break
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
         if not folder:
             if "escritorio" in msg_clean.lower() or "desktop" in msg_clean.lower():
                 folder = desktop

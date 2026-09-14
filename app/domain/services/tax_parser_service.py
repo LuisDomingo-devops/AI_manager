@@ -244,7 +244,8 @@ class TaxParserService:
                         if decrypted_name:
                             settings.ALFONSO_USER_NAME = decrypted_name
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
             if not user_nif:
                 user_nif = settings.ALFONSO_USER_NIF or "47019805P"
@@ -535,7 +536,8 @@ TEXTO:
                                 quarter_str = f"T{(inv_dt.month - 1) // 3 + 1}"
                                 break
                             except Exception:
-                                pass
+                                from app.utils.logger import error_logger
+                                error_logger.warning("Excepción genérica interceptada silenciosamente.")
                     
                     archive_base_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal"
                     is_expense = data.get("category", "").lower() in ("gasto", "expense")
@@ -581,7 +583,8 @@ TEXTO:
                 try:
                     asyncio.run(event_bus.publish("InvoiceCreated", data))
                 except Exception:
-                    pass
+                    from app.utils.logger import error_logger
+                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         return last_id
 

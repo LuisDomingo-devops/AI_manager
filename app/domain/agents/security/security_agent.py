@@ -176,7 +176,8 @@ class CyberSecurityAgent:
                     data["logo_base64"] = ""
                     inspected_body = json.dumps(data)
             except Exception:
-                pass
+                from app.utils.logger import error_logger
+                error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
         normalized_body = self._normalize_payload(inspected_body)
         payloads = [normalized_path, normalized_body]

@@ -62,7 +62,7 @@ def test_license_active_within_month(rsa_keypair):
     install_license(license_data)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0), ignore_dev_bypass=True)
+        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0))
         assert status.status == "active"
         assert status.is_operational is True
         assert status.days_until_expiration == 13
@@ -86,7 +86,7 @@ def test_license_grace_period_day_2(rsa_keypair):
     install_license(license_data)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0), ignore_dev_bypass=True)
+        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0))
         assert status.status == "grace_period"
         assert status.is_operational is True
         assert status.grace_days_remaining == 3
@@ -110,7 +110,7 @@ def test_license_expired_after_grace_period(rsa_keypair):
     install_license(license_data)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0), ignore_dev_bypass=True)
+        status = check_license_status(current_dt=datetime(2026, 8, 17, 10, 0))
         assert status.status == "expired"
         assert status.is_operational is False
         assert status.grace_days_remaining == 0
@@ -132,12 +132,12 @@ def test_clock_tampering_protection(rsa_keypair):
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
         # 1. Ejecución en tiempo normal (2026-08-17) -> OK
-        status_ok = check_license_status(current_dt=datetime(2026, 8, 17, 12, 0), ignore_dev_bypass=True)
+        status_ok = check_license_status(current_dt=datetime(2026, 8, 17, 12, 0))
         assert status_ok.status == "active"
         assert status_ok.is_operational is True
 
         # 2. Intento de retrasar el reloj a 2025 -> Clock tampered!
-        status_tampered = check_license_status(current_dt=datetime(2025, 1, 1, 12, 0), ignore_dev_bypass=True)
+        status_tampered = check_license_status(current_dt=datetime(2025, 1, 1, 12, 0))
         assert status_tampered.status == "clock_tampered"
         assert status_tampered.is_operational is False
 
@@ -192,7 +192,6 @@ def test_machine_binding_match_and_mismatch(rsa_keypair):
         # 1. En la máquina original -> Operatividad total
         status_orig = check_license_status(
             current_dt=datetime(2026, 8, 17, 10, 0),
-            ignore_dev_bypass=True,
             override_machine_fingerprint=original_fp
         )
         assert status_orig.status == "active"
@@ -201,7 +200,6 @@ def test_machine_binding_match_and_mismatch(rsa_keypair):
         # 2. En una máquina distinta (archivo copiado) -> Bloqueo por Machine Mismatch
         status_mismatch = check_license_status(
             current_dt=datetime(2026, 8, 17, 10, 0),
-            ignore_dev_bypass=True,
             override_machine_fingerprint=stolen_fp
         )
         assert status_mismatch.status == "machine_mismatch"

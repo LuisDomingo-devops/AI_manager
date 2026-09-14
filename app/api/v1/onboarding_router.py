@@ -63,7 +63,8 @@ async def get_onboarding_status(client_id: Optional[str] = None):
                         "direccion": dec_dir
                     }
     except Exception:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Excepción genérica interceptada silenciosamente.")
 
     is_completed = has_profile and license_result.is_operational
 

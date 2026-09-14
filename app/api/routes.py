@@ -184,17 +184,7 @@ class EventCreate(BaseModel):
     attendees: Optional[str] = None
 
 
-# ---------------------------------------------------------------------------
-# Schemas: Dev Sandbox
-# ---------------------------------------------------------------------------
 
-class FilePayload(BaseModel):
-    filename: str
-    content: str
-
-
-class CommandPayload(BaseModel):
-    command: str
 
 
 # ---------------------------------------------------------------------------

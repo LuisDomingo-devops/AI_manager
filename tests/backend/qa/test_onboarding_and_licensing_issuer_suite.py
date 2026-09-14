@@ -68,7 +68,7 @@ def test_private_license_issuer_paid_and_trial(master_keypair):
     # Instalar y verificar en el cliente
     install_license(paid_lic)
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        res_paid = check_license_status(ignore_dev_bypass=True)
+        res_paid = check_license_status()
         assert res_paid.status == "active"
         assert res_paid.is_operational is True
         assert res_paid.days_until_expiration >= 28
@@ -85,7 +85,7 @@ def test_private_license_issuer_paid_and_trial(master_keypair):
 
     install_license(trial_lic)
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        res_trial = check_license_status(ignore_dev_bypass=True)
+        res_trial = check_license_status()
         assert res_trial.status == "active"
         assert res_trial.is_operational is True
         assert res_trial.days_until_expiration >= 13
@@ -120,12 +120,12 @@ def test_private_license_issuer_transfer(master_keypair):
     install_license(transferred_lic)
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
         # En equipo nuevo -> OK
-        status_new = check_license_status(ignore_dev_bypass=True, override_machine_fingerprint=new_fp)
+        status_new = check_license_status(override_machine_fingerprint=new_fp)
         assert status_new.status == "active"
         assert status_new.is_operational is True
 
         # En equipo viejo -> Machine Mismatch
-        status_old = check_license_status(ignore_dev_bypass=True, override_machine_fingerprint=old_fp)
+        status_old = check_license_status(override_machine_fingerprint=old_fp)
         assert status_old.status == "machine_mismatch"
         assert status_old.is_operational is False
 
