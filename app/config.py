@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ALFONSO_AEAT_URL: str = ""
     ALFONSO_CLIENT_TOKENS: str = ""  # Formato JSON: {"client_id1": "token1", "client_id2": "token2"} o client1:token1,client2:token2
     ALFONSO_CLIENT_ROLES: str = ""   # Formato JSON: {"client_id1": "admin", "client_id2": "guest"} o client1:admin,client2:guest
-    ALFONSO_DEV_PREMIUM_BYPASS: str = ""
+    ALFONSO_CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8000"
 
     FISCAL_TERRITORY: str = "comun"
 
@@ -123,15 +123,11 @@ class Settings(BaseSettings):
             try:
                 from dotenv import load_dotenv
                 load_dotenv(override=True)
-                self.ALFONSO_DEV_PREMIUM_BYPASS = os.getenv("ALFONSO_DEV_PREMIUM_BYPASS", self.ALFONSO_DEV_PREMIUM_BYPASS)
                 self.ALFONSO_CLIENT_ROLES = os.getenv("ALFONSO_CLIENT_ROLES", self.ALFONSO_CLIENT_ROLES)
             except Exception:
                 pass
 
-
         default_role = "guest"
-        if self.ALFONSO_DEV_PREMIUM_BYPASS == "AlfonsoDevelopmentToken2026!":
-            default_role = "admin"
 
         if not self.ALFONSO_CLIENT_ROLES:
             return default_role

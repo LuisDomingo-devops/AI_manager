@@ -47,13 +47,10 @@ COMMON_ASSISTANT_TOOLS = {
     "save_user_preference", "forget_user_fact", "get_user_profile",
     "parse_invoice", "parse_tax_model", "get_quarterly_aggregates", "get_cash_flow_forecast",
     "cancel_invoice", "no_op", "get_current_time", "get_current_datetime",
-    # Herramientas del navegador e interacción con el sistema (Computer Use)
+    # Herramientas del navegador e interacción con el sistema
     "browser_navigate", "browser_click", "browser_fill", "browser_screenshot",
     "browser_get_text", "browser_inspect", "browser_search", "browser_close",
-    "system_info", "open_application", "close_application", "open_url", "screenshot",
-    "mouse_move", "mouse_click", "mouse_drag", "keyboard_type", "keyboard_hotkey",
-    "ocr_screenshot", "ocr_image", "find_on_screen", "window_list", "window_focus",
-    "window_close", "run_command"
+    "system_info", "open_application", "close_application", "open_url"
 }
 
 BASIC_ALLOWED_TOOLS = COMMON_ASSISTANT_TOOLS | {
@@ -225,7 +222,6 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
 
 def check_license_status(
     current_dt: Optional[datetime] = None,
-    ignore_dev_bypass: bool = False,
     override_machine_fingerprint: Optional[str] = None
 ) -> LicenseStatusResult:
     """
@@ -239,23 +235,7 @@ def check_license_status(
     now = current_dt or datetime.now()
     local_machine_fp = override_machine_fingerprint or get_machine_fingerprint()
 
-    # 1. Bypass para desarrollo explícito
-    if not ignore_dev_bypass:
-        dev_bypass = os.getenv("ALFONSO_DEV_PREMIUM_BYPASS")
-        is_testing_disabled = os.getenv("ALFONSO_IS_TESTING") == "False"
-        if dev_bypass == "AlfonsoDevelopmentToken2026!" and not is_testing_disabled:
-            return LicenseStatusResult(
-                status="active",
-                is_operational=True,
-                holder="Entorno de Pruebas",
-                license_type="advisor",
-                tier="advisor",
-                expires_at="2099-12-31",
-                machine_fingerprint=local_machine_fp,
-                days_until_expiration=9999,
-                grace_days_remaining=DEFAULT_GRACE_PERIOD_DAYS,
-                message="Licencia activa en modo desarrollo/pruebas (Nivel Asesoría Máximo)."
-            )
+    # (El bypass de desarrollo ALFONSO_DEV_PREMIUM_BYPASS ha sido eliminado por seguridad)
 
     # 2. Comprobar existencia del archivo de licencia
     if not LICENSE_PATH.exists():

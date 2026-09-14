@@ -11,7 +11,7 @@ os.environ["GEMINI_PROXY_URL"] = "http://mock_proxy_for_tests"
 os.environ["ALFONSO_CLIENT_SECRET"] = "mock_secret"
 os.environ["ALFONSO_API_KEY"] = "test_api_key_default"
 os.environ["ALFONSO_BRIDGE_TOKEN"] = "test_bridge_token_default"
-os.environ["ALFONSO_DEV_PREMIUM_BYPASS"] = ""
+
 
 
 

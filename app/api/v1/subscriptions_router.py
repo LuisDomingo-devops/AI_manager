@@ -123,7 +123,12 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
             logger.error("Firma de webhook Stripe inválida: %s", str(e))
             raise HTTPException(status_code=400, detail=f"Firma de webhook inválida: {str(e)}")
     else:
-        logger.warning("STRIPE_WEBHOOK_SECRET no configurado en entorno. Procesando webhook de Stripe SIN firma criptográfica (SOLO MODO PRUEBAS).")
+        from app.config import settings
+        if settings.ENV == "production":
+            logger.error("STRIPE_WEBHOOK_SECRET no configurado en entorno de PRODUCCIÓN.")
+            raise HTTPException(status_code=500, detail="Configuración de webhook inválida en producción")
+        
+        logger.warning("STRIPE_WEBHOOK_SECRET no configurado. Entorno de desarrollo. Procesando webhook de Stripe SIN firma criptográfica (SOLO MODO PRUEBAS).")
         try:
             raw_data = json.loads(body_bytes.decode("utf-8"))
         except Exception:
