@@ -6,7 +6,15 @@ from app.domain.services.backup_service import BackupService
 from app.tools.server.backup_tools import export_tenant_backup, import_tenant_backup
 
 @pytest.mark.asyncio
-async def test_backup_and_restore_cycle():
+async def test_backup_and_restore_cycle(tmp_path, monkeypatch):
+    # 0. Set up physical DB for backups to work
+    import sys
+    import app.infrastructure.database.connection_manager
+    manager_module = sys.modules["app.infrastructure.database.connection_manager"]
+    db_path = tmp_path / "backup_test.db"
+    monkeypatch.setattr(manager_module, "DB_PATH", db_path)
+    manager_module._initialized_dbs.clear()
+
     # 1. Setup inicial de datos en el inquilino 'tenant_backup'
     token = tenant_context.set("tenant_backup")
     conn = _get_connection()

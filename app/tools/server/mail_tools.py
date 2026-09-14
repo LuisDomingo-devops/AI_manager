@@ -190,8 +190,8 @@ Responde ESTRICTAMENTE en formato JSON con la siguiente estructura (si no hay ci
                     description = parsed.get("description", email["subject"])
                     location = parsed.get("location", "")
                     attendees = parsed.get("attendees", email["sender"])
-            except BaseException:
-                pass
+            except BaseException as e:
+                tool_logger.warning(f"BaseException en mail_tools: {e}")
                 
         # --- 3. Guardar cita en Calendario si se detectó ---
         if has_appointment and start_time and title:
@@ -221,8 +221,8 @@ Responde ESTRICTAMENTE en formato JSON con la siguiente estructura (si no hay ci
                 if bridge.has_clients():
                     try:
                         asyncio.create_task(bridge.send_command(Action.CALENDAR_SYNC, {}))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        tool_logger.warning(f"Error en mail_tools: {e}")
                         
         # Marcar email como procesado para no volverlo a evaluar
         update_email(email["id"], processed_for_calendar=1)
@@ -274,8 +274,8 @@ def save_invoice_to_desktop(email: dict):
         try:
             dt = datetime.strptime(email["received_at"], "%Y-%m-%d %H:%M")
             date_part = dt.strftime("%Y%m%d_%H%M")
-        except Exception:
-            pass
+        except Exception as e:
+            tool_logger.warning(f"Error en mail_tools: {e}")
             
     filename = f"{date_part}_Factura_{email['id']}.txt"
     file_path = os.path.join(provider_folder, filename)
@@ -381,8 +381,8 @@ def check_and_process_payments(email: dict):
         try:
             if not os.listdir(provider_active_dir):
                 os.rmdir(provider_active_dir)
-        except Exception:
-            pass
+        except Exception as e:
+            tool_logger.warning(f"Error en mail_tools: {e}")
 
 
 async def mail_classify_emails() -> dict:
@@ -728,8 +728,8 @@ IMPORTANTE: No debes usar emojis ni ningún tipo de formateo de Markdown como as
             try:
                 # Fired in background so we don't block summary generation
                 asyncio.create_task(bridge.send_command(Action.MAIL_OPEN, {}))
-            except Exception:
-                pass
+            except Exception as e:
+                tool_logger.warning(f"Error en mail_tools: {e}")
 
         return {
             "status": "ok",
@@ -853,8 +853,8 @@ def send_smtp_email_if_configured(recipient: str, subject: str, body: str) -> st
         try:
             import keyring
             gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD")
-        except Exception:
-            pass
+        except Exception as e:
+            tool_logger.warning(f"Error en mail_tools: {e}")
             
     if gmail_user and gmail_pass:
         msg = MIMEText(body)
@@ -914,8 +914,8 @@ async def mail_send_email(recipient: str, subject: str, body: str) -> dict:
         if bridge.has_clients():
             try:
                 asyncio.create_task(bridge.send_command(Action.MAIL_SYNC, {}))
-            except Exception:
-                pass
+            except Exception as e:
+                tool_logger.warning(f"Error en mail_tools: {e}")
         return {
             "status": "ok",
             "message": f"Correo electrónico enviado correctamente a {recipient}.",
@@ -945,8 +945,8 @@ async def mail_delete_email(email_id: int) -> dict:
             if bridge.has_clients():
                 try:
                     asyncio.create_task(bridge.send_command(Action.MAIL_SYNC, {}))
-                except Exception:
-                    pass
+                except Exception as e:
+                    tool_logger.warning(f"Error en mail_tools: {e}")
             return {"status": "ok", "message": f"Correo con ID {email_id} eliminado correctamente."}
         else:
             return {"status": "error", "message": f"No se encontró ningún correo con ID {email_id}."}
@@ -1002,8 +1002,8 @@ async def mail_reply_email(email_id: int, body: str, reply_all: bool = False) ->
         if bridge.has_clients():
             try:
                 asyncio.create_task(bridge.send_command(Action.MAIL_SYNC, {}))
-            except Exception:
-                pass
+            except Exception as e:
+                tool_logger.warning(f"Error en mail_tools: {e}")
         return {
             "status": "ok",
             "message": f"Respuesta enviada correctamente a {recipient}.",
@@ -1064,8 +1064,8 @@ async def mail_forward_email(email_id: int, recipient: str, comment: Optional[st
         if bridge.has_clients():
             try:
                 asyncio.create_task(bridge.send_command(Action.MAIL_SYNC, {}))
-            except Exception:
-                pass
+            except Exception as e:
+                tool_logger.warning(f"Error en mail_tools: {e}")
         return {
             "status": "ok",
             "message": f"Correo reenviado correctamente a {recipient}.",

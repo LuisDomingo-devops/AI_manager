@@ -3,7 +3,8 @@ import hmac
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from app.adapters.memory.memory import _get_connection, tenant_context, DB_PATH, IS_TESTING
+from app.adapters.memory.memory import _get_connection, tenant_context
+from app.infrastructure.database import connection_manager
 from app.utils.encryption import encryptor
 
 class BackupService:
@@ -13,11 +14,22 @@ class BackupService:
     def get_db_path(cls, client_id: str = None) -> Path:
         """Resuelve la ruta física de la base de datos para el inquilino."""
         cid = (client_id or tenant_context.get()).strip().lower()
-        if IS_TESTING:
+        
+        # Handle string URIs safely (like "file:main_mem") for testing
+        db_path_val = connection_manager.DB_PATH
+        if connection_manager.IS_TESTING and isinstance(db_path_val, str):
+            base_path = Path("data/memory.db")
+        else:
+            base_path = Path(str(db_path_val))
+            
+        if connection_manager.IS_TESTING:
             if cid == "default":
-                return DB_PATH
-            return DB_PATH.parent / f"test_memory_{cid}.db"
-        return DB_PATH.parent / f"memory_{cid}.db"
+                return base_path
+            return base_path.parent / f"test_memory_{cid}.db"
+        
+        if cid == "default":
+            return base_path
+        return base_path.parent / f"memory_{cid}.db"
 
     @classmethod
     def export_backup(cls, client_id: str = None) -> bytes:

@@ -24,7 +24,7 @@ from typing import Dict, List, Optional, Any
 IS_TESTING = "pytest" in sys.modules or os.getenv("TESTING") == "true"
 
 if IS_TESTING:
-    DB_PATH = Path(__file__).resolve().parents[2] / "data" / "memory_test_mail.db"
+    DB_PATH = "file:mail_mem?mode=memory&cache=shared"
 else:
     DB_PATH = Path(__file__).resolve().parents[2] / "data" / "memory.db"
 
@@ -82,8 +82,11 @@ def _init_mail_schema(conn: sqlite3.Connection) -> None:
 
 def get_connection() -> sqlite3.Connection:
     global _db_initialized
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), timeout=30.0, check_same_thread=False)
+    if isinstance(DB_PATH, str) and DB_PATH.startswith("file:"):
+        conn = sqlite3.connect(DB_PATH, uri=True, timeout=30.0, check_same_thread=False)
+    else:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(DB_PATH), timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     if not _db_initialized:
         _init_mail_schema(conn)

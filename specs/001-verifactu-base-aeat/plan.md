@@ -55,10 +55,14 @@ specs/001-verifactu-base-aeat/
 
 ```text
 app/
-└── domain/
-    └── services/
-        ├── verifactu_service.py                      # Servicio principal e integración SIF
-        └── ... (otros módulos del backend)
+├── config.py                                 # [MODIFY] Refactor keys persistence
+├── api/
+│   └── auth_router.py                        # [MODIFY] Consolidate auth
+├── domain/
+│   └── services/
+│       ├── verifactu_service.py              # [MODIFY] Remove offline_simulated in prod
+│       ├── bank_service.py                   # [MODIFY] Remove silent exceptions
+│       └── mail_tools.py                     # [MODIFY] Remove silent exceptions
 
 migrations/
 └── versions/

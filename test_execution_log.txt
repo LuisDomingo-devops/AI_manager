@@ -1,0 +1,46 @@
+============================== warnings summary ===============================
+venv\Lib\site-packages\_pytest\config\__init__.py:1464
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\venv\Lib\site-packages\_pytest\config\__init__.py:1464: PytestConfigWarning: Unknown config option: pytest_plugins
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+venv\Lib\site-packages\fastapi\testclient.py:1
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/backend/integration/test_auth_endpoints.py: 8 warnings
+tests/backend/qa/test_pentest_suite.py: 1 warning
+tests/backend/unit/test_auth_service.py: 6 warnings
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\app\domain\services\auth_service.py:127: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expire = datetime.utcnow() + timedelta(hours=_ACCESS_TOKEN_EXPIRE_HOURS)
+
+tests/backend/integration/test_integration_stress.py: 2 warnings
+tests/backend/integration/test_invoice_drafts.py: 1 warning
+tests/backend/integration/test_payments_module.py: 1 warning
+tests/backend/integration/test_planner_orchestrator_memory.py: 1 warning
+tests/backend/integration/test_presupuestos_integration.py: 1 warning
+tests/backend/integration/test_quotes_module.py: 1 warning
+tests/backend/integration/test_verifactu.py: 4 warnings
+tests/backend/integration/test_verifactu_anulacion.py: 4 warnings
+tests/backend/integration/test_verifactu_integrity.py: 5 warnings
+tests/backend/qa/test_phase1_compliance_suite.py: 2 warnings
+tests/backend/qa/test_phase3_b2b_advisor_suite.py: 1 warning
+tests/backend/qa/test_presupuestos_qa.py: 1 warning
+tests/backend/qa/test_qa_integration_suite.py: 2 warnings
+tests/backend/qa/test_qa_stress.py: 8 warnings
+tests/backend/qa/test_user_aeat_verifactu_suite.py: 1 warning
+tests/backend/qa/test_verifactu_qa_resilience_suite.py: 1 warning
+tests/backend/qa/test_verifactu_qa_stress.py: 11 warnings
+tests/backend/unit/test_verifactu_schema_and_endpoint_unit.py: 1 warning
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\venv\Lib\site-packages\httpx\_config.py:63: DeprecationWarning: `cert=...` is deprecated. Use `verify=<ssl_context>` instead,with `.load_cert_chain()` to configure the certificate chain.
+    warnings.warn(message, DeprecationWarning)
+
+tests/backend/unit/test_auth_service.py::test_decode_token_expirado_lanza_error
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\backend\unit\test_auth_service.py:74: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    "exp": dt.datetime.utcnow() - dt.timedelta(seconds=10),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/backend/integration/test_auth_endpoints.py::test_setup_requiere_api_key
+====== 1 failed, 461 passed, 5 skipped, 66 warnings in 227.21s (0:03:47) ======
+Finished running tests!

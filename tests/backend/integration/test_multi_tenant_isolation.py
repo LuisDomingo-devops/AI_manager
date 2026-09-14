@@ -103,15 +103,16 @@ async def test_tenant_database_isolation():
     finally:
         tenant_context.reset(token_a)
 
-    # 6. Limpieza de archivos de prueba físicos creados
-    for cid in ("tenant_a", "tenant_b"):
-        conn = _get_connection(client_id=cid)
-        conn.close()
-        # Encontrar y borrar archivos test_memory_tenant_a.db y test_memory_tenant_b.db
+        # 6. Limpieza de archivos de prueba físicos creados
         from app.adapters.memory.memory import DB_PATH
-        db_file = DB_PATH.parent / f"test_memory_{cid}.db"
-        if db_file.exists():
-            try:
-                os.remove(db_file)
-            except OSError:
-                pass
+        if not isinstance(DB_PATH, str):
+            for cid in ("tenant_a", "tenant_b"):
+                conn = _get_connection(client_id=cid)
+                conn.close()
+                # Encontrar y borrar archivos test_memory_tenant_a.db y test_memory_tenant_b.db
+                db_file = DB_PATH.parent / f"test_memory_{cid}.db"
+                if db_file.exists():
+                    try:
+                        db_file.unlink()
+                    except PermissionError:
+                        pass

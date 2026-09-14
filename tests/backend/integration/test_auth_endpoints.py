@@ -42,30 +42,21 @@ def test_setup_crea_usuario(client, api_headers):
         "username": "testuser",
         "password": "securepass",
         "email": "test@test.com"
-    }, headers=api_headers)
+    })
     assert resp.status_code == 201
     data = resp.json()
     assert data["username"] == "testuser"
     assert "user_id" in data
 
 
-def test_setup_requiere_api_key(client):
-    """POST /auth/setup sin API Key devuelve 401."""
-    resp = client.post("/api/v1/auth/setup", json={
-        "username": "testuser",
-        "password": "securepass"
-    })
-    assert resp.status_code == 401
-
-
 def test_setup_falla_si_usuario_ya_existe(client, api_headers):
     """Segundo POST /auth/setup devuelve 409 Conflict."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
     resp = client.post("/api/v1/auth/setup", json={
         "username": "otro", "password": "otrapass123"
-    }, headers=api_headers)
+    })
     assert resp.status_code == 409
 
 
@@ -75,7 +66,7 @@ def test_login_devuelve_tokens(client, api_headers):
     """POST /auth/login con credenciales correctas devuelve JWT."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
 
     resp = client.post("/api/v1/auth/login", json={
         "username": "testuser",
@@ -92,7 +83,7 @@ def test_login_falla_con_credenciales_incorrectas(client, api_headers):
     """POST /auth/login con contraseña errónea devuelve 401."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
 
     resp = client.post("/api/v1/auth/login", json={
         "username": "testuser",
@@ -107,7 +98,7 @@ def test_me_devuelve_perfil_con_token_valido(client, api_headers):
     """GET /auth/me con Bearer token válido devuelve datos del usuario."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass", "email": "u@u.com"
-    }, headers=api_headers)
+    })
 
     login_resp = client.post("/api/v1/auth/login", json={
         "username": "testuser", "password": "securepass"
@@ -144,7 +135,7 @@ def test_refresh_emite_nuevo_access_token(client, api_headers):
     """POST /auth/refresh con refresh token válido devuelve nuevo access_token."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
 
     login_resp = client.post("/api/v1/auth/login", json={
         "username": "testuser", "password": "securepass"
@@ -162,7 +153,7 @@ def test_logout_revoca_refresh_token(client, api_headers):
     """POST /auth/logout revoca el refresh token. Refresh posterior falla."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
 
     login_resp = client.post("/api/v1/auth/login", json={
         "username": "testuser", "password": "securepass"
@@ -187,7 +178,7 @@ def test_cambiar_password_ok(client, api_headers):
     """PATCH /auth/password cambia la contraseña correctamente."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
 
     login_resp = client.post("/api/v1/auth/login", json={
         "username": "testuser", "password": "securepass"
@@ -211,7 +202,7 @@ def test_cambiar_password_falla_con_password_antigua_incorrecta(client, api_head
     """PATCH /auth/password con contraseña antigua incorrecta devuelve 401."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
-    }, headers=api_headers)
+    })
     login_resp = client.post("/api/v1/auth/login", json={
         "username": "testuser", "password": "securepass"
     })

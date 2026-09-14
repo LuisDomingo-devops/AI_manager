@@ -43,19 +43,7 @@ def mock_memory(request):
         mocked.get_summary.return_value = ""
         yield mocked
 
-@pytest.fixture(scope="session", autouse=True)
-def clean_test_databases():
-    import os
-    from pathlib import Path
-    data_dir = Path(__file__).resolve().parent.parent / "data"
-    for db_name in ["memory_test.db", "memory_test_mail.db"]:
-        db_path = data_dir / db_name
-        if db_path.exists():
-            try:
-                db_path.unlink()
-            except Exception:
-                pass
-    yield
+_dummy_conns = []
 @pytest.fixture(autouse=True)
 def reset_db_caches():
     """
@@ -63,10 +51,18 @@ def reset_db_caches():
     Esto permite que si un test hace DROP TABLE en su teardown/setup,
     el siguiente test vuelva a ejecutar CREATE TABLE IF NOT EXISTS.
     """
-    # 1. Reset connection_manager._initialized_dbs
+    # 1. Reset connection_manager caches
     try:
         from app.infrastructure.database import connection_manager
         connection_manager._initialized_dbs.clear()
+        
+        # Clear dynamically created dummy connections to wipe isolated DBs
+        for c in connection_manager._test_dummy_conns.values():
+            try:
+                c.close()
+            except Exception:
+                pass
+        connection_manager._test_dummy_conns.clear()
     except Exception:
         pass
         
@@ -89,5 +85,19 @@ def reset_db_caches():
         session_manager.SessionManager._db_initialized = False
     except Exception:
         pass
+        
+    # Mantener vivas las conexiones en memoria durante el test actual
+    import sqlite3
+    global _dummy_conns
+    for c in _dummy_conns:
+        try:
+            c.close()
+        except:
+            pass
+    _dummy_conns.clear()
+    
+    _dummy_conns.append(sqlite3.connect("file:calendar_mem?mode=memory&cache=shared", uri=True))
+    _dummy_conns.append(sqlite3.connect("file:mail_mem?mode=memory&cache=shared", uri=True))
+    _dummy_conns.append(sqlite3.connect("file:main_mem?mode=memory&cache=shared", uri=True))
     
     yield

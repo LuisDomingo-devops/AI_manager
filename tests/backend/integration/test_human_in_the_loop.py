@@ -70,7 +70,7 @@ async def test_delete_operations_confirmation():
         cursor.execute("DELETE FROM contacts WHERE name='Test Client Delete'")
         cursor.execute("DELETE FROM products WHERE sku='TESTDEL'")
         cursor.execute("INSERT INTO contacts (name, nif, email, address, contact_type) VALUES ('Test Client Delete', '12345678Z', 'test@correo.com', 'Calle Test', 'Cliente')")
-        cursor.execute("INSERT INTO products (sku, name, unit_price, iva_rate) VALUES ('TESTDEL', 'Test Product Delete', 50.0, 21.0)")
+        cursor.execute("INSERT INTO products (sku, name, price, unit_price, iva_rate) VALUES ('TESTDEL', 'Test Product Delete', 50.0, 50.0, 21.0)")
         conn.commit()
         
         # Obtener ID de cliente creado

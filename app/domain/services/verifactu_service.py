@@ -788,12 +788,12 @@ class VerifactuService:
                         "message": f"Incidencia TLS o transporte en el envío a la AEAT: {str(e)}"
                     }
             
-            # Simulación de pruebas offline para evitar falsas aceptaciones
+            # Fallback removido: En producción es obligatorio un certificado cualificado.
             return {
-                "status": "offline_simulated",
-                "delivery_status": "PENDIENTE",
-                "code": 202,
-                "message": "ATENCIÓN: Registro firmado y guardado localmente, pero PENDIENTE de envío a la AEAT por falta de certificado cualificado en el perfil."
+                "status": "rejected",
+                "delivery_status": "ERROR_AUTH",
+                "code": 401,
+                "message": "ERROR: No se encontró certificado cualificado. Para VeriFactu en producción, el certificado es obligatorio."
             }
         finally:
             # Limpiar archivos temporales de certificados de forma segura

@@ -1,4 +1,5 @@
 import os
+from app.utils.logger import app_logger
 import json
 from pathlib import Path
 from datetime import datetime
@@ -74,8 +75,8 @@ class BankService:
                         status = "expiring_soon"
                     else:
                         status = "valid"
-                except Exception:
-                    pass
+                except Exception as e:
+                    app_logger.warning(f"Error silencioso capturado: {e}")
 
             return {
                 "connection_id": connection_id,
@@ -141,8 +142,8 @@ class BankService:
             if creds_cipher:
                 try:
                     creds_dict = json.loads(encryptor.decrypt(creds_cipher))
-                except Exception:
-                    pass
+                except Exception as e:
+                    app_logger.warning(f"Error silencioso capturado: {e}")
             
             provider = BankProviderFactory.get_provider(provider_name)
             
@@ -152,8 +153,8 @@ class BankService:
             try:
                 from datetime import timedelta
                 start_dt = (datetime.now() - timedelta(days=30)).strftime("%d/%m/%Y")
-            except Exception:
-                pass
+            except Exception as e:
+                app_logger.warning(f"Error silencioso capturado: {e}")
             
             account_id = creds_dict.get("account_id", "default_account")
             movements = provider.fetch_transactions(creds_dict, account_id, start_dt)
@@ -305,8 +306,8 @@ class BankService:
                             dt = datetime.strptime(clean_d, fmt.replace("Z", ""))
                             formatted_date = dt.strftime("%d/%m/%Y")
                             break
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            app_logger.warning(f"Error silencioso capturado: {e}")
 
                 # 2. Extraer importe
                 amount = 0.0
@@ -515,8 +516,8 @@ class BankService:
                         try:
                             inv_date = datetime.strptime(inv["date"][:10], fmt)
                             break
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            app_logger.warning(f"Error silencioso capturado: {e}")
                     if not inv_date:
                         continue
 
@@ -572,8 +573,8 @@ class BankService:
                                         year_str = str(inv_dt.year)
                                         quarter_str = f"T{(inv_dt.month - 1) // 3 + 1}"
                                         break
-                                    except Exception:
-                                        pass
+                                    except Exception as e:
+                                        app_logger.warning(f"Error silencioso capturado: {e}")
                                 
                                 dest_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal" / year_str / quarter_str / "Ingresos"
                                 dest_dir.mkdir(parents=True, exist_ok=True)
@@ -581,8 +582,8 @@ class BankService:
                                 
                                 shutil.move(str(src_path), str(dest_file))
                                 cursor.execute("UPDATE invoices SET file_path = ? WHERE id = ?", (encryptor.encrypt(str(dest_file)), matched_inv["db_id"]))
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            app_logger.warning(f"Error silencioso capturado: {e}")
                     
                     invoices.remove(matched_inv)
 

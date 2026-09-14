@@ -37,6 +37,22 @@ Como desarrollador, quiero ejecutar una suite de tests de integración completa 
 
 1. **Given** el módulo VeriFactu, **When** se lanzan los tests de integración, **Then** el sistema simula o conecta con la API de pruebas de la AEAT, verifica las respuestas y emite un log detallado de éxito o fracaso, cubriendo firma y formato XML.
 
+### User Story 3 - Resolución de Deuda Técnica y Seguridad (Priority: P1)
+
+Como responsable de seguridad y operaciones, quiero eliminar la deuda técnica crítica y vulnerabilidades antes del paso a producción (API keys en disco, doble autenticación, fallbacks inseguros de Verifactu, excepciones silenciosas y tests no deterministas).
+
+**Why this priority**: Son bloqueantes para un entorno de producción seguro y estable.
+
+**Independent Test**: Auditoría de código, ejecución aislada de tests en CI sin fixtures compartidas en disco, y pruebas de inyección de errores para asegurar que no hay fallos silenciosos.
+
+**Acceptance Scenarios**:
+
+1. **Given** el módulo de configuración, **When** arranca en producción, **Then** no debe persistir claves en disco sin rotación/cifrado.
+2. **Given** el API, **When** recibe peticiones, **Then** debe usar un único mecanismo de autenticación robusto (auth_router JWT unificado).
+3. **Given** el entorno de producción, **When** Verifactu intenta usar `offline_simulated`, **Then** debe rechazar la operación (solo válido en dev/test).
+4. **Given** operaciones de negocio (banco, mail), **When** ocurre un fallo, **Then** la excepción debe registrarse y propagarse adecuadamente, nunca ser silenciada por `except Exception: pass`.
+5. **Given** la suite de tests, **When** se ejecuta en CI, **Then** debe usar fixtures efímeras y no compartir estado en disco para garantizar determinismo.
+
 ### Edge Cases
 
 - ¿Qué sucede si la API de la AEAT está temporalmente inactiva o responde con un error HTTP 503?
