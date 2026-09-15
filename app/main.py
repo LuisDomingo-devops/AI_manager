@@ -116,45 +116,6 @@ async def lifespan(app: FastAPI):
     from urllib.parse import urlparse
     is_testing = "pytest" in sys.modules
 
-    # Auto-arranque de Ollama en segundo plano (solo si no es entorno de testing)
-    if not is_testing:
-        try:
-            url = urlparse(settings.OLLAMA_BASE_URL)
-            host = url.hostname or "localhost"
-            port = url.port or 11434
-            is_local = host in ("localhost", "127.0.0.1", "::1")
-
-            def is_ollama_responding() -> bool:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(0.5)
-                try:
-                    s.connect((host, port))
-                    s.close()
-                    return True
-                except Exception:
-                    return False
-
-            if is_local and not is_ollama_responding():
-                ollama_bin = shutil.which("ollama.exe") or shutil.which("ollama")
-                if ollama_bin:
-                    app_logger.info("Ollama no detectado en el puerto %s. Iniciando %s serve...", port, ollama_bin)
-                    _ollama_process = subprocess.Popen(
-                        [ollama_bin, "serve"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                    # Esperar hasta 3 segundos a que responda
-                    for _ in range(6):
-                        await asyncio.sleep(0.5)
-                        if is_ollama_responding():
-                            app_logger.info("Ollama arrancado correctamente en segundo plano.")
-                            break
-                    else:
-                        app_logger.warning("Ollama se inició pero no responde en el puerto esperado.")
-                else:
-                    app_logger.warning("Ollama no está en el PATH del sistema. No se pudo auto-arrancar.")
-        except Exception:
-            app_logger.exception("Error durante el intento de auto-arranque de Ollama")
 
     if not is_testing:
         await alfonso_bridge.start()

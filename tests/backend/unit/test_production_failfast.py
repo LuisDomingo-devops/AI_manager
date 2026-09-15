@@ -11,10 +11,11 @@ def test_encryption_key_fail_fast_in_production():
     se levanta RuntimeError impidiendo el arranque inseguro.
     """
     with patch.dict(os.environ, {"ALFONSO_ENV": "production", "DATABASE_ENCRYPTION_KEY": ""}):
-        with patch("keyring.get_password", return_value=None):
-            with patch("pathlib.Path.exists", return_value=False):
-                with pytest.raises(RuntimeError) as exc_info:
-                    enc.get_or_create_key()
+        with patch("app.config.settings.DATABASE_ENCRYPTION_KEY", ""):
+            with patch("keyring.get_password", return_value=None):
+                with patch("pathlib.Path.exists", return_value=False):
+                    with pytest.raises(RuntimeError) as exc_info:
+                        enc.get_or_create_key()
                 
                 assert "FATAL: Entorno configurado como 'production'" in str(exc_info.value)
                 assert "DATABASE_ENCRYPTION_KEY" in str(exc_info.value)

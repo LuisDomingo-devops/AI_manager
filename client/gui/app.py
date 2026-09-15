@@ -2348,7 +2348,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.chat_history = "### ¡Hola! Soy Alfonso, tu asistente contable.\n\nPuedes pedirme por voz o texto que emita facturas, concilie bancos, revise impuestos o calcule tus modelos de la AEAT.\n\n*Arrastra facturas o tickets aquí para procesarlos automáticamente.*"
+        self.chat_history = "### ¡Hola! Soy Alfonso, tu asistente contable.\n\nPuedes pedirme por voz o texto que emita facturas, concilie bancos, revise impuestos o calcule tus modelos de la AEAT.\n\n*Arrastra facturas o tickets aquí para procesarlos automáticamente.*\n\n"
         self.chat_lbl.setMarkdown(self.chat_history)
         chat_layout.addWidget(self.chat_lbl, 1)
 

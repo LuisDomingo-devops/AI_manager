@@ -64,7 +64,9 @@ BASIC_ALLOWED_TOOLS = COMMON_ASSISTANT_TOOLS | {
     "get_libro_diario", "get_balance_situacion", "get_pgc_accounts",
     "get_tax_estimate", "get_fiscal_deadlines", "get_fiscal_deadlines_tool",
     "fill_modelo_303_playwright", "fill_modelo_130_playwright",
-    "fill_modelo_111_playwright", "fill_modelo_115_playwright"
+    "fill_modelo_111_playwright", "fill_modelo_115_playwright",
+    "get_quarterly_aggregates", "get_full_financial_report", "get_profit_and_loss_report",
+    "parse_invoice", "parse_tax_model"
 }
 
 PRO_ALLOWED_TOOLS = BASIC_ALLOWED_TOOLS | {
@@ -79,7 +81,11 @@ PRO_ALLOWED_TOOLS = BASIC_ALLOWED_TOOLS | {
     "register_payment", "get_invoice_payment_summary", "get_pending_payments_report",
     # Asistente IA Proactivo y Cierre Contable
     "request_document", "send_to_advisor", "export_advisor_pack", "export_advisor_pack_tool",
-    "get_profit_and_loss_report", "close_fiscal_year_tool"
+    "close_fiscal_year_tool",
+    # Gestión de Activos
+    "add_asset", "list_assets", "get_amortization_table", "execute_amortization", "generate_depreciation_proposal_tool",
+    # Modelos Corporativos y Laborales (PYME)
+    "generate_modelo_200_summary", "fill_modelo_200_playwright", "generate_modelo_202_autofill_script", "generate_modelo_190_summary"
 }
 
 ADVISOR_ALLOWED_TOOLS = PRO_ALLOWED_TOOLS | {
@@ -405,6 +411,9 @@ def check_license_status(
 
 def get_active_license_tier() -> str:
     """Devuelve el tier normalizado activo ('basic', 'pro', 'advisor') o 'none' si no es válida."""
+    override = os.getenv("ALFONSO_LICENSE_TIER")
+    if override:
+        return override
     status = check_license_status()
     if not status.is_operational:
         return "none"

@@ -54,8 +54,8 @@ class PromptInjectionFilter:
         )
         
         try:
-            client = GeminiClient(temperature=0.0)
-            response = await client.generate_content(prompt)
+            client = GeminiClient()
+            response = await client.generate(prompt, options={"temperature": 0.0})
             from app.infrastructure.adapters.llm_client import extract_json_robust
             
             result = extract_json_robust(response)

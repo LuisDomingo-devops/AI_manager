@@ -125,8 +125,6 @@ class DatabaseEncryptor:
             return self.fernet.decrypt(cipher_text.encode('utf-8')).decode('utf-8')
         except Exception as e:
             if cipher_text.startswith("gAAAA"):
-                from app.utils.logger import error_logger
-                error_logger.warning("Error al descifrar un dato corrupto o clave incorrecta: %s. Se devuelve marcador fallback.", e)
                 return f"[CORRUPTED_DATA]"
             # En caso de error (texto plano o cifrado fallback antiguo), devolver la cadena original
             return cipher_text

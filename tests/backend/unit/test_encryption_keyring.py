@@ -25,6 +25,7 @@ def test_keyring_storage_success():
 
     with patch("keyring.get_password", side_effect=mock_get), \
          patch("keyring.set_password", side_effect=mock_set), \
+         patch("app.config.settings.DATABASE_ENCRYPTION_KEY", ""), \
          patch.dict(os.environ, {"ALFONSO_ENV": "test"}):
          
         # Primera llamada genera clave
@@ -52,6 +53,7 @@ def test_keyring_failure_fallback_to_file():
 
     with patch("keyring.get_password", side_effect=mock_get_error), \
          patch("keyring.set_password", side_effect=mock_set_error), \
+         patch("app.config.settings.DATABASE_ENCRYPTION_KEY", ""), \
          patch.dict(os.environ, {"ALFONSO_ENV": "test"}):
          
         # Primera llamada genera clave

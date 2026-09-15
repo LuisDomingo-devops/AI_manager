@@ -119,7 +119,7 @@ class Settings(BaseSettings):
             for item in self.ALFONSO_CLIENT_TOKENS.split(","):
                 if ":" in item:
                     k, v = item.split(":", 1)
-                    if k.strip() == client_id:
+                    if k.strip() == client_id or k.strip() == "*":
                         return v.strip()
             return None
 
@@ -148,7 +148,7 @@ class Settings(BaseSettings):
             for item in self.ALFONSO_CLIENT_ROLES.split(","):
                 if ":" in item:
                     k, v = item.split(":", 1)
-                    if k.strip() == client_id:
+                    if k.strip() == client_id or k.strip() == "*":
                         return v.strip()
             return default_role
 

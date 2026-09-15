@@ -111,6 +111,7 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
     # Mocking tool de servidor
     mock_tool = AsyncMock()
     mock_tool.return_value = {"status": "ok"}
+    monkeypatch.setattr("app.config.settings.ALFONSO_CLIENT_ROLES", "")
     monkeypatch.setattr("app.domain.planner_orchestrator.get_tool", lambda name, req_id: mock_tool)
     monkeypatch.setattr("app.domain.planner_orchestrator.prepare_tool_args", lambda name, args, req_id: MagicMock(ok=True, args=args))
     
@@ -125,6 +126,8 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
         '{"tool": "read_emails", "args": {}}',
         'Mensaje final de chat.'
     ]
+    
+    monkeypatch.setattr("app.utils.license_validator.is_tool_allowed_for_tier", lambda *args, **kwargs: (True, ""))
     
     # 1. Ejecución de guest sobre tool de servidor -> Debería ser bloqueada (Acceso denegado)
     res_guest = await orchestrator.run("consulta", llm=mock_llm, client_id="guest_client", session_id="test_sess_guest")
