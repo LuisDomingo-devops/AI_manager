@@ -102,6 +102,13 @@ class Settings(BaseSettings):
             return cleaned
         return data
 
+    @model_validator(mode="after")
+    def validate_cors_origins(self) -> 'Settings':
+        """Evita la combinación fatal de origins=* y allow_credentials=True en producción"""
+        if self.ENV == "production" and "*" in self.ALFONSO_CORS_ORIGINS:
+            raise ValueError("FATAL EN PRODUCCIÓN: ALFONSO_CORS_ORIGINS contiene '*'. Con allow_credentials=True esto es un agujero crítico de seguridad. Configura orígenes explícitos separados por comas.")
+        return self
+
     def get_client_token(self, client_id: str) -> str | None:
         if not self.ALFONSO_CLIENT_TOKENS:
             return None

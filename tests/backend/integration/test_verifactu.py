@@ -80,7 +80,7 @@ def test_verifactu_chain_corruption():
     # Corromper deliberadamente la base de datos
     with _get_connection() as conn:
         conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
-            conn.execute(
+        conn.execute(
             "UPDATE verifactu_invoices SET total_amount = 999.0 WHERE invoice_number = 'FAC-2026-0001'"
         )
         conn.commit()

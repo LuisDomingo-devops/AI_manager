@@ -189,7 +189,7 @@ def test_integration_verifactu_cryptographic_chaining():
     # Intentar alterar un registro en base de datos directamente
     with _get_connection() as conn:
         conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
-            conn.execute("UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'EMITIDA-001'")
+        conn.execute("UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'EMITIDA-001'")
         conn.commit()
         
     # Verificar que el sistema detecta la alteración del hash de encadenamiento

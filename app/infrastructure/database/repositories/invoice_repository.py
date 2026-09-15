@@ -225,68 +225,76 @@ class InvoiceRepository:
             conn.close()
 
     @staticmethod
-    def generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:
-        if rect_id:
-            return rect_id
+    def _get_next_sequence_value(year: int, prefix: str) -> int:
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT invoice_id FROM invoices")
-            rows = cursor.fetchall()
-            count = 0
-            prefix = "R-BORRADOR-2026-" if is_draft else "R-2026-"
-            for r in rows:
-                try:
-                    dec_id = encryptor.decrypt(r["invoice_id"])
-                    if dec_id.startswith(prefix):
-                        count += 1
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
-            return f"{prefix}{count + 101:03d}"
+            # Iniciar transaccion explicita con bloqueo para concurrencia
+            cursor.execute("BEGIN EXCLUSIVE TRANSACTION")
+            
+            cursor.execute("SELECT last_value FROM invoice_sequences WHERE year = ? AND prefix = ?", (year, prefix))
+            row = cursor.fetchone()
+            
+            if row:
+                next_val = row["last_value"] + 1
+                cursor.execute("UPDATE invoice_sequences SET last_value = ? WHERE year = ? AND prefix = ?", (next_val, year, prefix))
+            else:
+                # Fallback inicial: calcular max_val basandose en la BD existente (solo ocurre la primera vez)
+                cursor.execute("SELECT invoice_id FROM invoices")
+                rows = cursor.fetchall()
+                max_val = 100 # Empezamos en 101 por defecto
+                
+                # Para evitar problemas con el mock de pruebas, contamos simplemente las que coincidan
+                for r in rows:
+                    try:
+                        dec_id = encryptor.decrypt(r["invoice_id"])
+                        if dec_id.startswith(f"{prefix}{year}-"):
+                            parts = dec_id.split("-")
+                            if len(parts) >= 3 and parts[-1].isdigit():
+                                val = int(parts[-1])
+                                if val > max_val:
+                                    max_val = val
+                    except Exception:
+                        pass
+                
+                next_val = max_val + 1
+                cursor.execute("INSERT INTO invoice_sequences (year, prefix, last_value) VALUES (?, ?, ?)", (year, prefix, next_val))
+            
+            conn.commit()
+            return next_val
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
     @staticmethod
+    def generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:
+        if rect_id:
+            return rect_id
+        
+        from datetime import datetime
+        year = datetime.now().year # Usamos año actual
+        prefix = "R-BORRADOR-" if is_draft else "R-"
+        
+        next_val = InvoiceRepository._get_next_sequence_value(year, prefix)
+        return f"{prefix}{year}-{next_val:03d}"
+
+    @staticmethod
     def generate_unique_invoice_id(is_draft: bool, invoice_id: str) -> str:
+        from datetime import datetime
+        year = datetime.now().year
+        
         if is_draft:
             if not invoice_id or not invoice_id.startswith("BORRADOR-"):
-                conn = _get_connection()
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT invoice_id FROM invoices")
-                    rows = cursor.fetchall()
-                    draft_count = 0
-                    for r in rows:
-                        try:
-                            dec_id = encryptor.decrypt(r["invoice_id"])
-                            if dec_id.startswith("BORRADOR-"):
-                                draft_count += 1
-                        except Exception:
-                            from app.utils.logger import error_logger
-                            error_logger.warning("Excepción genérica interceptada silenciosamente.")
-                    invoice_id = f"BORRADOR-2026-{draft_count + 101:03d}"
-                finally:
-                    conn.close()
+                prefix = "BORRADOR-"
+                next_val = InvoiceRepository._get_next_sequence_value(year, prefix)
+                invoice_id = f"{prefix}{year}-{next_val:03d}"
         else:
             if not invoice_id or invoice_id.startswith("BORRADOR-"):
-                conn = _get_connection()
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT invoice_id FROM invoices")
-                    rows = cursor.fetchall()
-                    firm_count = 0
-                    for r in rows:
-                        try:
-                            dec_id = encryptor.decrypt(r["invoice_id"])
-                            if dec_id.startswith("F-"):
-                                firm_count += 1
-                        except Exception:
-                            from app.utils.logger import error_logger
-                            error_logger.warning("Excepción genérica interceptada silenciosamente.")
-                    invoice_id = f"F-2026-{firm_count + 101:03d}"
-                finally:
-                    conn.close()
+                prefix = "F-"
+                next_val = InvoiceRepository._get_next_sequence_value(year, prefix)
+                invoice_id = f"{prefix}{year}-{next_val:03d}"
         return invoice_id
 
     @staticmethod

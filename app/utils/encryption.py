@@ -8,6 +8,7 @@ import keyring
 KEY_PATH = Path(__file__).resolve().parents[2] / "data" / ".key"
 
 def get_or_create_key() -> bytes:
+    from app.utils.logger import error_logger, app_logger
     # 0. Intentar obtener la clave desde la configuración (archivo .env / settings)
     try:
         from app.config import settings
@@ -18,14 +19,12 @@ def get_or_create_key() -> bytes:
                 decoded = base64.b64decode(key_str.encode('utf-8'))
                 if len(decoded) == 32:
                     return decoded
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            except Exception as e:
+                error_logger.exception(f"Error al decodificar DATABASE_ENCRYPTION_KEY como base64: {e}")
             # Fallback si no es base64 de 32 bytes directo: derivar con SHA-256
             return hashlib.sha256(key_str.encode('utf-8')).digest()
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+    except Exception as e:
+        error_logger.exception(f"Error al acceder a settings.DATABASE_ENCRYPTION_KEY: {e}")
 
     # 1. Intentar obtener la clave desde el Keyring del sistema
     try:
@@ -35,28 +34,26 @@ def get_or_create_key() -> bytes:
             if KEY_PATH.exists():
                 try:
                     KEY_PATH.unlink()
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                except Exception as e:
+                    error_logger.exception(f"Error al eliminar KEY_PATH local: {e}")
             return base64.b64decode(stored_key_b64.encode('utf-8'))
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+    except Exception as e:
+        error_logger.exception(f"Error al leer la clave del keyring: {e}")
 
     # 2. Si no está en el Keyring, comprobar el archivo de clave local como fallback
     if KEY_PATH.exists():
         try:
             return KEY_PATH.read_bytes()
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        except Exception as e:
+            error_logger.exception(f"Error al leer KEY_PATH local: {e}")
 
-    # 3. Verificación de seguridad para entorno de producción (Fail-Fast)
-    alfonso_env = os.getenv("ALFONSO_ENV", "").strip().lower()
-    if alfonso_env == "production":
+    # 3. Verificación de seguridad (Fail-Closed por defecto)
+    alfonso_env = os.getenv("ALFONSO_ENV", "production").strip().lower()
+    if alfonso_env not in ["development", "local", "test"]:
         raise RuntimeError(
-            "FATAL EN PRODUCCIÓN: No se ha configurado 'DATABASE_ENCRYPTION_KEY'. "
-            "En entorno de producción está terminantemente prohibido generar claves de cifrado temporales en memoria "
+            f"FATAL: Entorno configurado como '{alfonso_env}'. "
+            "No se ha configurado 'DATABASE_ENCRYPTION_KEY'. "
+            "En entornos no-desarrollo está terminantemente prohibido generar claves de cifrado temporales en memoria "
             "debido al riesgo crítico de pérdida permanente de acceso a datos cifrados tras reinicio del servicio. "
             "Por favor, configure la variable de entorno DATABASE_ENCRYPTION_KEY con una clave base64 válida de 32 bytes."
         )
@@ -64,16 +61,14 @@ def get_or_create_key() -> bytes:
     # 4. Generar nueva clave y advertir en los logs (solo permitido en desarrollo/local)
     new_key = os.urandom(32)
     try:
-        from app.utils.logger import app_logger
         new_key_b64 = base64.b64encode(new_key).decode('utf-8')
         app_logger.warning(
             "⚠️ ALERTA DE SEGURIDAD: Se ha generado una clave de cifrado temporal de desarrollo. "
             "Para un despliegue portable y seguro en producción, añade la siguiente clave "
             "a tu archivo .env como DATABASE_ENCRYPTION_KEY:\n%s", new_key_b64
         )
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+    except Exception as e:
+        error_logger.exception(f"Error al loggear la nueva clave: {e}")
     
     # 4. Intentar guardar en el Keyring del sistema
     saved_in_keyring = False
@@ -81,18 +76,16 @@ def get_or_create_key() -> bytes:
         new_key_b64 = base64.b64encode(new_key).decode('utf-8')
         keyring.set_password("alfonso_autonomo", "db_encryption_key", new_key_b64)
         saved_in_keyring = True
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+    except Exception as e:
+        error_logger.exception(f"Error al guardar la clave en el keyring: {e}")
         
     # 5. Si falló el keyring, guardar en archivo local
     if not saved_in_keyring:
         KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
         try:
             KEY_PATH.write_bytes(new_key)
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        except Exception as e:
+            error_logger.exception(f"Error al escribir la clave en KEY_PATH local: {e}")
             
     return new_key
 

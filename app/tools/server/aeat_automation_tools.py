@@ -789,23 +789,27 @@ async def generate_modelo_347_summary(year: int) -> dict:
         with _get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT issuer_name, issuer_nif, receiver_name, receiver_nif, total_amount, category FROM invoices WHERE year = ?", (year,))
-            rows = cursor.fetchall()
             
-        terceros = {}
-        for r in rows:
-            cat = r["category"]
-            if cat in ("ingreso", "income"):
-                name = encryptor.decrypt(r["receiver_name"])
-                nif = encryptor.decrypt(r["receiver_nif"])
-            else:
-                name = encryptor.decrypt(r["issuer_name"])
-                nif = encryptor.decrypt(r["issuer_nif"])
-                
-            total = float(encryptor.decrypt(r["total_amount"]))
-            
-            if nif not in terceros:
-                terceros[nif] = {"name": name, "nif": nif, "total": 0.0, "category": cat}
-            terceros[nif]["total"] += total
+            terceros = {}
+            while True:
+                rows = cursor.fetchmany(1000)
+                if not rows:
+                    break
+                    
+                for r in rows:
+                    cat = r["category"]
+                    if cat in ("ingreso", "income"):
+                        name = encryptor.decrypt(r["receiver_name"])
+                        nif = encryptor.decrypt(r["receiver_nif"])
+                    else:
+                        name = encryptor.decrypt(r["issuer_name"])
+                        nif = encryptor.decrypt(r["issuer_nif"])
+                        
+                    total = float(encryptor.decrypt(r["total_amount"]))
+                    
+                    if nif not in terceros:
+                        terceros[nif] = {"name": name, "nif": nif, "total": 0.0, "category": cat}
+                    terceros[nif]["total"] += total
             
         reported_terceros = [t for t in terceros.values() if t["total"] > 3005.06]
         
@@ -902,22 +906,16 @@ async def register_asset_tool(
         return {"status": "error", "message": str(e)}
 
 
-async def generate_depreciation_proposal_tool(year: int, confirmed_by_user: bool = False) -> dict:
+async def generate_depreciation_proposal_tool(year: int) -> dict:
     """
     Genera la propuesta de cuotas y asientos de amortización anual de activos.
-    Si se confirma por el usuario (confirmed_by_user=True), inserta los asientos en el diario contable.
+    NOTA: Esta herramienta solo genera la propuesta (Out-of-band). 
+    La confirmación e inserción real debe realizarse a través de la API/UI directamente por el usuario.
     """
     try:
         adapter = SqliteAssetRepositoryAdapter()
         service = DepreciationService(adapter)
         proposal = service.calculate_depreciation_proposal("default", year)
-
-        if not confirmed_by_user:
-            return {
-                "status": "pending_confirmation",
-                "message": f"Se va a calcular la propuesta de amortización de activos del año {year} para tu revisión.",
-                "proposal": proposal
-            }
 
         if not proposal:
             return {
@@ -925,25 +923,10 @@ async def generate_depreciation_proposal_tool(year: int, confirmed_by_user: bool
                 "message": "No hay activos pendientes de amortizar para este año."
             }
 
-        from app.domain.services.ledger_service import LedgerService
-        
-        registered_count = 0
-        for line in proposal:
-            apuntes = [
-                {"account_code": line["account_debe"], "debe": line["amount"], "haber": 0.0},
-                {"account_code": line["account_haber"], "debe": 0.0, "haber": line["amount"]}
-            ]
-            LedgerService._insert_journal_and_ledger(
-                date_str=f"31/12/{year}",
-                concept=line["concept"],
-                apuntes=apuntes
-            )
-            registered_count += 1
-
         return {
-            "status": "ok",
-            "message": f"Se han registrado con éxito {registered_count} asientos contables de amortización anual para el ejercicio {year}.",
-            "proposal_applied": proposal
+            "status": "pending_confirmation",
+            "message": f"Se ha calculado la propuesta de amortización de activos del año {year} para tu revisión. Por favor, confírmala en la interfaz para aplicarla.",
+            "proposal": proposal
         }
     except Exception as e:
         tool_logger.exception("Error al generar propuesta de amortizaciones")

@@ -52,6 +52,11 @@ class LedgerService:
     def _insert_journal_and_ledger(cls, date_str: str, concept: str, apuntes: List[Dict[str, Any]]) -> int:
         """Inserta de forma atómica y cifrada un asiento en el Libro Diario y sus apuntes en el Mayor."""
         cls.validate_double_entry(apuntes)
+        
+        year = cls.extract_year_from_date(date_str)
+        if cls.is_fiscal_year_closed(year):
+            raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
+
         with _get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
