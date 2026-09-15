@@ -136,7 +136,7 @@ async def test_sqlite_asset_repository_and_tools():
     assert len(all_assets) >= 1
 
     # 4. Probar propuesta de amortización sin confirmación (confirmed_by_user=False)
-    res_proposal = await generate_depreciation_proposal_tool(2026, confirmed_by_user=False)
+    res_proposal = await generate_depreciation_proposal_tool(2026)
     assert res_proposal["status"] == "pending_confirmation"
     assert len(res_proposal["proposal"]) == 1
     # Cuota anual: (1200 - 200) / 10 = 100. Prorrata 8 meses de uso (mayo a diciembre): 100 * (8/12) = 66.67
@@ -175,9 +175,10 @@ async def test_sqlite_asset_repository_and_tools():
         conn.commit()
 
     with patch("app.domain.services.ledger_service.LedgerService.is_fiscal_year_closed", return_value=False):
-        res_apply = await generate_depreciation_proposal_tool(2026, confirmed_by_user=True)
-        assert res_apply["status"] == "ok"
-        assert "registrado con éxito" in res_apply["message"]
+        # Simulamos la confirmación Out-of-band a través del servicio
+        from app.domain.services.depreciation_service import DepreciationService
+        service = DepreciationService(adapter)
+        res_apply = service.record_depreciation_entries("default", 2026)
         
         # Validar inserción del asiento en la base de datos
         with _get_connection("default") as conn:

@@ -16,7 +16,7 @@ def test_encryption_key_fail_fast_in_production():
                 with pytest.raises(RuntimeError) as exc_info:
                     enc.get_or_create_key()
                 
-                assert "FATAL EN PRODUCCIÓN" in str(exc_info.value)
+                assert "FATAL: Entorno configurado como 'production'" in str(exc_info.value)
                 assert "DATABASE_ENCRYPTION_KEY" in str(exc_info.value)
 
 
