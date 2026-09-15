@@ -254,11 +254,13 @@ async def test_advisor_role_rbac_isolation(monkeypatch):
     pero tenga denegado el acceso a operaciones de modificación, borrado o transacciones bancarias.
     """
     from unittest.mock import AsyncMock, MagicMock
+    monkeypatch.delenv("ALFONSO_LICENSE_TIER", raising=False)
     orchestrator = PlannerOrchestrator()
     orchestrator.execution_engine.bridge._client_info_dict["advisor_client"] = {"role": "advisor"}
 
     mock_tool = AsyncMock()
     mock_tool.return_value = {"status": "ok"}
+    monkeypatch.setattr("app.utils.license_validator.get_active_license_tier", lambda: "advisor")
     monkeypatch.setattr("app.domain.planner_orchestrator.get_tool", lambda name, req_id: mock_tool)
     monkeypatch.setattr("app.domain.planner_orchestrator.prepare_tool_args", lambda name, args, req_id: MagicMock(ok=True, args=args))
     monkeypatch.setattr("app.domain.planner_orchestrator.vector_memory.query_facts", lambda *args, **kwargs: [])

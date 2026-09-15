@@ -64,7 +64,7 @@ def test_basic_tier_allowed_and_blocked_tools(master_keypair):
     install_license(basic_lic)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False"}):
+        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False", "ALFONSO_LICENSE_TIER": ""}):
             tier = get_active_license_tier()
             assert tier == "basic"
 
@@ -115,7 +115,7 @@ def test_pro_tier_allowed_and_blocked_tools(master_keypair):
     install_license(pro_lic)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False"}):
+        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False", "ALFONSO_LICENSE_TIER": ""}):
             tier = get_active_license_tier()
             assert tier == "pro"
 
@@ -150,7 +150,7 @@ def test_advisor_tier_full_power(master_keypair):
     install_license(advisor_lic)
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
-        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False"}):
+        with patch.dict("os.environ", {"ALFONSO_IS_TESTING": "False", "ALFONSO_LICENSE_TIER": ""}):
             tier = get_active_license_tier()
             assert tier == "advisor"
 
