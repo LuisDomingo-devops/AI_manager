@@ -27,7 +27,9 @@ def setup_test_env():
         conn.execute("DELETE FROM ledger_entries")
         conn.execute("DELETE FROM fiscal_year_status")
         conn.execute("DELETE FROM b2b_invoice_status_history")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
         conn.execute("DELETE FROM sif_event_log")
         conn.execute("DELETE FROM user_profile")
         

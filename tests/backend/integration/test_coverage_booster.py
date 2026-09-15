@@ -74,6 +74,7 @@ def test_tax_parser_aggregation_decryption_exception():
 def test_verifactu_integrity_verification_empty():
     """Verifica que la auditoría Verifactu sea válida si no hay facturas registradas."""
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         

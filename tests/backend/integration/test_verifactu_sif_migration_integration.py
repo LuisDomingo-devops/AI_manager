@@ -52,6 +52,7 @@ def test_sif_event_lifecycle_startup_and_shutdown_integration():
 
     
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
         conn.execute("DELETE FROM sif_event_log")
         conn.commit()
 

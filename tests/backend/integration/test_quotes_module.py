@@ -14,6 +14,7 @@ async def test_quotes_flow():
         cursor = conn.cursor()
         cursor.execute("DELETE FROM quotes")
         cursor.execute("DELETE FROM invoices")
+        cursor.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         cursor.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     finally:

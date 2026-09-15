@@ -8,7 +8,9 @@ from app.adapters.memory.memory import _get_connection
 def clean_db():
 
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
         conn.execute("DELETE FROM sif_event_log")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     yield

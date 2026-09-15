@@ -20,6 +20,7 @@ async def test_payments_flow(mock_mail):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM payments")
         cursor.execute("DELETE FROM invoices")
+        cursor.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         cursor.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     finally:

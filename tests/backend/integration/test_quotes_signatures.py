@@ -12,6 +12,7 @@ async def test_quote_digital_signature_flow():
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM quotes")
+        cursor.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         cursor.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     finally:

@@ -17,10 +17,12 @@ def clean_verifactu_db(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_module, "DB_PATH", test_db)
 
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
     yield
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
 
@@ -90,7 +92,8 @@ def test_chain_propagation_corruption():
     
     # Corromper deliberadamente la factura del medio (2ª factura)
     with _get_connection() as conn:
-        conn.execute(
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
+            conn.execute(
             "UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'FAC-PROP-0002'"
         )
         conn.commit()

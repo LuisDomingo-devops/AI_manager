@@ -17,6 +17,7 @@ def clean_db(tmp_path, monkeypatch):
     
     with _get_connection() as conn:
         conn.execute("DELETE FROM invoices")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         

@@ -46,6 +46,7 @@ def setup_test_environment(tmp_path, monkeypatch):
         _init_db_schema(conn)
         _init_mail_schema(conn)
         
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.execute("DELETE FROM invoices")
         conn.execute("DELETE FROM emails")

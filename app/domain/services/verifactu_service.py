@@ -734,17 +734,16 @@ class VerifactuService:
         if custom_url and custom_url.strip():
             AEAT_URL = custom_url.strip()
         else:
-            # Si usamos certificados de prueba de la FNMT (eIDAS Test / data/certificados_prueba / NIF 99999972C),
-            # el endpoint Sandbox de la AEAT que confía en la CA de pruebas es prewww10.aeat.es.
-            # Para certificados reales en preproducción, se usa prewww1.aeat.es.
-            cert_check = (str(cert_path or "") + " " + str(cert_path_db or "")).lower()
-            nif_check = os.environ.get("ALFONSO_SIF_PRODUCER_NIF", "")
-            is_test_cert = "prueba" in cert_check or "test" in cert_check or nif_check.startswith("999999")
-
-            if is_test_cert:
+            aeat_env = getattr(settings, "ALFONSO_AEAT_ENV", "sandbox").lower()
+            if aeat_env == "sandbox":
                 AEAT_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
-            else:
+            elif aeat_env == "preproduction":
                 AEAT_URL = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+            elif aeat_env == "production":
+                AEAT_URL = "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+            else:
+                app_logger.warning("ALFONSO_AEAT_ENV desconocido ('%s'). Cayendo en entorno sandbox por seguridad.", aeat_env)
+                AEAT_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
 
         # Envoltorio SOAP reglamentario Verifactu
         soap_envelope = f"""<?xml version="1.0" encoding="utf-8"?>

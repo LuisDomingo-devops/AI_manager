@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     ALFONSO_CLIENT_ROLES: str = ""   # Formato JSON: {"client_id1": "admin", "client_id2": "guest"} o client1:admin,client2:guest
     ALFONSO_CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8000"
 
+    ALFONSO_AEAT_ENV: str = "sandbox"  # sandbox, preproduction, production
+
     FISCAL_TERRITORY: str = "comun"
 
     ALFONSO_USER_NAME: str = "Luis Domingo"
@@ -151,16 +153,15 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Asegurar la presencia de credenciales seguras de forma persistente y compartida
-import secrets
+import sys
 import logging
 
-if not settings.ALFONSO_API_KEY or settings.ALFONSO_API_KEY.strip() == "":
-    logging.warning("ALFONSO_API_KEY no configurada. Generando clave efímera. Configura en entorno de producción.")
-    settings.ALFONSO_API_KEY = secrets.token_hex(32)
-
-if not settings.ALFONSO_BRIDGE_TOKEN or settings.ALFONSO_BRIDGE_TOKEN.strip() == "":
-    logging.warning("ALFONSO_BRIDGE_TOKEN no configurada. Generando token efímero.")
-    settings.ALFONSO_BRIDGE_TOKEN = secrets.token_hex(32)
+if settings.ENV == "production":
+    if not settings.ALFONSO_API_KEY or not settings.ALFONSO_API_KEY.strip():
+        logging.critical("Fallo crítico de seguridad: ALFONSO_API_KEY no está configurada en el entorno de producción.")
+        sys.exit(1)
+    if not settings.ALFONSO_BRIDGE_TOKEN or not settings.ALFONSO_BRIDGE_TOKEN.strip():
+        logging.critical("Fallo crítico de seguridad: ALFONSO_BRIDGE_TOKEN no está configurado en el entorno de producción.")
+        sys.exit(1)
 
 # Forzar recarga automática de Uvicorn para refrescar caché de sesión.

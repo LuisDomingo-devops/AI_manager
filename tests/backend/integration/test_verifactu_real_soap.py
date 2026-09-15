@@ -13,13 +13,17 @@ def clean_verifactu_db(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_module, "DB_PATH", test_db)
 
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
         conn.execute("DELETE FROM sif_event_log")
         conn.commit()
 
     yield
     with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
         conn.execute("DELETE FROM sif_event_log")
         conn.commit()
 

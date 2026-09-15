@@ -40,6 +40,7 @@ def clean_system_state(tmp_path, monkeypatch):
         conn.execute("DELETE FROM emails")
         conn.execute("DELETE FROM settings")
         conn.execute("DELETE FROM calendar_events")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
         conn.commit()
         
@@ -187,7 +188,8 @@ def test_integration_verifactu_cryptographic_chaining():
     
     # Intentar alterar un registro en base de datos directamente
     with _get_connection() as conn:
-        conn.execute("UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'EMITIDA-001'")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
+            conn.execute("UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'EMITIDA-001'")
         conn.commit()
         
     # Verificar que el sistema detecta la alteración del hash de encadenamiento
