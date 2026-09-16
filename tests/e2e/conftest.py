@@ -32,7 +32,7 @@ async def start_server():
     async with httpx.AsyncClient() as client:
         for _ in range(30):
             try:
-                response = await client.get("http://127.0.0.1:8000/api/health")
+                response = await client.get("http://127.0.0.1:8000/health")
                 if response.status_code == 200:
                     break
             except Exception:

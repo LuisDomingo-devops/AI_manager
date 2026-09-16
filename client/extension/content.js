@@ -80,20 +80,23 @@ async function uploadPDFToAlfonso(blob, filename) {
 
 // 2. Conexión WebSocket al Backend Local de Alfonso
 function connectWebSocket() {
-    socket = new WebSocket("ws://localhost:7860/ws/guardian");
+    const wsUrl = "ws://127.0.0.1:8000/ws/guardian";
+    console.log(`Intentando conectar a ${wsUrl}...`);
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-        console.log("Conectado con Alfonso Core local.");
+        console.log("✅ Conectado con Alfonso Core local en el puerto 8000.");
         let statusMsg = "Alfonso está vigilando este trámite de forma segura en local.";
         if (window.location.hostname.includes("dehu.redsara.es")) {
             statusMsg = "Listo para capturar y analizar automáticamente la notificación cuando la descargues.";
         }
         updateBannerStatus("Conectado", statusMsg);
+        document.getElementById("alfonso-banner-status").style.color = "#00FFCC";
     };
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("Comando recibido de Alfonso Core:", data);
+        console.log("📥 Comando recibido de Alfonso Core:", data);
         if (data.action === "guardian.alert") {
             showNotification(data.params.message, data.params.type || "warning");
         } else if (data.action === "guardian.autofill") {
@@ -101,9 +104,18 @@ function connectWebSocket() {
         }
     };
 
+    socket.onerror = (error) => {
+        console.error("❌ Error en la conexión WebSocket:", error);
+    };
+
     socket.onclose = () => {
-        console.log("Desconectado de Alfonso Core. Reintentando...");
-        updateBannerStatus("Desconectado", "Alfonso está desconectado. Sincronización inactiva.");
+        console.warn("⚠️ Desconectado de Alfonso Core. Reintentando en 3s...");
+        updateBannerStatus("Desconectado", "No se pudo conectar al servidor de Alfonso en el puerto 8000. Asegúrate de iniciarlo.");
+        const statusEl = document.getElementById("alfonso-banner-status");
+        if (statusEl) {
+            statusEl.style.color = "#FF8080";
+            statusEl.style.borderColor = "#FF8080";
+        }
         setTimeout(connectWebSocket, 3000); // Reintento
     };
 }
