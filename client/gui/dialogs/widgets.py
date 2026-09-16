@@ -776,7 +776,7 @@ class PlaywrightWorkerThread(QThread):
         try:
             from playwright.sync_api import sync_playwright
             self.pw = sync_playwright().start()
-            self.browser = self.pw.chromium.launch(headless=False)
+            self.browser = self.pw.firefox.launch(headless=False)
             context = self.browser.new_context()
             self.page = context.new_page()
             

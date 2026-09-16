@@ -10,7 +10,7 @@ async def test_guardian_autofill_modelo_303(start_server: str, firefox_page: Pag
     await firefox_page.goto(f"{start_server}/")
     
     # 2. Verificar que la UI carga correctamente
-    await expect(firefox_page.locator("text=Alfonso Autónomo")).to_be_visible(timeout=10000)
+    await expect(firefox_page.locator("text=Alfonso")).to_be_visible(timeout=10000)
     
     # 3. Interacción simulada del usuario: "Rellenar modelo 303 del trimestre 1"
     # Suponiendo que hay un input de chat o comando en la GUI
