@@ -7,21 +7,17 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from client.core.api_client import api_client
 
-class BalancePanel(QWidget):
+from client.gui.panels.base_panel import AlfonsoBasePanel
+
+class BalancePanel(AlfonsoBasePanel):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, title="Balance de Situación (PGC)", subtitle="Consulta el estado del Activo, Pasivo y Patrimonio Neto.")
         self.setup_ui()
 
     def setup_ui(self):
-        self.layout = QVBoxLayout(self)
-        
-        # Header
-        header = QHBoxLayout()
-        title = QLabel("Balance de Situación (PGC)")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
-        header.addWidget(title)
-        
-        header.addStretch()
+        # Action bar
+        action_row = QHBoxLayout()
+        action_row.addStretch()
         
         self.year_combo = QComboBox()
         current_year = datetime.datetime.now().year
@@ -30,12 +26,13 @@ class BalancePanel(QWidget):
         self.year_combo.setCurrentText(str(current_year))
         
         btn_refresh = QPushButton("Calcular Balance")
+        btn_refresh.setProperty("class", "PrimaryButton")
         btn_refresh.clicked.connect(self.load_data)
         
-        header.addWidget(QLabel("Ejercicio:"))
-        header.addWidget(self.year_combo)
-        header.addWidget(btn_refresh)
-        self.layout.addLayout(header)
+        action_row.addWidget(QLabel("Ejercicio:"))
+        action_row.addWidget(self.year_combo)
+        action_row.addWidget(btn_refresh)
+        self.add_layout(action_row)
         
         # Tables for Activo and Pasivo
         tables_layout = QHBoxLayout()
@@ -68,7 +65,7 @@ class BalancePanel(QWidget):
         pas_layout.addWidget(self.lbl_total_pasivo)
         tables_layout.addLayout(pas_layout)
         
-        self.layout.addLayout(tables_layout)
+        self.add_layout(tables_layout, stretch=1)
 
     def load_data(self):
         year = self.year_combo.currentData()

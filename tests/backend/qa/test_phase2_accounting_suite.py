@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, AsyncMock
 from datetime import datetime
 from app.domain.services.ledger_service import LedgerService
 from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
@@ -186,7 +187,8 @@ def test_close_fiscal_year_full_flow():
 
 
 @pytest.mark.asyncio
-async def test_tools_pnl_and_year_close():
+@patch("app.domain.services.approval_service.approval_service")
+async def test_tools_pnl_and_year_close(mock_approval_service):
     """
     Verifica las herramientas de usuario para consulta de PyG y cierre de ejercicio.
     """
@@ -195,11 +197,14 @@ async def test_tools_pnl_and_year_close():
     assert res_pnl["status"] == "ok"
     assert "report" in res_pnl
 
-    # 2. Herramienta Cierre sin confirmación -> pending_confirmation
-    res_close_pending = await close_fiscal_year_tool(2024, confirmed_by_user=False)
-    assert res_close_pending["status"] == "pending_confirmation"
+    # 2. Herramienta Cierre rechazada en OOB
+    mock_approval_service.request_approval = AsyncMock(return_value=False)
+    res_close_pending = await close_fiscal_year_tool(2024)
+    assert res_close_pending["status"] == "error"
+    assert "cancelado" in res_close_pending["message"].lower()
 
-    # 3. Herramienta Cierre con confirmación -> ok
-    res_close_ok = await close_fiscal_year_tool(2024, confirmed_by_user=True)
+    # 3. Herramienta Cierre aprobada en OOB
+    mock_approval_service.request_approval = AsyncMock(return_value=True)
+    res_close_ok = await close_fiscal_year_tool(2024)
     assert res_close_ok["status"] == "ok"
     assert LedgerService.is_fiscal_year_closed(2024) is True

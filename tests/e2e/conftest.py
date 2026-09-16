@@ -20,19 +20,19 @@ async def start_server():
     env = os.environ.copy()
     env["TESTING"] = "1"
     
-    # Levantar el backend
+    # Levantar el backend en un puerto distinto para no colisionar con el dev server
     process = subprocess.Popen(
-        ["uvicorn", "app.main:app", "--port", "8000"],
+        ["uvicorn", "app.main:app", "--port", "8999"],
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     
     # Esperar a que el servidor esté vivo
     async with httpx.AsyncClient() as client:
         for _ in range(30):
             try:
-                response = await client.get("http://127.0.0.1:8000/health")
+                response = await client.get("http://127.0.0.1:8999/health")
                 if response.status_code == 200:
                     break
             except Exception:
@@ -42,7 +42,7 @@ async def start_server():
             process.terminate()
             raise RuntimeError("El servidor no arrancó a tiempo para los tests E2E.")
             
-    yield "http://127.0.0.1:8000"
+    yield "http://127.0.0.1:8999"
     
     process.terminate()
     process.wait()

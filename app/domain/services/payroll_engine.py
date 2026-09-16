@@ -9,26 +9,19 @@ from app.domain.schemas import PayrollResultSchema, SettlementResultSchema
 
 class PayrollEngine:
 
-    # Tipos de cotización de la Seguridad Social vigentes (2026)
-    WORKER_CC_RATE = 4.70          # Contingencias comunes trabajador
-    WORKER_UNEMPLOYMENT_RATE = 1.55 # Desempleo contrato indefinido
-    WORKER_UNEMPLOYMENT_TEMP = 1.60 # Desempleo contrato temporal
-    WORKER_FP_RATE = 0.10          # Formación profesional trabajador
-    WORKER_MEI_RATE = 0.12         # MEI trabajador (2026)
-
-    EMPLOYER_CC_RATE = 23.60       # Contingencias comunes empresa
-    EMPLOYER_UNEMPLOYMENT_RATE = 5.50 # Desempleo empresa indefinido
-    EMPLOYER_UNEMPLOYMENT_TEMP = 6.70 # Desempleo empresa temporal
-    EMPLOYER_FOGASA_RATE = 0.20    # FOGASA empresa
-    EMPLOYER_FP_RATE = 0.60        # Formación profesional empresa
-    EMPLOYER_MEI_RATE = 0.58       # MEI empresa (2026)
-    EMPLOYER_ATEP_RATE = 1.50      # Tarifa de primas promedio accidentes de trabajo
+    # Eliminadas constantes hardcodeadas. Se cargarán vía tax_rules_port.
 
     @classmethod
-    def calculate_monthly_payroll(cls, employee: Dict[str, Any], month: int, year: int) -> Dict[str, Any]:
+    def calculate_monthly_payroll(cls, employee: Dict[str, Any], month: int, year: int, tax_rules_port=None) -> Dict[str, Any]:
         """
         Calcula la nómina mensual completa con bases de cotización, descuentos del trabajador y coste patronal.
         """
+        if tax_rules_port:
+            rules = tax_rules_port.get_rules().get("payroll", {})
+        else:
+            # Fallback para no romper la API si no se inyecta
+            from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+            rules = FileTaxRulesAdapter().get_rules().get("payroll", {})
         gross_annual = float(employee["gross_annual_salary"])
         num_paychecks = int(employee.get("num_paychecks", 12))
         is_temp = str(employee.get("contract_type", "100")).startswith("4")
@@ -48,21 +41,21 @@ class PayrollEngine:
         bccp = bccc
 
         # Cotizaciones Trabajador
-        w_cc = round(bccc * (cls.WORKER_CC_RATE / 100.0), 2)
-        w_unempl_rate = cls.WORKER_UNEMPLOYMENT_TEMP if is_temp else cls.WORKER_UNEMPLOYMENT_RATE
+        w_cc = round(bccc * (rules.get("worker_cc_rate", 4.70) / 100.0), 2)
+        w_unempl_rate = rules.get("worker_unemployment_temp", 1.60) if is_temp else rules.get("worker_unemployment_rate", 1.55)
         w_unempl = round(bccp * (w_unempl_rate / 100.0), 2)
-        w_fp = round(bccp * (cls.WORKER_FP_RATE / 100.0), 2)
-        w_mei = round(bccc * (cls.WORKER_MEI_RATE / 100.0), 2)
+        w_fp = round(bccp * (rules.get("worker_fp_rate", 0.10) / 100.0), 2)
+        w_mei = round(bccc * (rules.get("worker_mei_rate", 0.12) / 100.0), 2)
         w_total_ss = round(w_cc + w_unempl + w_fp + w_mei, 2)
 
         # Cotizaciones Empresa
-        e_cc = round(bccc * (cls.EMPLOYER_CC_RATE / 100.0), 2)
-        e_unempl_rate = cls.EMPLOYER_UNEMPLOYMENT_TEMP if is_temp else cls.EMPLOYER_UNEMPLOYMENT_RATE
+        e_cc = round(bccc * (rules.get("employer_cc_rate", 23.60) / 100.0), 2)
+        e_unempl_rate = rules.get("employer_unemployment_temp", 6.70) if is_temp else rules.get("employer_unemployment_rate", 5.50)
         e_unempl = round(bccp * (e_unempl_rate / 100.0), 2)
-        e_fogasa = round(bccp * (cls.EMPLOYER_FOGASA_RATE / 100.0), 2)
-        e_fp = round(bccp * (cls.EMPLOYER_FP_RATE / 100.0), 2)
-        e_mei = round(bccc * (cls.EMPLOYER_MEI_RATE / 100.0), 2)
-        e_atep = round(bccp * (cls.EMPLOYER_ATEP_RATE / 100.0), 2)
+        e_fogasa = round(bccp * (rules.get("employer_fogasa_rate", 0.20) / 100.0), 2)
+        e_fp = round(bccp * (rules.get("employer_fp_rate", 0.60) / 100.0), 2)
+        e_mei = round(bccc * (rules.get("employer_mei_rate", 0.58) / 100.0), 2)
+        e_atep = round(bccp * (rules.get("employer_atep_rate", 1.50) / 100.0), 2)
         e_total_ss = round(e_cc + e_unempl + e_fogasa + e_fp + e_mei + e_atep, 2)
 
         # Retención IRPF

@@ -1,19 +1,19 @@
-﻿"""
+"""
 panels/chat_panel.py -- Panel derecho de chat del asistente Alfonso.
 Sin setStyleSheet() inline: hereda todo del GLOBAL_QSS de theme.py.
 """
 from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel,
+    QVBoxLayout, QHBoxLayout, QLabel,
     QTextBrowser, QProgressBar, QGridLayout, QWidget,
-    QPushButton, QSizePolicy
+    QPushButton, QSizePolicy, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from client.gui.theme import AlfonsoStyledWidget
+from client.gui.panels.base_panel import AlfonsoBasePanel
 from client.gui.widgets import AnimatedWaveWidget, ChatTextInput
 
 
-class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
+class AlfonsoChatPanel(AlfonsoBasePanel):
     """
     Panel lateral derecho (380px) que contiene:
       - Cabecera de estado del asistente
@@ -36,15 +36,10 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("ChatPanel")    # <- QFrame#ChatPanel en GLOBAL_QSS
         self.setFixedWidth(380)
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 16, 12, 14)
-        layout.setSpacing(8)
-
         # -- 1. Cabecera --------------------------------------------------
         chat_header = QHBoxLayout()
         chat_badge = QLabel("● ALFONSO AI ASISTENTE")
@@ -57,12 +52,12 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
         chat_header.addWidget(chat_badge)
         chat_header.addStretch()
         chat_header.addWidget(self.state_lbl)
-        layout.addLayout(chat_header)
+        self.add_layout(chat_header)
 
         # -- 2. Indicador de sesion activa --------------------------------
         self.lbl_active_session = QLabel("SESION ACTIVA: DEFAULT")
         self.lbl_active_session.setProperty("class", "LblSession")
-        layout.addWidget(self.lbl_active_session)
+        self.add_widget(self.lbl_active_session)
 
         # -- 3. Cubiculo holografico --------------------------------------
         hologram_cubicle = QFrame()
@@ -72,7 +67,7 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
         holo_layout.setContentsMargins(4, 4, 4, 4)
         self.animated_wave = AnimatedWaveWidget(self)
         holo_layout.addWidget(self.animated_wave)
-        layout.addWidget(hologram_cubicle)
+        self.add_widget(hologram_cubicle)
 
         # -- 4. Medidor VU ------------------------------------------------
         vu_layout = QHBoxLayout()
@@ -86,13 +81,13 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
 
         vu_layout.addWidget(self.mic_name_lbl)
         vu_layout.addWidget(self.vu_meter)
-        layout.addLayout(vu_layout)
+        self.add_layout(vu_layout)
 
         # -- 5. Historial de mensajes -------------------------------------
         self.chat_display = QTextBrowser()
         self.chat_display.setObjectName("ChatHistory")  # <- QTextBrowser#ChatHistory en QSS
         self.chat_display.setOpenExternalLinks(True)
-        layout.addWidget(self.chat_display, 1)
+        self.add_widget(self.chat_display, 1)
 
         # -- 6. Contenedor de adjuntos ------------------------------------
         self.attachments_container = QWidget()
@@ -100,7 +95,7 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
         self.attachments_layout = QGridLayout(self.attachments_container)
         self.attachments_layout.setContentsMargins(0, 0, 0, 0)
         self.attachments_layout.setSpacing(4)
-        layout.addWidget(self.attachments_container)
+        self.add_widget(self.attachments_container)
 
         # -- 7. Input de texto --------------------------------------------
         self.text_input = ChatTextInput()
@@ -110,7 +105,7 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
             "Escribe a Alfonso o arrastra facturas aqui... (Shift+Enter para salto)"
         )
         self.text_input.file_dropped.connect(self.file_dropped)
-        layout.addWidget(self.text_input)
+        self.add_widget(self.text_input)
 
         # -- 8. Botonera --------------------------------------------------
         btn_layout = QHBoxLayout()
@@ -137,4 +132,4 @@ class AlfonsoChatPanel(QFrame, AlfonsoStyledWidget):
         btn_layout.addWidget(self.btn_mode)
         btn_layout.addWidget(self.btn_clear)
         btn_layout.addWidget(btn_send)
-        layout.addLayout(btn_layout)
+        self.add_layout(btn_layout)

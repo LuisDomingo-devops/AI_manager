@@ -17,6 +17,7 @@ Crea una instancia de FastAPI, registra el router principal unificado, configura
 - app/adapters/alfonso_bridge.py: Arranca/detiene la comunicación en tiempo real con el cliente.
 """
 
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -56,6 +57,19 @@ _bg_security_task = None
 _bg_mail_task = None
 _ollama_process = None
 from app.domain.services.background_monitor import start_background_mail_monitor
+
+# Sentry config
+import sentry_sdk
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+    
+# APScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+scheduler = AsyncIOScheduler()
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +128,7 @@ async def lifespan(app: FastAPI):
     import subprocess
     import shutil
     from urllib.parse import urlparse
-    is_testing = "pytest" in sys.modules
+    is_testing = "pytest" in sys.modules or os.environ.get("TESTING") == "1"
 
 
     if not is_testing:
@@ -153,10 +167,19 @@ async def lifespan(app: FastAPI):
                     app_logger.warning("Error en clasificación inicial de emails")
 
             asyncio.create_task(preheat_and_classify())
+            
+            # Start APScheduler jobs
+            from app.domain.services.verifactu_service import VerifactuService
+            from app.domain.services.backup_service import BackupService
+            scheduler.add_job(VerifactuService.process_pending_deliveries, 'interval', hours=1, id="aeat_retry")
+            scheduler.add_job(BackupService.create_daily_backup, 'cron', hour=3, minute=0, id="daily_backup")
+            scheduler.start()
+            app_logger.info("APScheduler iniciado con tareas de retención AEAT y Backups")
+            
         else:
-            app_logger.info("Precalentamiento de modelo omitido en entorno de test")
+            app_logger.info("Precalentamiento de modelo y planificador omitidos en entorno de test")
     except Exception:
-        app_logger.exception("Error al programar precalentamiento de modelo")
+        app_logger.exception("Error al programar precalentamiento o inicializar planificador")
 
     app_logger.info("Alfonso listo")
 
@@ -212,6 +235,8 @@ async def lifespan(app: FastAPI):
             app_logger.exception("Error apagando proceso de Ollama")
 
     app_logger.info("Alfonso detenido")
+    if scheduler.running:
+        scheduler.shutdown()
 
 
 # ---------------------------------------------------------------------------
@@ -223,10 +248,12 @@ from pathlib import Path
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.api.limiter import limiter
 app = FastAPI(title="Alfonso Core — Fase 4", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Configuración de CORS
 from app.config import settings
@@ -263,10 +290,19 @@ async def request_id_middleware(request: Request, call_next):
     request.state.request_id = request_id
     logger = attach_request_id(app_logger, request_id)
 
-    # 1. Obtener la IP y el cuerpo de forma segura para la inspección del CyberSecurityAgent (WAF)
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    # 1. Obtener la IP real del cliente (resolviendo cabeceras de proxy inverso/WAF como Cloudflare o AWS)
+    client_ip = request.headers.get("CF-Connecting-IP") or request.headers.get("X-Forwarded-For")
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "127.0.0.1"
+
+    # Verificar si estamos detrás de un WAF gestionado comercial que asume el filtrado L7
+    managed_waf_enabled = os.environ.get("ALFONSO_MANAGED_WAF_ENABLED", "false").lower() == "true"
+
     body_str = ""
-    if request.method in ("POST", "PUT", "PATCH"):
+    # Si tenemos un WAF externo no hace falta leer el body aquí sincrónicamente para buscar inyecciones
+    if not managed_waf_enabled and request.method in ("POST", "PUT", "PATCH"):
         try:
             body_bytes = await request.body()
             body_str = body_bytes.decode("utf-8", errors="ignore")
@@ -276,23 +312,24 @@ async def request_id_middleware(request: Request, call_next):
             request._receive = receive
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción genérica interceptada silenciosamente al decodificar body.")
 
-    # 2. Inspección del WAF
-    headers_dict = {k: v for k, v in request.headers.items()}
-    if security_agent.inspect_request(
-        ip=client_ip,
-        path=request.url.path,
-        method=request.method,
-        headers=headers_dict,
-        body=body_str
-    ):
-        logger.warning(f"Petición bloqueada por CyberSecurityAgent WAF desde IP {client_ip}: {request.method} {request.url.path}")
-        increment_http_errors()
-        return JSONResponse(
-            status_code=403,
-            content={"status": "error", "request_id": request_id, "detail": "Petición bloqueada por el Firewall de Aplicación (WAF) por razones de seguridad."}
-        )
+    # 2. Inspección del WAF Local (Solo si NO hay WAF gestionado externo o si queremos protección en profundidad)
+    if not managed_waf_enabled:
+        headers_dict = {k: v for k, v in request.headers.items()}
+        if security_agent.inspect_request(
+            ip=client_ip,
+            path=request.url.path,
+            method=request.method,
+            headers=headers_dict,
+            body=body_str
+        ):
+            logger.warning(f"Petición bloqueada por CyberSecurityAgent WAF desde IP {client_ip}: {request.method} {request.url.path}")
+            increment_http_errors()
+            return JSONResponse(
+                status_code=403,
+                content={"status": "error", "request_id": request_id, "detail": "Petición bloqueada por el Firewall de Aplicación (WAF) por razones de seguridad."}
+            )
 
     # Extraer client_id de cabeceras o parámetros de consulta para aislamiento multi-tenant
     client_id = request.headers.get("X-Client-ID") or request.query_params.get("client_id") or "default"

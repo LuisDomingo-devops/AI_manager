@@ -8,12 +8,9 @@ class AlfonsoProductServicePanel(AlfonsoProductListPanel):
     y las mismas métricas (API: get_products, create_product, etc).
     """
     def __init__(self, parent=None):
-        super().__init__(parent, filter_type="service")
-        
-    def setup_ui(self):
-        super().setup_ui()
-        # Sobrescribimos el título para esta vista en particular
-        for child in self.findChildren(QLabel):
-            if "PRODUCTOS" in child.text():
-                child.setText("🛠️  GESTIÓN DE SERVICIOS")
-                break
+        super().__init__(
+            parent, 
+            filter_type="service", 
+            title="🛠️  GESTIÓN DE SERVICIOS",
+            subtitle="Administración del catálogo de servicios."
+        )

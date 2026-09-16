@@ -112,3 +112,36 @@ class BackupService:
             raise RuntimeError(f"Error escribiendo el archivo de base de datos: {e}") from e
 
         return True
+
+    @classmethod
+    def create_daily_backup(cls, client_id: str = "default") -> None:
+        """
+        Método programado para generar la copia de seguridad y persistirla en el disco 
+        para tareas de mantenimiento en background.
+        """
+        try:
+            backup_data = cls.export_backup(client_id)
+            backup_dir = Path("data/backups")
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = backup_dir / f"backup_{client_id}_{timestamp}.enc"
+            backup_file.write_bytes(backup_data)
+            from app.utils.logger import app_logger
+            app_logger.info(f"Backup programado creado exitosamente: {backup_file}")
+            
+            # Limpieza de backups antiguos (retención: 7 días)
+            from datetime import timedelta
+            now = datetime.now()
+            for f in backup_dir.glob(f"backup_{client_id}_*.enc"):
+                if f.is_file():
+                    try:
+                        time_str = f.stem.split("_")[-2:]
+                        file_time = datetime.strptime(f"{time_str[0]}_{time_str[1]}", "%Y%m%d_%H%M%S")
+                        if now - file_time > timedelta(days=7):
+                            f.unlink()
+                            app_logger.info(f"Backup antiguo eliminado: {f}")
+                    except Exception as e:
+                        app_logger.warning(f"Error procesando limpieza de {f}: {e}")
+        except Exception as e:
+            from app.utils.logger import error_logger
+            error_logger.error(f"Error crítico creando backup diario para {client_id}: {str(e)}")

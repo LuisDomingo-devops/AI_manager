@@ -18,7 +18,7 @@ config = {
 }
 
 try:
-    from gui.app import launch
+    from client.gui.main_window import launch
     launch(config)
 except Exception as e:
     import traceback

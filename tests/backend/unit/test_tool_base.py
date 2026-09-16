@@ -100,6 +100,8 @@ def test_prepare_tool_args_end_to_end_create_file(tmp_path, monkeypatch):
     """Camino completo: tool_registry.prepare_tool_args + ejecución real del tool."""
     from app.config import settings
     monkeypatch.setattr(settings, "TOOL_VALIDATION_MODE", "permissive")
+    import app.tools.server.filesystem_tools
+    monkeypatch.setattr(app.tools.server.filesystem_tools, "WORKSPACE_DIR", tmp_path)
     tool_registry.load_plugins()
 
     target = tmp_path / "salida.txt"

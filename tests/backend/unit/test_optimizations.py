@@ -9,44 +9,36 @@ from app.domain.planner_orchestrator import PlannerOrchestrator
 
 # 1. Test replace_file_content tool
 @pytest.mark.asyncio
-async def test_replace_file_content_success():
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".py") as f:
-        f.write("def foo():\n    return 42\n")
-        f.close()
-        
-        path = f.name
-        
-        # Test replacement
-        res = await replace_file_content(path=path, target="42", replacement="100")
-        assert res["status"] == "ok"
-        
-        content = pathlib.Path(path).read_text(encoding="utf-8")
-        assert "return 100" in content
-        
-        # Cleanup
-        pathlib.Path(path).unlink()
+async def test_replace_file_content_success(monkeypatch, tmp_path):
+    import app.tools.server.filesystem_tools
+    monkeypatch.setattr(app.tools.server.filesystem_tools, "WORKSPACE_DIR", tmp_path)
+    path = tmp_path / "test_success.py"
+    path.write_text("def foo():\n    return 42\n", encoding="utf-8")
+    
+    # Test replacement
+    res = await replace_file_content(path=str(path), target="42", replacement="100")
+    assert res["status"] == "ok"
+    
+    content = path.read_text(encoding="utf-8")
+    assert "return 100" in content
 
 @pytest.mark.asyncio
-async def test_replace_file_content_syntax_error():
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".py") as f:
-        # Valid python originally
-        f.write("def foo():\n    return 42\n")
-        f.close()
-        
-        path = f.name
-        
-        # We replace with invalid Python (missing indent/syntax)
-        res = await replace_file_content(path=path, target="return 42", replacement="return = 42")
-        assert res["status"] == "ok"
-        
-        content = pathlib.Path(path).read_text(encoding="utf-8")
-        assert "return = 42" in content
-        
-        # Check syntax explicitly using py_compile to ensure our checker detects it
-        with pytest.raises(py_compile.PyCompileError):
-            py_compile.compile(path, doraise=True)
-            
-        pathlib.Path(path).unlink()
+async def test_replace_file_content_syntax_error(monkeypatch, tmp_path):
+    import app.tools.server.filesystem_tools
+    monkeypatch.setattr(app.tools.server.filesystem_tools, "WORKSPACE_DIR", tmp_path)
+    path = tmp_path / "test_syntax.py"
+    path.write_text("def foo():\n    return 42\n", encoding="utf-8")
+    
+    # We replace with invalid Python (missing indent/syntax)
+    res = await replace_file_content(path=str(path), target="return 42", replacement="return = 42")
+    assert res["status"] == "ok"
+    
+    content = path.read_text(encoding="utf-8")
+    assert "return = 42" in content
+    
+    # Check syntax explicitly using py_compile to ensure our checker detects it
+    with pytest.raises(py_compile.PyCompileError):
+        py_compile.compile(str(path), doraise=True)
 
 # 2. Test R1 thought block extraction
 def test_extract_json_robust_with_think():

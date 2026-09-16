@@ -1,0 +1,13 @@
+{
+    "raw_text": "FACTURA\n\nFecha: 2026-05-10\nNum: F26-001\nEmisor: B12345678 TECH CORP SL\nReceptor: 12345678Z CARLOS SANCHEZ\nConcepto: Servicios de consultoria informatica mes abril.\nBase Imponible: 1000.00 EUR\nIVA (21%): 210.00 EUR\nTotal: 1210.00 EUR",
+    "expected_result": {
+        "invoice_number": "F26-001",
+        "issue_date": "2026-05-10",
+        "supplier_name": "TECH CORP SL",
+        "supplier_nif": "B12345678",
+        "customer_nif": "12345678Z",
+        "total_amount": 1210.00,
+        "tax_amount": 210.00,
+        "tax_rate": 21.0
+    }
+}

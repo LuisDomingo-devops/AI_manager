@@ -66,11 +66,23 @@ def get_current_user_home_path():
     ctx = get_client_context()
     return Path(ctx["home"])
 
+WORKSPACE_DIR = Path(__file__).resolve().parents[3] / "data" / "workspace"
+WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+
 def _resolve_path(raw_path: str) -> Path:
     """Unifies path resolution logic to handle Windows paths in WSL, macOS hallucinations, 
-    and placeholder usernames (e.g., YOUR_USERNAME)."""
+    and placeholder usernames, enforcing a secure sandbox (WORKSPACE_DIR)."""
     resolved_str = resolve_client_path(raw_path)
-    return Path(resolved_str)
+    p = Path(resolved_str).resolve()
+    
+    # Check if it's within WORKSPACE_DIR
+    try:
+        p.relative_to(WORKSPACE_DIR)
+    except ValueError:
+        error_logger.warning(f"Intento de acceso fuera del workspace denegado: {p}")
+        raise PermissionError(f"Acceso denegado: La ruta {p} está fuera de la jaula segura del asistente ({WORKSPACE_DIR}).")
+        
+    return p
 
 async def create_file(path: str, content: str):
     """Crea un archivo nuevo con el contenido especificado (ej. en el Escritorio/Desktop o ruta relativa)."""
@@ -79,29 +91,28 @@ async def create_file(path: str, content: str):
         return del_res
 
     tool_logger.info(f"Intentando crear archivo: {path}")
-    p = _resolve_path(path)
-    
-    # Restricción en el servidor: prevenir la creación de archivos de script en directorios sensibles del core
-    if p.suffix.lower() in (".py", ".sh", ".bat", ".ps1", ".exe", ".cmd"):
-        p_abs = p.resolve()
-        forbidden_parents = {"app", "client", "data", "migrations"}
-        if any(folder in p_abs.parts for folder in forbidden_parents) or p_abs.parent == Path(__file__).resolve().parents[3]:
-            error_logger.warning(f"Intento de creación de script bloqueado en el servidor: {p_abs}")
-            return {
-                "status": "error",
-                "message": "Operación de seguridad bloqueada: no se permite la creación de scripts ejecutables en directorios del core en el servidor."
-            }
-    
-    tool_logger.info(f"Ruta absoluta final: {p}")
     
     try:
+        p = _resolve_path(path)
+        # Restricción en el servidor: prevenir la creación de archivos de script en directorios sensibles del core
+        if p.suffix.lower() in (".py", ".sh", ".bat", ".ps1", ".exe", ".cmd"):
+            p_abs = p.resolve()
+            forbidden_parents = {"app", "client", "data", "migrations"}
+            if any(folder in p_abs.parts for folder in forbidden_parents) or p_abs.parent == Path(__file__).resolve().parents[3]:
+                error_logger.warning(f"Intento de creación de script bloqueado en el servidor: {p_abs}")
+                return {
+                    "status": "error",
+                    "message": "Operación de seguridad bloqueada: no se permite la creación de scripts ejecutables en directorios del core en el servidor."
+                }
+        
+        tool_logger.info(f"Ruta absoluta final: {p}")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
     except PermissionError as e: # Catch PermissionError specifically
-        error_logger.error(f"Error de permisos al crear {p}: {e}")
-        return {"status": "error", "message": f"Permiso denegado. No se puede escribir en {p.parent}. Intenta usar una ruta dentro de {get_current_user_home_path()}/"}
+        error_logger.error(f"Error de permisos al crear archivo: {e}")
+        return {"status": "error", "message": str(e)}
     except Exception as e: # Catch any other unexpected errors
-        error_logger.error(f"Error inesperado al crear {p}: {e}")
+        error_logger.error(f"Error inesperado al crear archivo: {e}")
         return {"status": "error", "message": f"Error inesperado al crear archivo: {e}"}
 
     tool_logger.info(f"Archivo creado exitosamente: {p}")

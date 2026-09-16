@@ -53,10 +53,14 @@ def _get_connection(client_id: str = None) -> sqlite3.Connection:
     if not isinstance(target_path, str):
         if str(target_path) != ":memory:":
             target_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(target_path), check_same_thread=False)
+        conn = sqlite3.connect(str(target_path), check_same_thread=False, timeout=20.0)
     else:
-        conn = sqlite3.connect(target_path, uri=True, check_same_thread=False)
+        conn = sqlite3.connect(target_path, uri=True, check_same_thread=False, timeout=20.0)
     conn.row_factory = sqlite3.Row
+    
+    if str(target_path) != ":memory:" and "?mode=memory" not in str(target_path):
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
     
     db_key = str(target_path)
     if db_key not in _initialized_dbs:

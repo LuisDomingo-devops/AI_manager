@@ -1,6 +1,7 @@
 import os
 import json
 import pytest
+from unittest.mock import patch, AsyncMock
 from starlette.testclient import TestClient
 
 from app.main import app
@@ -87,18 +88,21 @@ def test_subscriptions_router_endpoints():
     assert status_data["data"]["profile"]["razon_social"] == "Innovaciones Autónomas S.L."
 
 @pytest.mark.asyncio
-async def test_send_to_advisor_tool():
+@patch("app.domain.services.approval_service.approval_service")
+async def test_send_to_advisor_tool(mock_approval_service):
     """
     Verifica la herramienta send_to_advisor con confirmación de usuario,
     empaquetado contable y registro en audit_ledger.
     """
-    # 1. Sin confirmación -> pending_confirmation
-    unconfirmed = await send_to_advisor(year=2026, advisor_email="asesor@gestoria.es", confirmed_by_user=False)
-    assert unconfirmed["status"] == "pending_confirmation"
-    assert "Se va a consolidar el expediente" in unconfirmed["message"]
+    # 1. Sin confirmación (usuario rechaza en OOB) -> status error
+    mock_approval_service.request_approval = AsyncMock(return_value=False)
+    unconfirmed = await send_to_advisor(year=2026, advisor_email="asesor@gestoria.es")
+    assert unconfirmed["status"] == "error"
+    assert "cancelado" in unconfirmed["message"].lower()
 
-    # 2. Con confirmación -> ok
-    confirmed = await send_to_advisor(year=2026, advisor_email="asesor@gestoria.es", confirmed_by_user=True)
+    # 2. Con confirmación (usuario aprueba en OOB) -> success
+    mock_approval_service.request_approval = AsyncMock(return_value=True)
+    confirmed = await send_to_advisor(year=2026, advisor_email="asesor@gestoria.es")
     assert confirmed["status"] == "ok"
     assert confirmed["year"] == 2026
     assert confirmed["advisor_email"] == "asesor@gestoria.es"

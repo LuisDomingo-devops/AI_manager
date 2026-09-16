@@ -107,7 +107,8 @@ async def get_quarterly_aggregates(year: Optional[int] = None) -> dict:
         return {
             "status": "ok",
             "year_filter": year,
-            "aggregates": aggregates
+            "aggregates": aggregates,
+            "legal_disclaimer": "AVISO LEGAL: Estas cifras son estimaciones provisionales y no vinculantes basadas en los datos actuales. No constituyen asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado oficialmente."
         }
     except Exception as e:
         tool_logger.exception("Error al calcular agregados trimestrales")
@@ -137,7 +138,8 @@ async def get_full_financial_report(year: Optional[int] = None) -> dict:
             "status": "ok",
             "year_filter": year,
             "aggregates": aggregates,
-            "libro_diario": libro_diario
+            "libro_diario": libro_diario,
+            "legal_disclaimer": "AVISO LEGAL: Estas cifras son estimaciones provisionales y no vinculantes basadas en los datos actuales. No constituyen asesoramiento fiscal definitivo. El importe real puede variar y debe ser confirmado oficialmente."
         }
     except Exception as e:
         tool_logger.exception("Error al calcular el reporte financiero completo")

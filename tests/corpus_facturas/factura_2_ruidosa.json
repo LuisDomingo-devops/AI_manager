@@ -1,0 +1,13 @@
+{
+    "raw_text": "F4CTURA\n\nFch: 2026/05/11\nN: FR-992\nEms: X9876543A GESTORIA PEREZ\nRecp: 12345678Z CARLOS SANCHEZ\nC0ncepto: Asesoria fiscal 1er trim\nBI: 150,00€\nIVA 21%: 31,50\nTOTAL: 181,50",
+    "expected_result": {
+        "invoice_number": "FR-992",
+        "issue_date": "2026-05-11",
+        "supplier_name": "GESTORIA PEREZ",
+        "supplier_nif": "X9876543A",
+        "customer_nif": "12345678Z",
+        "total_amount": 181.50,
+        "tax_amount": 31.50,
+        "tax_rate": 21.0
+    }
+}

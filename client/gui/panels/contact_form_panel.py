@@ -3,23 +3,19 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-class AlfonsoContactFormPanel(QWidget):
+from client.gui.panels.base_panel import AlfonsoBasePanel
+
+class AlfonsoContactFormPanel(AlfonsoBasePanel):
     """Formulario para crear un nuevo contacto (Cliente/Proveedor)."""
 
     def __init__(self, main_window):
-        super().__init__()
+        super().__init__(None, title="Alta de Nuevo Contacto", subtitle="Introduce los datos del nuevo cliente o proveedor.")
         self.main_window = main_window
         self.api = main_window.api_client
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(20)
 
-        title = QLabel("Alta de Nuevo Contacto")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #F8FAFC;")
-        layout.addWidget(title)
 
         form_layout = QFormLayout()
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -34,16 +30,6 @@ class AlfonsoContactFormPanel(QWidget):
         self.cb_type = QComboBox()
         self.cb_type.addItems(["Cliente", "Proveedor", "Ambos"])
 
-        # Estilos simples
-        style = "background: #1E293B; border: 1px solid #334155; padding: 8px; color: #F8FAFC; border-radius: 4px;"
-        self.txt_name.setStyleSheet(style)
-        self.txt_nif.setStyleSheet(style)
-        self.txt_email.setStyleSheet(style)
-        self.txt_phone.setStyleSheet(style)
-        self.txt_address.setStyleSheet(style)
-        self.txt_iban.setStyleSheet(style)
-        self.cb_type.setStyleSheet(style)
-
         form_layout.addRow(QLabel("Nombre/Razón Social:"), self.txt_name)
         form_layout.addRow(QLabel("NIF/CIF:"), self.txt_nif)
         form_layout.addRow(QLabel("Email:"), self.txt_email)
@@ -52,27 +38,22 @@ class AlfonsoContactFormPanel(QWidget):
         form_layout.addRow(QLabel("IBAN bancario:"), self.txt_iban)
         form_layout.addRow(QLabel("Tipo de Contacto:"), self.cb_type)
 
-        layout.addLayout(form_layout)
+        self.add_layout(form_layout)
 
         btn_layout = QHBoxLayout()
-        btn_save = QPushButton("Guardar Contacto")
-        btn_save.setStyleSheet("""
-            QPushButton { background-color: #059669; color: white; border-radius: 6px; padding: 12px 24px; font-weight: bold; }
-            QPushButton:hover { background-color: #047857; }
-        """)
-        btn_save.clicked.connect(self.save_contact)
+        btn_layout.addStretch() # Empuja los botones a la derecha y evita que ocupen todo el ancho
         
         btn_cancel = QPushButton("Cancelar")
-        btn_cancel.setStyleSheet("""
-            QPushButton { background-color: #64748B; color: white; border-radius: 6px; padding: 12px 24px; font-weight: bold; }
-            QPushButton:hover { background-color: #475569; }
-        """)
         btn_cancel.clicked.connect(self.cancel)
+        
+        btn_save = QPushButton("Guardar Contacto")
+        btn_save.setProperty("class", "PrimaryButton")
+        btn_save.clicked.connect(self.save_contact)
         
         btn_layout.addWidget(btn_cancel)
         btn_layout.addWidget(btn_save)
-        layout.addLayout(btn_layout)
-        layout.addStretch()
+        self.add_layout(btn_layout)
+        self.content_layout.addStretch()
 
     def clear_form(self):
         self.txt_name.clear()

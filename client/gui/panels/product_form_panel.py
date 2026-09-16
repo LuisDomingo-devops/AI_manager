@@ -5,30 +5,16 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-class AlfonsoProductFormPanel(QWidget):
+from client.gui.panels.base_panel import AlfonsoBasePanel
+
+class AlfonsoProductFormPanel(AlfonsoBasePanel):
     """Panel para crear un nuevo producto o servicio."""
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, title="🆕 NUEVO PRODUCTO O SERVICIO", subtitle="Crea o edita productos y servicios en tu catálogo.")
         self.edit_sku = None
         self.setup_ui()
 
     def setup_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 16)
-        root.setSpacing(12)
-
-        # Header
-        header = QHBoxLayout()
-        title = QLabel("🆕 NUEVO PRODUCTO O SERVICIO")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E2E8F0; letter-spacing: 0.5px;")
-        header.addWidget(title)
-        header.addStretch()
-        root.addLayout(header)
-
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: rgba(99,102,241,0.2);")
-        root.addWidget(sep)
 
         # Form Container
         form_layout = QVBoxLayout()
@@ -37,21 +23,18 @@ class AlfonsoProductFormPanel(QWidget):
         # Tipo (Producto / Servicio)
         self.type_combo = QComboBox()
         self.type_combo.addItems(["Producto Físico (product)", "Servicio (service)"])
-        self.type_combo.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         form_layout.addWidget(QLabel("Tipo de Elemento:"))
         form_layout.addWidget(self.type_combo)
 
         # SKU
         self.sku_input = QLineEdit()
         self.sku_input.setPlaceholderText("Automático (o escribe uno)")
-        self.sku_input.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         form_layout.addWidget(QLabel("SKU (Código único):"))
         form_layout.addWidget(self.sku_input)
 
         # Nombre
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Nombre del producto o servicio")
-        self.name_input.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         form_layout.addWidget(QLabel("Nombre:"))
         form_layout.addWidget(self.name_input)
 
@@ -59,7 +42,6 @@ class AlfonsoProductFormPanel(QWidget):
         self.desc_input = QTextEdit()
         self.desc_input.setPlaceholderText("Descripción detallada...")
         self.desc_input.setFixedHeight(80)
-        self.desc_input.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         form_layout.addWidget(QLabel("Descripción:"))
         form_layout.addWidget(self.desc_input)
 
@@ -72,7 +54,6 @@ class AlfonsoProductFormPanel(QWidget):
         self.price_input.setRange(0.0, 999999.99)
         self.price_input.setDecimals(2)
         self.price_input.setSuffix(" €")
-        self.price_input.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         price_vbox.addWidget(QLabel("Precio Base (sin IVA):"))
         price_vbox.addWidget(self.price_input)
         prices_layout.addLayout(price_vbox)
@@ -84,15 +65,14 @@ class AlfonsoProductFormPanel(QWidget):
         self.iva_input.setDecimals(2)
         self.iva_input.setValue(21.0)
         self.iva_input.setSuffix(" %")
-        self.iva_input.setStyleSheet("padding: 8px; border-radius: 4px; background: rgba(30,41,59,0.5); color: white; border: 1px solid rgba(99,102,241,0.3);")
         iva_vbox.addWidget(QLabel("Tipo de IVA:"))
         iva_vbox.addWidget(self.iva_input)
         prices_layout.addLayout(iva_vbox)
 
         form_layout.addLayout(prices_layout)
         
-        root.addLayout(form_layout)
-        root.addStretch()
+        self.add_layout(form_layout)
+        self.content_layout.addStretch()
 
         # Botones
         btn_layout = QHBoxLayout()
@@ -101,20 +81,11 @@ class AlfonsoProductFormPanel(QWidget):
         self.btn_save = QPushButton("💾 Guardar Producto")
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_save.setFixedSize(160, 36)
-        self.btn_save.setStyleSheet('''
-            QPushButton {
-                background-color: #4F46E5;
-                color: white;
-                font-weight: bold;
-                border-radius: 6px;
-                font-size: 13px;
-            }
-            QPushButton:hover { background-color: #4338CA; }
-        ''')
+        self.btn_save.setProperty("class", "PrimaryButton")
         self.btn_save.clicked.connect(self.on_save)
         btn_layout.addWidget(self.btn_save)
         
-        root.addLayout(btn_layout)
+        self.add_layout(btn_layout)
 
     def on_save(self):
         sku = self.sku_input.text().strip()

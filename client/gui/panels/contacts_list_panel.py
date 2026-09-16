@@ -6,42 +6,31 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
-class AlfonsoContactsListPanel(QWidget):
+from client.gui.panels.base_panel import AlfonsoBasePanel
+
+class AlfonsoContactsListPanel(AlfonsoBasePanel):
     """Panel para gestionar el directorio de Clientes y Proveedores."""
 
     def __init__(self, main_window):
-        super().__init__()
+        super().__init__(None, title="Directorio de Contactos", subtitle="Gestiona tus clientes y proveedores.")
         self.main_window = main_window
         self.api = main_window.api_client
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
-
-        # Header
+        # Action bar
         header_layout = QHBoxLayout()
-        title = QLabel("Directorio de Contactos")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #F8FAFC;")
-        header_layout.addWidget(title)
+        header_layout.addStretch()
 
         self.cb_filter = QComboBox()
         self.cb_filter.addItems(["Todos", "Cliente", "Proveedor", "Ambos"])
         self.cb_filter.currentTextChanged.connect(self.load_data)
-        self.cb_filter.setStyleSheet("""
-            QComboBox { background: #1E293B; border: 1px solid #334155; padding: 6px; color: #F8FAFC; border-radius: 4px; }
-        """)
+        
         header_layout.addWidget(QLabel("Filtro:"))
         header_layout.addWidget(self.cb_filter)
 
-        header_layout.addStretch()
-
         btn_new = QPushButton(" + Nuevo Contacto")
-        btn_new.setStyleSheet("""
-            QPushButton { background-color: #4F46E5; color: white; border-radius: 6px; padding: 8px 16px; font-weight: bold; }
-            QPushButton:hover { background-color: #4338CA; }
-        """)
+        btn_new.setProperty("class", "PrimaryButton")
         btn_new.clicked.connect(self.go_to_new_contact)
         header_layout.addWidget(btn_new)
         
@@ -49,7 +38,7 @@ class AlfonsoContactsListPanel(QWidget):
         btn_refresh.clicked.connect(self.load_data)
         header_layout.addWidget(btn_refresh)
 
-        layout.addLayout(header_layout)
+        self.add_layout(header_layout)
 
         # Table
         self.table = QTableWidget()
@@ -58,11 +47,7 @@ class AlfonsoContactsListPanel(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setStyleSheet("""
-            QTableWidget { background-color: #0F172A; color: #F8FAFC; border: 1px solid #1E293B; border-radius: 8px; }
-            QHeaderView::section { background-color: #1E293B; color: #94A3B8; font-weight: bold; padding: 8px; border: none; }
-        """)
-        layout.addWidget(self.table)
+        self.add_widget(self.table, stretch=1)
 
     def load_data(self):
         try:

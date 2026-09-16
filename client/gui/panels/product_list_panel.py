@@ -46,14 +46,16 @@ class _ProductDataWorker(QThread):
             self.error.emit(str(exc))
 
 
+from client.gui.panels.base_panel import AlfonsoBasePanel
+
 # ---------------------------------------------------------------------------
 # Panel principal
 # ---------------------------------------------------------------------------
-class AlfonsoProductListPanel(QWidget):
+class AlfonsoProductListPanel(AlfonsoBasePanel):
     """Panel dinámico que muestra el catálogo de productos con métricas de ventas."""
 
-    def __init__(self, parent=None, filter_type="product"):
-        super().__init__(parent)
+    def __init__(self, parent=None, filter_type="product", title="📦  PRODUCTOS & SERVICIOS", subtitle="Gestión de catálogo e inventario."):
+        super().__init__(parent, title=title, subtitle=subtitle)
         self.filter_type = filter_type
         self._worker: _ProductDataWorker | None = None
         self.setup_ui()
@@ -64,17 +66,8 @@ class AlfonsoProductListPanel(QWidget):
     # UI
     # ------------------------------------------------------------------
     def setup_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 16)
-        root.setSpacing(12)
-
-        # ── Cabecera ──────────────────────────────────────────────────
+        # Action bar
         header = QHBoxLayout()
-        title = QLabel("📦  PRODUCTOS & SERVICIOS")
-        title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #E2E8F0; letter-spacing: 0.5px;"
-        )
-        header.addWidget(title)
         header.addStretch()
 
         self.lbl_status = QLabel("Listo")
@@ -84,27 +77,11 @@ class AlfonsoProductListPanel(QWidget):
         btn_refresh = QPushButton("↻  Actualizar")
         btn_refresh.setFixedHeight(28)
         btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: rgba(99,102,241,0.18);
-                border: 1px solid rgba(99,102,241,0.5);
-                border-radius: 6px;
-                color: #818CF8;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 0 12px;
-            }
-            QPushButton:hover { background: rgba(99,102,241,0.30); }
-        """)
+        btn_refresh.setProperty("class", "PrimaryButton")
         btn_refresh.clicked.connect(self.load_data)
         header.addWidget(btn_refresh)
-        root.addLayout(header)
-
-        # ── Separador ────────────────────────────────────────────────
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: rgba(99,102,241,0.2);")
-        root.addWidget(sep)
+        
+        self.add_layout(header)
 
         # ── Tabla de productos ────────────────────────────────────────
         self.table = QTableWidget()
@@ -151,7 +128,7 @@ class AlfonsoProductListPanel(QWidget):
                 padding: 6px 8px;
             }
         """)
-        root.addWidget(self.table)
+        self.add_widget(self.table, stretch=1)
         
         if self.filter_type == "service":
             self.table.setColumnHidden(5, True)
@@ -159,7 +136,7 @@ class AlfonsoProductListPanel(QWidget):
         # ── Pie de página ─────────────────────────────────────────────
         self.lbl_footer = QLabel("")
         self.lbl_footer.setStyleSheet("font-size: 10px; color: #475569;")
-        root.addWidget(self.lbl_footer)
+        self.add_widget(self.lbl_footer)
 
     def _get_api(self):
         p = self.parent()

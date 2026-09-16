@@ -26,7 +26,21 @@ class FileTaxRulesAdapter(TaxRulesPort):
             "iva_general_rate": 21.0,
             "irpf_profesionales_rate": 15.0,
             "last_updated": "2026-08-13",
-            "boe_reference": "Default Seed Fallback"
+            "boe_reference": "Default Seed Fallback",
+            "payroll": {
+                "worker_cc_rate": 4.70,
+                "worker_unemployment_rate": 1.55,
+                "worker_unemployment_temp": 1.60,
+                "worker_fp_rate": 0.10,
+                "worker_mei_rate": 0.12,
+                "employer_cc_rate": 23.60,
+                "employer_unemployment_rate": 5.50,
+                "employer_unemployment_temp": 6.70,
+                "employer_fogasa_rate": 0.20,
+                "employer_fp_rate": 0.60,
+                "employer_mei_rate": 0.58,
+                "employer_atep_rate": 1.50
+            }
         }
 
     def save_rules(self, rules: Dict[str, Any]) -> None:

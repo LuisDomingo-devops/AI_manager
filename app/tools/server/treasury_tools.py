@@ -19,6 +19,16 @@ async def generate_sepa_remittance() -> dict:
     Genera el archivo XML SEPA (pain.001.001.03) para todos los pagos pendientes de remesar.
     """
     try:
+        from app.domain.services.approval_service import approval_service
+        is_approved = await approval_service.request_approval(
+            action_type="generate_sepa", 
+            details={}
+        )
+        if not is_approved:
+            return {
+                "status": "error",
+                "message": "Generación de remesa SEPA cancelada por el usuario o expirada."
+            }
         res = SepaService.generate_remittance_xml()
         return res
     except Exception as e:

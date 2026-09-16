@@ -1426,18 +1426,45 @@ async def generate_invoice_pdf(
 
 async def cancel_invoice(invoice_id: str) -> dict:
     """
-    Anula una factura emitida de forma firme bajo la regulación Verifactu (AEAT).
-    Genera el XML de anulación correspondiente y lo envía / registra en la cadena de huellas de auditoría.
+    Anula o borra una factura dependiendo de su estado.
+    - Si está en estado BORRADOR: Se elimina si el usuario lo confirma OOB.
+    - Si está EMITIDA: Bloquea la eliminación (inmutabilidad VeriFactu) y sugiere factura rectificativa.
     """
     try:
-        from app.domain.services.verifactu_service import VerifactuService
-        res = VerifactuService.cancel_invoice(invoice_id)
-        if res["status"] == "success":
-            return {"status": "ok", "message": f"Factura {invoice_id} anulada correctamente en Verifactu (AEAT).", "detail": res}
+        from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+        from app.adapters.memory.memory import _get_connection
+        
+        invoice = InvoiceRepository.find_invoice_by_id(invoice_id)
+        if not invoice:
+            return {"status": "error", "message": f"Factura {invoice_id} no encontrada."}
+
+        status = invoice.get("status", "").lower()
+        if status == "borrador":
+            from app.domain.services.approval_service import approval_service
+            is_approved = await approval_service.request_approval(
+                action_type="cancel_invoice", 
+                details={"invoice_id": invoice_id}
+            )
+            if not is_approved:
+                return {
+                    "status": "error",
+                    "message": f"Anulación del borrador {invoice_id} cancelada por el usuario o expirada."
+                }
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (invoice["db_id"],))
+                cursor.execute("DELETE FROM invoices WHERE id = ?", (invoice["db_id"],))
+                conn.commit()
+            
+            return {"status": "ok", "message": f"Borrador {invoice_id} eliminado exitosamente."}
         else:
-            return {"status": "error", "message": res.get("message", "Error al anular la factura.")}
+            return {
+                "status": "error", 
+                "message": f"No se puede borrar la factura {invoice_id} porque ya está emitida (estado: {status}). La inmutabilidad de Veri*Factu impide borrar facturas ya emitidas. Por favor, crea una factura rectificativa para anular sus efectos."
+            }
+            
     except Exception as e:
-        tool_logger.exception("Error al anular la factura")
+        tool_logger.exception("Error al procesar la cancelación de la factura")
         return {"status": "error", "message": str(e)}
 
 async def get_invoice_file(invoice_id: str) -> dict:
@@ -2279,7 +2306,7 @@ async def get_profit_and_loss_report(year: int = None, quarter: int = None) -> d
         return {"status": "error", "message": str(e)}
 
 
-async def close_fiscal_year_tool(year: int, confirmed_by_user: bool = False) -> dict:
+async def close_fiscal_year_tool(year: int) -> dict:
     """
     Ejecuta el cierre oficial del ejercicio contable/fiscal:
     1. Asiento de Regularización (Grupos 6 y 7 a cuenta 12900000).
@@ -2290,11 +2317,15 @@ async def close_fiscal_year_tool(year: int, confirmed_by_user: bool = False) -> 
     """
     try:
         from app.domain.services.ledger_service import LedgerService
-        if not confirmed_by_user:
+        from app.domain.services.approval_service import approval_service
+        is_approved = await approval_service.request_approval(
+            action_type="close_fiscal_year", 
+            details={"year": year}
+        )
+        if not is_approved:
             return {
-                "status": "pending_confirmation",
-                "year": year,
-                "message": f"El cierre del ejercicio contable {year} es una operación irreversible que bloqueará la modificación de facturas y generará los asientos de regularización, cierre y apertura. Confirma explícitamente para proceder (confirmed_by_user=True)."
+                "status": "error",
+                "message": f"Cierre del ejercicio {year} cancelado por el usuario o expirado."
             }
 
         res = LedgerService.close_fiscal_year(year)

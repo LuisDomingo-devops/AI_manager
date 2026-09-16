@@ -13,35 +13,36 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
-from client.gui.theme import AlfonsoStyledWidget, HoverAnimationFilter
+from client.gui.theme import HoverAnimationFilter
 from client.gui.widgets import QuarterlyBarChartWidget, DonutChartWidget, SparklineWidget
+from client.gui.panels.base_panel import AlfonsoBasePanel
 
 
-class KPICard(QFrame, AlfonsoStyledWidget):
+class KPICard(QFrame):
     """
     Tarjeta KPI reutilizable.
     Aplica la clase QSS "KPICard" al crearse.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.apply_qss_class("KPICard")
+        self.setProperty("class", "KPICard")
         HoverAnimationFilter(self)
 
 
-class ChartPanel(QFrame, AlfonsoStyledWidget):
+class ChartPanel(QFrame):
     """
     Panel de grafico (donut, barras, alertas).
     Aplica la clase QSS "ChartPanel" al crearse.
     """
     def __init__(self, parent=None, min_height=0):
         super().__init__(parent)
-        self.apply_qss_class("ChartPanel")
+        self.setProperty("class", "ChartPanel")
         HoverAnimationFilter(self)
         if min_height:
             self.setMinimumHeight(min_height)
 
 
-class AlfonsoDashboardPanel(QWidget, AlfonsoStyledWidget):
+class AlfonsoDashboardPanel(AlfonsoBasePanel):
     """
     Panel central del dashboard con:
       - Saludo personalizado
@@ -59,32 +60,10 @@ class AlfonsoDashboardPanel(QWidget, AlfonsoStyledWidget):
     quick_access_requested = pyqtSignal(str)
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, title="Buenos días, Luis", subtitle="Resumen de actividad y estado financiero actual.")
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(14)
-
-        # ---------------------------------------------------------------
-        # 1. Saludo
-        # ---------------------------------------------------------------
-        greeting_row = QHBoxLayout()
-        greeting_col = QVBoxLayout()
-
-        self.lbl_greeting = QLabel("Buenos dias, Luis")
-        self.lbl_greeting.setProperty("class", "LblTitle")
-
-        self.lbl_subgreeting = QLabel("Resumen de actividad y estado financiero actual.")
-        self.lbl_subgreeting.setProperty("class", "LblSubtitle")
-
-        greeting_col.addWidget(self.lbl_greeting)
-        greeting_col.addWidget(self.lbl_subgreeting)
-        greeting_row.addLayout(greeting_col)
-        greeting_row.addStretch()
-        layout.addLayout(greeting_row)
-
         # ---------------------------------------------------------------
         # 2. Fila de tarjetas KPI
         # ---------------------------------------------------------------
@@ -147,7 +126,7 @@ class AlfonsoDashboardPanel(QWidget, AlfonsoStyledWidget):
         c4_lay.addWidget(self.c4_spark)
         kpi_row.addWidget(card4)
 
-        layout.addLayout(kpi_row)
+        self.add_layout(kpi_row)
 
         # ---------------------------------------------------------------
         # 3. Fila central: donut + trimestral + alertas
@@ -220,7 +199,7 @@ class AlfonsoDashboardPanel(QWidget, AlfonsoStyledWidget):
         ap_lay.addStretch()
         middle_row.addWidget(alert_panel, 1)
 
-        layout.addLayout(middle_row)
+        self.add_layout(middle_row)
 
         # ---------------------------------------------------------------
         # 4. Fila inferior: tabla de movimientos + accesos rapidos
@@ -272,7 +251,7 @@ class AlfonsoDashboardPanel(QWidget, AlfonsoStyledWidget):
             qp_lay.addWidget(btn)
 
         bottom_row.addWidget(quick_panel, 1)
-        layout.addLayout(bottom_row)
+        self.add_layout(bottom_row)
 
     # ------------------------------------------------------------------
     # API publica: actualizar metricas

@@ -10,8 +10,7 @@ from app.utils.logger import tool_logger
 async def send_to_advisor(
     year: int = None,
     advisor_email: str = "",
-    notes: str = "",
-    confirmed_by_user: bool = False
+    notes: str = ""
 ) -> dict:
     """
     Consolida el expediente contable, fiscal y de facturación electrónica del ejercicio
@@ -20,11 +19,17 @@ async def send_to_advisor(
     """
     target_year = year if year is not None else datetime.now().year
 
-    if advisor_email and not confirmed_by_user:
-        return {
-            "status": "pending_confirmation",
-            "message": f"Se va a consolidar el expediente contable/fiscal del ejercicio {target_year} y remitirlo al correo '{advisor_email}'. ¿Deseas confirmar el envío?"
-        }
+    if advisor_email:
+        from app.domain.services.approval_service import approval_service
+        is_approved = await approval_service.request_approval(
+            action_type="send_to_advisor", 
+            details={"year": target_year, "advisor_email": advisor_email}
+        )
+        if not is_approved:
+            return {
+                "status": "error",
+                "message": f"Envío al asesor {advisor_email} cancelado por el usuario o expirado."
+            }
 
     try:
         pack = LedgerService.export_advisor_pack(target_year)
@@ -91,7 +96,33 @@ async def request_document(
         tool_logger.exception("Error al crear solicitud de documento")
         return {"status": "error", "message": f"Error al registrar solicitud de documento: {str(e)}"}
 
+async def get_compliance_declaration_dossier() -> dict:
+    """
+    Genera y devuelve la Declaración Responsable del fabricante/desarrollador
+    para el cumplimiento normativo (Ley Antifraude / Veri*Factu / RGPD).
+    """
+    declaracion = (
+        "DECLARACIÓN RESPONSABLE DEL SISTEMA INFORMATICO DE FACTURACIÓN\n"
+        "==============================================================\n\n"
+        "De conformidad con lo dispuesto en el artículo 29.2.j) de la Ley 58/2003, "
+        "de 17 de diciembre, General Tributaria, y en el Reglamento que establece "
+        "los requisitos que deben adoptar los sistemas y programas informáticos o electrónicos, "
+        "se declara bajo responsabilidad que este software (Alfonso Autónomo) cumple con:\n"
+        "1. Garantizar la integridad, conservación, accesibilidad, legibilidad, trazabilidad e "
+        "inalterabilidad de los registros de facturación.\n"
+        "2. No disponer de software de doble uso ni alterar u ocultar la facturación real.\n"
+        "3. Aplicar protocolos criptográficos (Veri*Factu) en el registro y comunicación de facturas.\n\n"
+        "Fecha de generación de la declaración: " + datetime.now().strftime("%d/%m/%Y")
+    )
+    
+    return {
+        "status": "ok",
+        "message": "Declaración Responsable generada correctamente.",
+        "content": declaracion
+    }
+
 TOOLS = {
     "send_to_advisor": send_to_advisor,
     "request_document": request_document,
+    "get_compliance_declaration_dossier": get_compliance_declaration_dossier,
 }

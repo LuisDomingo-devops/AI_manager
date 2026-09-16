@@ -22,7 +22,7 @@ QWidget {{
 }}
 
 /* Paneles y Tarjetas (HUDPanel) */
-QFrame#HUDPanel {{
+QFrame[class="HUDPanel"], QFrame[class="KPICard"], QFrame[class="ChartPanel"] {{
     background-color: {COLOR_PANEL_BG};
     border: 1px solid {COLOR_BORDER};
     border-radius: 12px;
@@ -47,52 +47,127 @@ QPushButton:pressed {{
 }}
 
 /* Botones Primarios */
-QPushButton.PrimaryButton {{
+QPushButton[class="PrimaryButton"] {{
     background-color: rgba(99, 102, 241, 0.2);
     border: 1px solid {COLOR_PRIMARY};
     color: {COLOR_PRIMARY};
     font-weight: bold;
+    min-width: 120px;
 }}
-QPushButton.PrimaryButton:hover {{
+QPushButton[class="PrimaryButton"]:hover {{
     background-color: rgba(99, 102, 241, 0.3);
 }}
 
 /* Botones de Alerta/Peligro */
-QPushButton.DangerButton {{
+QPushButton[class="DangerButton"] {{
     background-color: rgba(239, 68, 68, 0.1);
     border: 1px solid rgba(239, 68, 68, 0.4);
     color: {COLOR_DANGER};
+    min-width: 120px;
 }}
-QPushButton.DangerButton:hover {{
+QPushButton[class="DangerButton"]:hover {{
     background-color: rgba(239, 68, 68, 0.2);
 }}
 
-/* Campos de Texto (QLineEdit, QTextEdit) */
-QLineEdit, QTextEdit {{
+/* Desplegables (QComboBox) */
+QComboBox {{
     background-color: rgba(15, 23, 42, 0.6);
     border: 1px solid {COLOR_BORDER};
     border-radius: 6px;
-    padding: 6px;
+    padding: 6px 10px;
     color: {COLOR_TEXT_MAIN};
-    selection-background-color: {COLOR_PRIMARY};
 }}
-
-QLineEdit:focus, QTextEdit:focus {{
+QComboBox:focus {{
     border: 1px solid {COLOR_PRIMARY};
     background-color: rgba(15, 23, 42, 0.8);
 }}
+QComboBox::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left-width: 1px;
+    border-left-color: {COLOR_BORDER};
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}}
+QComboBox::down-arrow {{
+    image: none; /* Can be replaced with a custom arrow if desired */
+}}
+QComboBox QAbstractItemView {{
+    background-color: {COLOR_PANEL_BG};
+    border: 1px solid {COLOR_BORDER};
+    color: {COLOR_TEXT_MAIN};
+    selection-background-color: rgba(99, 102, 241, 0.5);
+    selection-color: white;
+}}
+
+/* Campos de Texto (QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox) */
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox {{
+    background-color: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 6px;
+    color: #F1F5F9;
+    selection-background-color: #6366F1;
+}}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+    border: 1px solid #6366F1;
+    background-color: rgba(15, 23, 42, 0.8);
+}}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {{
+    background-color: transparent;
+    width: 16px;
+}}
+
+/* Diálogos modales */
+QDialog {{
+    background-color: #0F172A;
+}}
 
 /* Títulos y Subtítulos */
-QLabel.TitleLabel {{
+QLabel[class="LblTitle"] {{
     font-size: 16px;
     font-weight: bold;
     color: {COLOR_PRIMARY};
     letter-spacing: 0.5px;
 }}
 
-QLabel.SubtitleLabel {{
+QLabel[class="LblSubtitle"] {{
     font-size: 11px;
     color: {COLOR_TEXT_MUTED};
+}}
+
+QLabel[class="LblPanelTitle"] {{
+    font-size: 14px;
+    font-weight: bold;
+    color: {COLOR_TEXT_MAIN};
+    border-bottom: 1px solid {COLOR_BORDER};
+    padding-bottom: 4px;
+}}
+
+QLabel[class="LblKpiTitle"] {{
+    font-size: 12px;
+    color: {COLOR_TEXT_MUTED};
+}}
+
+QLabel[class="LblKpiValue"] {{
+    font-size: 20px;
+    font-weight: bold;
+    color: {COLOR_TEXT_MAIN};
+}}
+
+QLabel[class="LblCyan"] {{
+    color: {COLOR_ACCENT_CYAN};
+    font-weight: bold;
+}}
+
+QLabel[class="LblState"], QLabel[class="LblSession"], QLabel[class="LblMicName"] {{
+    color: {COLOR_TEXT_MUTED};
+    font-size: 11px;
 }}
 
 /* Splitters (Divisores) */
@@ -123,9 +198,40 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
 }}
 
 /* ===== ESTILOS ESPECÍFICOS: SIDEBAR ===== */
-QFrame#Sidebar {{
+QFrame[class="Sidebar"] {{
     background-color: #070B14;
     border-right: 1px solid rgba(255, 255, 255, 0.06);
+}}
+
+/* ===== TABLAS (QTableWidget) ===== */
+QTableWidget {{
+    background-color: rgba(15, 23, 42, 0.4);
+    alternate-background-color: rgba(30, 41, 59, 0.6);
+    color: #F8FAFC;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    gridline-color: rgba(255, 255, 255, 0.05);
+    selection-background-color: rgba(99, 102, 241, 0.4);
+    selection-color: #FFFFFF;
+}}
+
+QTableWidget::item {{
+    padding: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}}
+
+QHeaderView::section {{
+    background-color: rgba(30, 41, 59, 0.95);
+    color: #94A3B8;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+    font-weight: bold;
+    font-size: 12px;
+}}
+
+QHeaderView {{
+    background-color: transparent;
 }}
 
 QToolTip {{
@@ -137,7 +243,7 @@ QToolTip {{
     font-size: 13px;
 }}
 
-QLabel.SidebarBadge {{
+QLabel[class="SidebarBadge"] {{
     background-color: rgba(99, 102, 241, 0.15);
     color: #818CF8;
     border: 1px solid rgba(99, 102, 241, 0.3);
@@ -147,28 +253,28 @@ QLabel.SidebarBadge {{
     font-weight: bold;
 }}
 
-QPushButton.SidebarCategory {{
+QPushButton[class="SidebarCategory"] {{
     background-color: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.04);
     border-radius: 6px;
     text-align: left;
     padding: 4px;
 }}
-QPushButton.SidebarCategory:hover {{
+QPushButton[class="SidebarCategory"]:hover {{
     background-color: rgba(99, 102, 241, 0.08);
     border-color: rgba(99, 102, 241, 0.2);
 }}
 
-QFrame.SearchBox {{
+QFrame[class="SearchBox"] {{
     background-color: #0F172A;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
 }}
-QFrame.SearchBox:focus-within {{
+QFrame[class="SearchBox"]:focus-within {{
     border: 1px solid #00F0FF;
 }}
 
-QLineEdit.SearchInput {{
+QLineEdit[class="SearchInput"] {{
     background: transparent;
     border: none;
     color: #FFFFFF;
@@ -176,7 +282,7 @@ QLineEdit.SearchInput {{
     padding: 2px 6px;
 }}
 
-QPushButton.ClearSearchBtn {{
+QPushButton[class="ClearSearchBtn"] {{
     background: rgba(255, 255, 255, 0.1);
     border: none;
     border-radius: 8px;
@@ -185,12 +291,12 @@ QPushButton.ClearSearchBtn {{
     font-weight: bold;
     padding: 0;
 }}
-QPushButton.ClearSearchBtn:hover {{
+QPushButton[class="ClearSearchBtn"]:hover {{
     background: rgba(239, 68, 68, 0.3);
     color: #FFFFFF;
 }}
 
-QFrame.PlanCard {{
+QFrame[class="PlanCard"] {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(245, 158, 11, 0.08),
         stop:1 rgba(99, 102, 241, 0.08));
@@ -198,7 +304,7 @@ QFrame.PlanCard {{
     border-radius: 8px;
 }}
 
-QPushButton.PlanButton {{
+QPushButton[class="PlanButton"] {{
     background: rgba(245, 158, 11, 0.15);
     border: 1px solid rgba(245, 158, 11, 0.4);
     border-radius: 4px;
@@ -207,7 +313,7 @@ QPushButton.PlanButton {{
     font-weight: bold;
     padding: 4px;
 }}
-QPushButton.PlanButton:hover {{
+QPushButton[class="PlanButton"]:hover {{
     background-color: rgba(245, 158, 11, 0.25);
     color: #FFFFFF;
 }}
@@ -286,31 +392,31 @@ QFrame#EditorContainer {{
     border: 2px solid #00F0FF;
     background-color: #030406;
 }}
-QLabel.DevHeaderTitle {{
+QLabel[class="DevHeaderTitle"] {{
     font-size: 13px;
     font-weight: bold;
     color: #00F0FF;
     letter-spacing: 1px;
 }}
-QLabel.DevPanelTitle {{
+QLabel[class="DevPanelTitle"] {{
     font-weight: bold;
     font-size: 10px;
     color: rgba(0, 240, 255, 70);
 }}
-QLabel.DevTerminalTitle {{
+QLabel[class="DevTerminalTitle"] {{
     font-weight: bold;
     font-size: 10px;
     color: #FFB800;
 }}
-QPushButton.DevDangerBtn {{
+QPushButton[class="DevDangerBtn"] {{
     color: #FF0055;
     border-color: rgba(255, 0, 85, 40);
 }}
-QPushButton.DevSuccessBtn {{
+QPushButton[class="DevSuccessBtn"] {{
     color: #00FF66;
     border-color: rgba(0, 255, 102, 50);
 }}
-QSplitter.DevSplitter::handle {{
+QSplitter[class="DevSplitter"]::handle {{
     background-color: rgba(0, 240, 255, 30);
 }}
 QFrame#Separator {{

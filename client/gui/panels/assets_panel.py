@@ -1,4 +1,5 @@
 import datetime
+from client.gui.panels.base_panel import AlfonsoBasePanel
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -41,6 +42,7 @@ class AddAssetDialog(QDialog):
         layout.addRow("Vida Útil (Años):", self.life_input)
         
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         save_btn = QPushButton("Guardar")
         save_btn.clicked.connect(self.accept)
         cancel_btn = QPushButton("Cancelar")
@@ -92,6 +94,7 @@ class AmortizationDialog(QDialog):
         layout.addWidget(tot_lbl)
         
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         exec_btn = QPushButton("Contabilizar Amortización")
         exec_btn.clicked.connect(self.accept)
         cancel_btn = QPushButton("Cerrar")
@@ -101,35 +104,33 @@ class AmortizationDialog(QDialog):
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
 
-class AssetsPanel(QWidget):
+class AssetsPanel(AlfonsoBasePanel):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, title="Gestión de Activos Fijos", subtitle="Administra tus bienes de inversión y sus cuadros de amortización.")
         self.setup_ui()
 
     def setup_ui(self):
-        self.layout = QVBoxLayout(self)
-        
-        # Header
-        header = QHBoxLayout()
-        title = QLabel("Gestión de Activos Fijos")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
-        header.addWidget(title)
-        header.addStretch()
+        # Action bar
+        action_row = QHBoxLayout()
+        action_row.addStretch()
         
         btn_add = QPushButton("+ Añadir Bien de Inversión")
+        btn_add.setProperty("class", "PrimaryButton")
         btn_add.clicked.connect(self.add_asset)
+        
         btn_amortize = QPushButton("Ver Cuadro Amortización Actual")
         btn_amortize.clicked.connect(self.view_amortization)
         
-        header.addWidget(btn_amortize)
-        header.addWidget(btn_add)
-        self.layout.addLayout(header)
+        action_row.addWidget(btn_amortize)
+        action_row.addWidget(btn_add)
+        
+        self.add_layout(action_row)
         
         # Table
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Fecha Compra", "Coste", "Valor Residual", "Años Vida Útil"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.layout.addWidget(self.table)
+        self.add_widget(self.table, stretch=1)
         
     def load_data(self):
         try:

@@ -195,10 +195,18 @@ async def get_current_datetime() -> dict:
 
 
 async def open_application(command: str | Sequence[str], args: Sequence[str] | None = None, client_id: str | None = None) -> dict:
-    command_text = (
-        command if isinstance(command, str)
-        else " ".join(shlex.quote(str(part)) for part in (list(command) + list(args or [])))
-    )
+    command_parts = _normalize_command(command)
+    if args:
+        command_parts.extend(args)
+    
+    if not _is_safe(command_parts):
+        error_logger.warning(f"Intento de ejecutar comando bloqueado por seguridad: {command_parts}")
+        return {
+            "status": "error",
+            "message": "Operación de seguridad bloqueada: Este comando no está permitido."
+        }
+
+    command_text = " ".join(shlex.quote(str(part)) for part in command_parts)
 
     if alfonso_bridge.has_clients():
         tool_logger.info("Delegando open_application al agente local: %s", command_text)
@@ -229,6 +237,14 @@ async def open_application(command: str | Sequence[str], args: Sequence[str] | N
 
 async def close_application(command: str, client_id: str | None = None) -> dict:
     target = command.strip()
+    
+    command_parts = _normalize_command(target)
+    if not _is_safe(command_parts):
+        error_logger.warning(f"Intento de cerrar aplicación bloqueado por seguridad: {command_parts}")
+        return {
+            "status": "error",
+            "message": "Operación de seguridad bloqueada: Este comando no está permitido."
+        }
 
     if alfonso_bridge.has_clients():
         tool_logger.info("Delegando close_application al agente local: %s", target)

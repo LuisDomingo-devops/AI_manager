@@ -172,50 +172,70 @@ class PayrollPdfService:
         c.drawString(480, y, "TOTALES")
 
         y -= 18
+        from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
+        rules = FileTaxRulesAdapter().get_rules().get("payroll", {})
+
         c.setFont("Helvetica", 9)
-        c.drawString(50, y, f"1. Contingencias Comunes ({PayrollEngine.WORKER_CC_RATE}%)")
+        c.drawString(50, y, f"1. Contingencias Comunes ({rules.get('worker_cc_rate', 4.70)}%)")
+        c.drawString(400, y, f"{payroll['bccc']:,.2f}")
         c.drawString(480, y, f"{payroll['ss_worker_cc']:,.2f} €")
-
+    
         y -= 15
-        c.drawString(50, y, f"2. Desempleo ({PayrollEngine.WORKER_UNEMPLOYMENT_RATE}%)")
+        is_temp = str(employee.get("contract_type", "100")).startswith("4")
+        w_unempl_rate = rules.get("worker_unemployment_temp", 1.60) if is_temp else rules.get("worker_unemployment_rate", 1.55)
+        c.drawString(50, y, f"2. Desempleo ({w_unempl_rate}%)")
+        c.drawString(400, y, f"{payroll['bccp']:,.2f}")
         c.drawString(480, y, f"{payroll['ss_worker_unemployment']:,.2f} €")
-
+    
         y -= 15
-        c.drawString(50, y, f"3. Formación Profesional ({PayrollEngine.WORKER_FP_RATE}%)")
+        c.drawString(50, y, f"3. Formación Profesional ({rules.get('worker_fp_rate', 0.10)}%)")
+        c.drawString(400, y, f"{payroll['bccp']:,.2f}")
         c.drawString(480, y, f"{payroll['ss_worker_fp']:,.2f} €")
-
+    
         y -= 15
-        c.drawString(50, y, f"4. MEI - Equidad Intergeneracional ({PayrollEngine.WORKER_MEI_RATE}%)")
+        c.drawString(50, y, f"4. MEI ({rules.get('worker_mei_rate', 0.12)}%)")
+        c.drawString(400, y, f"{payroll['bccc']:,.2f}")
         c.drawString(480, y, f"{payroll['ss_worker_mei']:,.2f} €")
-
-        y -= 18
-        c.drawString(50, y, f"5. Retención I.R.P.F. ({payroll['irpf_rate']:.1f}%)")
-        c.drawString(480, y, f"{payroll['irpf_amount']:,.2f} €")
-
+    
+        y -= 25
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y, f"TOTAL APORTACIONES SEGURIDAD SOCIAL")
+        c.drawString(480, y, f"{payroll['ss_worker_total']:,.2f} €")
+    
         y -= 20
+        c.setFont("Helvetica", 9)
+        c.drawString(50, y, f"5. Retención IRPF ({payroll['irpf_rate']}%)")
+        c.drawString(400, y, f"{payroll['gross_total']:,.2f}")
+        c.drawString(480, y, f"{payroll['irpf_amount']:,.2f} €")
+    
+        y -= 25
         c.setFont("Helvetica-Bold", 9)
         c.drawString(50, y, "B. TOTAL A DEDUCIR")
-        total_ded = payroll['ss_worker_total'] + payroll['irpf_amount']
-        c.drawString(480, y, f"{total_ded:,.2f} €")
-
-        # 6. Líquido Total
-        y -= 30
-        c.rect(40, y - 10, w - 80, 25, fill=0)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, y - 2, "LÍQUIDO TOTAL A PERCIBIR (NETO EN CUENTA):")
-        c.drawString(480, y - 2, f"{payroll['net_salary']:,.2f} €")
-
-        # 7. Cuadro Obligatorio de Aportaciones de la Empresa a la Seguridad Social (Orden ESS/2098/2014)
-        y -= 50
-        c.rect(40, y - 65, w - 80, 75)
+        c.drawString(480, y, f"{payroll['ss_worker_total'] + payroll['irpf_amount']:,.2f} €")
+    
+        # 6. Líquido a percibir
+        c.rect(40, y - 45, w - 80, 30)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, y - 35, "LÍQUIDO A PERCIBIR (A - B)")
+        c.drawString(460, y - 35, f"{payroll['net_salary']:,.2f} €")
+    
+        # 7. Determinación de Bases Empresa (Pie de página)
         c.setFont("Helvetica-Bold", 8)
-        c.drawString(45, y - 5, "DETERMINACIÓN DE LAS BASES DE COTIZACIÓN Y APORTACIÓN EMPRESARIAL (OBLIGATORIO)")
-        c.setFont("Helvetica", 7.5)
-        c.drawString(45, y - 20, f"Base Contingencias Comunes (BCCC): {payroll['bccc']:,.2f} €  | Aportación Empresa ({PayrollEngine.EMPLOYER_CC_RATE}%): {payroll['ss_employer_cc']:,.2f} €")
-        c.drawString(45, y - 32, f"Base Contingencias Prof. (BCCP): {payroll['bccp']:,.2f} €  | Desempleo ({PayrollEngine.EMPLOYER_UNEMPLOYMENT_RATE}%): {payroll['ss_employer_unemployment']:,.2f} €  | FOGASA: {payroll['ss_employer_fogasa']:,.2f} €")
-        c.drawString(45, y - 44, f"Formación Profesional: {payroll['ss_employer_fp']:,.2f} €  | MEI Empresa: {payroll['ss_employer_mei']:,.2f} €  | AT/EP: {payroll['ss_employer_atep']:,.2f} €")
-        c.setFont("Helvetica-Bold", 8)
-        c.drawString(45, y - 58, f"TOTAL APORTACIÓN EMPRESARIAL A LA SEGURIDAD SOCIAL: {payroll['ss_employer_total']:,.2f} €")
+        c.drawString(40, 150, "DETERMINACIÓN DE LAS BASES DE COTIZACIÓN AL RÉGIMEN GENERAL Y APORTACIÓN EMPRESARIAL")
+        c.setFont("Helvetica", 7)
+        c.drawString(40, 135, f"1. Base de Cotización a Contingencias Comunes (BCCC): {payroll['bccc']:,.2f} €")
+        c.drawString(40, 125, f"   - Aportación Empresa ({rules.get('employer_cc_rate', 23.60)}%): {payroll['ss_employer_cc']:,.2f} €")
+        
+        c.drawString(40, 110, f"2. Base de Cotización a Contingencias Profesionales (BCCP): {payroll['bccp']:,.2f} €")
+        e_unempl_rate = rules.get("employer_unemployment_temp", 6.70) if is_temp else rules.get("employer_unemployment_rate", 5.50)
+        c.drawString(40, 100, f"   - Desempleo ({e_unempl_rate}%): {payroll['ss_employer_unemployment']:,.2f} €")
+        c.drawString(40, 90, f"   - Formación Profesional ({rules.get('employer_fp_rate', 0.60)}%): {payroll['ss_employer_fp']:,.2f} €")
+        c.drawString(40, 80, f"   - FOGASA ({rules.get('employer_fogasa_rate', 0.20)}%): {payroll['ss_employer_fogasa']:,.2f} €")
+    
+        c.drawString(350, 135, f"3. Mecanismo de Equidad Intergeneracional (MEI)")
+        c.drawString(350, 125, f"   - Aportación Empresa ({rules.get('employer_mei_rate', 0.58)}%): {payroll['ss_employer_mei']:,.2f} €")
+        c.drawString(350, 110, f"4. Tarifa de Primas (AT/EP)")
+        c.drawString(350, 100, f"   - Aportación Empresa ({rules.get('employer_atep_rate', 1.50)}%): {payroll['ss_employer_atep']:,.2f} €")
 
         # Firmas
         c.setFont("Helvetica", 8)

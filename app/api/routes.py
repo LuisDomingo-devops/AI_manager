@@ -123,6 +123,25 @@ async def dashboard_sync(client_id: str = Depends(verify_api_key)):
         "customization": {} # Placeholder if needed
     }
 
+class ApprovalResolutionRequest(BaseModel):
+    action_id: str
+    approved: bool
+
+@router.post("/approvals/{action_id}/confirm", summary="Confirma una acción sensible retenida.")
+async def confirm_approval(action_id: str, client_id: str = Depends(verify_api_key)):
+    from app.domain.services.approval_service import approval_service
+    if approval_service.resolve_approval(action_id, True):
+        return {"status": "ok", "message": "Acción confirmada y en ejecución."}
+    raise HTTPException(status_code=404, detail="Aprobación no encontrada o ya resuelta.")
+
+@router.post("/approvals/{action_id}/reject", summary="Rechaza una acción sensible retenida.")
+async def reject_approval(action_id: str, client_id: str = Depends(verify_api_key)):
+    from app.domain.services.approval_service import approval_service
+    if approval_service.resolve_approval(action_id, False):
+        return {"status": "ok", "message": "Acción rechazada correctamente."}
+    raise HTTPException(status_code=404, detail="Aprobación no encontrada o ya resuelta.")
+
+
 router_browser = APIRouter(prefix="/browser", tags=["browser"], dependencies=[Depends(verify_api_key)])
 router_computer = APIRouter(prefix="/computer", tags=["computer"], dependencies=[Depends(verify_api_key)])
 router_calendar = APIRouter(prefix="/calendar", tags=["calendar"], dependencies=[Depends(verify_api_key)])
