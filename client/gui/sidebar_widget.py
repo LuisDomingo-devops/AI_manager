@@ -56,7 +56,7 @@ SIDEBAR_CATEGORIES = [
         "subcategories": [
             {"id": "conciliacion_bancaria", "title": "Conciliación Bancaria", "icon": "", "desc": "Emparejamiento inteligente de apuntes y facturas"},
             {"id": "conexiones_psd2", "title": "Cuentas Conectadas", "icon": "", "desc": "Banca abierta Open Banking y sincronización de saldos"},
-            {"id": "transferencias_pagos", "title": "Realizar Pagos", "icon": "", "desc": "Transferencias a proveedores y remesas SEPA"}
+            {"id": "transferencias_pagos", "title": "Remesas SEPA", "icon": "", "desc": "Generación de remesas SEPA para cobros domiciliados"}
         ]
     },
     {

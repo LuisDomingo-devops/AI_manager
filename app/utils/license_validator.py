@@ -72,7 +72,7 @@ BASIC_ALLOWED_TOOLS = COMMON_ASSISTANT_TOOLS | {
 PRO_ALLOWED_TOOLS = BASIC_ALLOWED_TOOLS | {
     # Open Banking y Conciliación
     "run_bank_reconciliation", "get_unreconciled_report_tool", "get_bank_balance",
-    "import_bank_statement", "add_manual_bank_movement", "initiate_transfer",
+    "import_bank_statement", "add_manual_bank_movement",
     "check_consent_status_tool",
     # Previsión de Tesorería
     "get_cash_flow_forecast_tool", "get_liquidity_alerts_tool",

@@ -2622,7 +2622,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             # TESORERÍA (bancos)
             ("bancos", "conciliacion_bancaria"): (9, "TESORERÍA > CONCILIACIÓN INTELIGENTE PSD2", "bancos", "conciliacion_bancaria"),
             ("bancos", "conexiones_psd2"): (10, "TESORERÍA > CUENTAS BANCARIAS VINCULADAS", "bancos", "conexiones_psd2"),
-            ("bancos", "transferencias_pagos"): (11, "TESORERÍA > EMISIÓN DE TRANSFERENCIAS SEPA", "bancos", "transferencias_pagos"),
+            ("bancos", "transferencias_pagos"): (11, "TESORERÍA > EMISIÓN DE REMESAS SEPA (COBROS)", "bancos", "transferencias_pagos"),
 
             # CATÁLOGOS
             ("catalogos", "lista_contactos"): (36, "CATÁLOGOS > DIRECTORIO", "catalogos", "lista_contactos"),

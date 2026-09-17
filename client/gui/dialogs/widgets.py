@@ -1651,8 +1651,6 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         btn_manual.clicked.connect(self.add_manual_mov)
         btn_layout.addWidget(btn_manual)
 
-        btn_transfer = QPushButton("Realizar Transferencia")
-        btn_transfer.clicked.connect(self.initiate_transfer)
         btn_layout.addWidget(btn_transfer)
 
         btn_subs = QPushButton("Plan Premium")
@@ -1821,16 +1819,6 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
             self.load_bank_movements()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-
-    def initiate_transfer(self):
-        connection_id = self.cb_account.currentData()
-        if connection_id is None:
-            QMessageBox.warning(self, "Seleccionar Cuenta", "Para realizar transferencias en pruebas debes tener seleccionada una cuenta activa en el desplegable superior.")
-            return
-            
-        dialog = AlfonsoInitiateTransferDialog(self, connection_id)
-        dialog.exec()
-        self.load_bank_movements()
 
     def show_subscription(self):
         dialog = AlfonsoSubscriptionDialog(self)

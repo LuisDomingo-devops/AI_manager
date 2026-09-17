@@ -7,9 +7,9 @@ class SepaService:
     @classmethod
     def generate_remittance_xml(cls) -> dict:
         """
-        Genera el archivo XML SEPA (pain.001.001.03) para transferencias pendientes.
+        Genera el archivo XML SEPA (pain.008.001.02) para cobros de facturas pendientes.
         Extrae la cuenta bancaria marcada como por defecto para remesas, o la primera activa si no hay.
-        Lee los registros en bank_transfers con status = 'initiated'.
+        Lee los registros en invoices con status != 'cobrada'.
         Retorna un dict con el status, xml_content y transfer_ids incluidos.
         """
         conn = _get_connection()
@@ -32,8 +32,8 @@ class SepaService:
             profile_row = cursor.fetchone()
             issuer_name = profile_row["razon_social"] if profile_row else "Usuario de Alfonso"
             
-            # Leer transferencias pendientes
-            cursor.execute("SELECT id, transfer_date, recipient_name, recipient_iban, amount, concept FROM bank_transfers WHERE status = 'initiated'")
+            # Leer cobros pendientes
+            cursor.execute("SELECT id, date_of_issue as transfer_date, client_name as recipient_name, client_iban as recipient_iban, total_amount as amount, 'Cobro Fra ' || invoice_number as concept FROM invoices WHERE status != 'cobrada' AND client_iban IS NOT NULL")
             transfers = cursor.fetchall()
             
             if not transfers:
@@ -113,9 +113,9 @@ class SepaService:
                     rmt_inf = ET.SubElement(cdt_trf_tx_inf, f"{{{ns}}}RmtInf")
                     ET.SubElement(rmt_inf, f"{{{ns}}}Ustrd").text = str(t["concept"])
             
-            # Marcar transferencias como emitidas en remesa
-            for t_id in transfer_ids:
-                cursor.execute("UPDATE bank_transfers SET status = 'remitted' WHERE id = ?", (t_id,))
+            # Marcar facturas como remesadas (opcional, de momento comentado)
+            # for t in transfers:
+            #     cursor.execute("UPDATE invoices SET status = 'remesada' WHERE id = ?", (t["id"],))
             conn.commit()
             
             xml_string = ET.tostring(document, encoding="utf-8", xml_declaration=True).decode("utf-8")

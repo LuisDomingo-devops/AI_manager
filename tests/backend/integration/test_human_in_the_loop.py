@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.tools.server.bank_tools import run_bank_reconciliation, initiate_transfer
+from app.tools.server.bank_tools import run_bank_reconciliation
 from app.tools.server.aeat_automation_tools import (
     fill_modelo_303_playwright, fill_modelo_130_playwright,
     fill_modelo_111_playwright, fill_modelo_115_playwright,
@@ -20,17 +20,6 @@ async def test_bank_reconciliation_confirmation():
     # Con confirmacion
     with patch("app.domain.services.bank_service.BankService.reconcile_matching_algorithm", return_value=[]):
         res_ok = await run_bank_reconciliation(confirmed_by_user=True)
-        assert res_ok["status"] == "ok"
-
-@pytest.mark.asyncio
-async def test_initiate_transfer_confirmation():
-    # Sin confirmacion
-    res = await initiate_transfer(connection_id=1, recipient_name="Luis", recipient_iban="ES1234", amount=100.0, concept="test", confirmed_by_user=False)
-    assert res["status"] == "pending_confirmation"
-
-    # Con confirmacion
-    with patch("app.domain.services.bank_service.BankService.initiate_transfer", return_value={"tx_id": "tx123"}):
-        res_ok = await initiate_transfer(connection_id=1, recipient_name="Luis", recipient_iban="ES1234", amount=100.0, concept="test", confirmed_by_user=True)
         assert res_ok["status"] == "ok"
 
 @pytest.mark.asyncio

@@ -96,44 +96,7 @@ async def get_bank_balance() -> dict:
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-async def initiate_transfer(connection_id: int, recipient_name: str, recipient_iban: str, amount: float, concept: str, confirmed_by_user: bool = False) -> dict:
-    """
-    Inicia y realiza una transferencia bancaria simulada (operación PIS).
-    Requiere confirmación explícita del usuario por motivos de seguridad financiera.
-    """
-    if not confirmed_by_user:
-        return {
-            "status": "pending_confirmation",
-            "message": (
-                f"¿Confirmas el inicio de una transferencia bancaria con los siguientes datos?\n"
-                f"- Destinatario: {recipient_name}\n"
-                f"- IBAN: {recipient_iban}\n"
-                f"- Importe: {amount:.2f} €\n"
-                f"- Concepto: {concept}"
-            )
-        }
 
-    try:
-        res = BankService.initiate_transfer(connection_id, recipient_name, recipient_iban, amount, concept)
-        
-        # Registrar en el Ledger de Auditoría
-        from app.domain.services.audit_ledger import AuditLedgerService
-        from app.adapters.memory.memory import tenant_context
-        cid = tenant_context.get()
-        AuditLedgerService.log_audit_event(
-            event_type="INITIATE_TRANSFER",
-            description=f"Transferencia iniciada de {amount:.2f} € a {recipient_name} (IBAN: {recipient_iban}, Concepto: {concept}).",
-            client_id=cid
-        )
-        
-        return {
-            "status": "ok",
-            "message": f"Transferencia de {amount:.2f} € a {recipient_name} realizada con éxito.",
-            "data": res
-        }
-    except Exception as e:
-        tool_logger.exception("Error al iniciar transferencia bancaria")
-        return {"status": "error", "message": str(e)}
 
 TOOLS = {
     "add_manual_bank_movement": add_manual_bank_movement,
@@ -141,5 +104,5 @@ TOOLS = {
     "run_bank_reconciliation": run_bank_reconciliation,
     "get_unreconciled_report_tool": get_unreconciled_report_tool,
     "get_bank_balance": get_bank_balance,
-    "initiate_transfer": initiate_transfer,
+
 }
