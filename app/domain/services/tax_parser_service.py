@@ -244,8 +244,7 @@ class TaxParserService:
                         if decrypted_name:
                             settings.ALFONSO_USER_NAME = decrypted_name
             except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                pass
 
             if not user_nif:
                 user_nif = settings.ALFONSO_USER_NIF or "47019805P"
@@ -330,11 +329,13 @@ TEXTO DE LA FACTURA:
                 year = date_obj.year
                 quarter = (date_obj.month - 1) // 3 + 1
                 date_str = date_obj.strftime("%d/%m/%Y")
+                iso_date_str = date_obj.strftime("%Y-%m-%d")
             except Exception:
                 now = datetime.now()
                 year = now.year
                 quarter = (now.month - 1) // 3 + 1
                 date_str = now.strftime("%d/%m/%Y")
+                iso_date_str = now.strftime("%Y-%m-%d")
                 
             requires_manual_confirmation = False
             status = "firmada"
@@ -387,7 +388,7 @@ TEXTO DE LA FACTURA:
 
             from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
             engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
-            engine_rules = engine.load_rules()
+            engine_rules = engine.load_rules(date=iso_date_str)
             tax_engine_version = f"v{engine_rules.get('last_updated', 'unknown')}"
                 
             return {
@@ -536,8 +537,7 @@ TEXTO:
                                 quarter_str = f"T{(inv_dt.month - 1) // 3 + 1}"
                                 break
                             except Exception:
-                                from app.utils.logger import error_logger
-                                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                                pass
                     
                     archive_base_dir = Path(__file__).resolve().parents[3] / "data" / "archivo fiscal"
                     is_expense = data.get("category", "").lower() in ("gasto", "expense")
@@ -583,8 +583,7 @@ TEXTO:
                 try:
                     asyncio.run(event_bus.publish("InvoiceCreated", data))
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
 
         return last_id
 

@@ -19,7 +19,7 @@ if root_dir not in sys.path:
 if client_dir not in sys.path:
     sys.path.insert(0, client_dir)
 
-from PyQt6.QtWidgets import QApplication, QTableWidgetItem
+from PyQt6.QtWidgets import QApplication, QTableWidgetItem, QWidget
 from PyQt6.QtCore import Qt
 
 from client.gui.sidebar_widget import SIDEBAR_CATEGORIES, AlfonsoSidebarWidget
@@ -157,7 +157,8 @@ def test_qa_central_stack_widget_validity(qapp, mock_dashboard_config):
 
 def test_qa_defensive_fallbacks_on_empty_db(qapp):
     """Verifica que las vistas especializadas no fallen cuando la base de datos está vacía o inaccesible."""
-    with patch("app.adapters.memory.memory._get_connection", side_effect=Exception("DB Unreachable")):
+    with patch("app.adapters.memory.memory._get_connection", side_effect=Exception("DB Unreachable")), \
+         patch("client.gui.dialogs.specialized_views.QMessageBox"):
         # Cash Flow debe usar fallbacks seguros sin crashear
         cf = AlfonsoCashFlowWidget(embedded=True)
         cf.show()
@@ -169,7 +170,14 @@ def test_qa_defensive_fallbacks_on_empty_db(qapp):
         assert payroll.tbl_employees.columnCount() == 6
 
         # Verifactu debe renderizar la auditoría sin crashear
-        verif = AlfonsoVerifactuAuditWidget(embedded=True)
+        class MockApp(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.api_client = MagicMock()
+                self.api_client.get.return_value = {"items": []}
+
+        mock_app = MockApp()
+        verif = AlfonsoVerifactuAuditWidget(parent=mock_app, embedded=True)
         verif.show()
         assert verif.tbl_hashes.columnCount() == 5
 

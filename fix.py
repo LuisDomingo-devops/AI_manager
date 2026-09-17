@@ -1,56 +1,26 @@
-import re
-path1 = r'c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\backend\integration\test_tax_multiterritory.py'
-with open(path1, 'r', encoding='utf-8') as f:
-    c1 = f.read()
+import os
 
-c1 = c1.replace('''            '{"iva_rate": 4.0, "confidence": 0.95}',  # navarra_ok''', '''            '{"confidence": 0.50}',                   # can_inf\n            '{"iva_rate": 4.0, "confidence": 0.95}',  # navarra_ok''')
+def fix_file(filepath):
+    with open(filepath, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    
+    new_lines = []
+    modified = False
+    for line in lines:
+        if "from app.utils.logger import error_logger" in line:
+            new_lines.append(line.replace("from app.utils.logger import error_logger", "pass"))
+            modified = True
+        elif "error_logger.warning(" in line and "Excepci髇 gen閞ica interceptada silenciosamente." in line:
+            pass
+        else:
+            new_lines.append(line)
+            
+    if modified:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        print(f"Fixed {filepath}")
 
-with open(path1, 'w', encoding='utf-8') as f:
-    f.write(c1)
-
-path2 = r'c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\backend\qa\test_phase5_audit_remediation_suite.py'
-with open(path2, 'r', encoding='utf-8') as f:
-    c2 = f.read()
-
-c2 = c2.replace('''    rates_info = TaxParserService.resolve_rates_with_confidence(text_without_vat)
-    assert rates_info["is_iva_inferred"] is True
-    assert rates_info["requires_manual_confirmation"] is True
-    assert rates_info["confidence_score"] <= 0.70
-
-    # 2. Texto con IVA expl铆cito
-    text_with_vat = "Factura de servicios profesionales Base 1000 EUR, IVA 21%, Total 1210 EUR."
-    rates_info_explicit = TaxParserService.resolve_rates_with_confidence(text_with_vat)
-    assert rates_info_explicit["is_iva_inferred"] is False
-    assert rates_info_explicit["requires_manual_confirmation"] is False
-    assert rates_info_explicit["iva_rate"] == 21.0
-    assert rates_info_explicit["confidence_score"] == 1.0
-
-    # 3. Texto con exenci贸n legal (Art. 20)
-    text_exempt = "Honorarios m茅dicos. Operaci贸n exenta de IVA seg煤n Art. 20 Ley 37/1992. Total 150 EUR."
-    rates_info_exempt = TaxParserService.resolve_rates_with_confidence(text_exempt)
-    assert rates_info_exempt["iva_rate"] == 0.0
-    assert rates_info_exempt["is_iva_inferred"] is False''', '''    from unittest.mock import patch, AsyncMock
-    with patch("app.domain.services.tax_engine.GeminiClient.generate", new_callable=AsyncMock) as mock_gen:
-        mock_gen.side_effect = ['{"confidence": 0.5}', '{"iva_rate": 21.0, "confidence": 1.0}', '{"iva_rate": 0.0, "confidence": 1.0}']
-        
-        rates_info = TaxParserService.resolve_rates_with_confidence(text_without_vat)
-        assert rates_info["is_iva_inferred"] is True
-        assert rates_info["requires_manual_confirmation"] is True
-        assert rates_info["confidence_score"] <= 0.70
-
-        # 2. Texto con IVA expl铆cito
-        text_with_vat = "Factura de servicios profesionales Base 1000 EUR, IVA 21%, Total 1210 EUR."
-        rates_info_explicit = TaxParserService.resolve_rates_with_confidence(text_with_vat)
-        assert rates_info_explicit["is_iva_inferred"] is False
-        assert rates_info_explicit["requires_manual_confirmation"] is False
-        assert rates_info_explicit["iva_rate"] == 21.0
-        assert rates_info_explicit["confidence_score"] == 1.0
-
-        # 3. Texto con exenci贸n legal (Art. 20)
-        text_exempt = "Honorarios m茅dicos. Operaci贸n exenta de IVA seg煤n Art. 20 Ley 37/1992. Total 150 EUR."
-        rates_info_exempt = TaxParserService.resolve_rates_with_confidence(text_exempt)
-        assert rates_info_exempt["iva_rate"] == 0.0
-        assert rates_info_exempt["is_iva_inferred"] is False''')
-
-with open(path2, 'w', encoding='utf-8') as f:
-    f.write(c2)
+for root, _, files in os.walk("app/domain/services"):
+    for file in files:
+        if file.endswith(".py"):
+            fix_file(os.path.join(root, file))

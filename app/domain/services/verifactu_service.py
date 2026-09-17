@@ -39,8 +39,7 @@ class VerifactuService:
                     try:
                         cls.process_pending_deliveries()
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
             t = threading.Thread(target=run_worker, daemon=True)
             t.start()
 
@@ -78,8 +77,7 @@ class VerifactuService:
                     with open(key_path, "w", encoding="utf-8") as key_file:
                         key_file.write(encrypted_pem)
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
                 decrypted_bytes = raw_pem
 
             return serialization.load_pem_private_key(
@@ -198,8 +196,7 @@ class VerifactuService:
                     if profile_row and profile_row["razon_social"]:
                         issuer_name = encryptor.decrypt(profile_row["razon_social"])
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
 
             # Estructura del XML oficial de Verifactu (Orden HAC/1177/2024)
             registro_xml = etree.Element("RegFactuSistemaFacturacion")
@@ -410,8 +407,7 @@ class VerifactuService:
                     if profile_row and profile_row["razon_social"]:
                         issuer_name = encryptor.decrypt(profile_row["razon_social"])
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
 
             # Estructura XML de anulación
             registro_xml = etree.Element("RegFactuSistemaFacturacion")
@@ -692,8 +688,7 @@ class VerifactuService:
                     if row["cert_password"]:
                         cert_password_db = encryptor.decrypt(row["cert_password"])
         except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            pass
 
         # Si hay certificado en la DB, extraer clave y cert a archivos temporales PEM
         if cert_path_db and os.path.exists(cert_path_db):
@@ -905,8 +900,7 @@ class VerifactuService:
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
                 return {
                     "status": "corrupted",
                     "corrupted_invoice_number": row["invoice_number"],
@@ -922,8 +916,7 @@ class VerifactuService:
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
                 return {
                     "status": "tampered",
                     "corrupted_invoice_number": row["invoice_number"],

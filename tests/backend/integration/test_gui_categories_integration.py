@@ -17,7 +17,7 @@ if root_dir not in sys.path:
 if client_dir not in sys.path:
     sys.path.insert(0, client_dir)
 
-from PyQt6.QtWidgets import QApplication, QLabel
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 from PyQt6.QtCore import Qt
 
 from client.gui.sidebar_widget import SIDEBAR_CATEGORIES
@@ -203,8 +203,16 @@ def test_specialized_payroll_and_audit_widgets_integration(qapp):
     payroll_widget.show()
     assert payroll_widget.tbl_employees.columnCount() == 6
     assert payroll_widget.tbl_employees.rowCount() >= 1
+    class MockApp(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.api_client = MagicMock()
+            self.api_client.get.return_value = {
+                "items": [{"event_type": "API_TEST", "created_at": "2026", "description": "mocked", "current_hash": "hash123"}]
+            }
 
-    audit_widget = AlfonsoVerifactuAuditWidget(embedded=True)
+    mock_app = MockApp()
+    audit_widget = AlfonsoVerifactuAuditWidget(parent=mock_app, embedded=True)
     audit_widget.show()
     assert audit_widget.tbl_hashes.columnCount() == 5
     assert audit_widget.tbl_hashes.rowCount() >= 1

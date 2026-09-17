@@ -216,7 +216,23 @@ def validate_invoice_for_sif(invoice_data: Dict[str, Any]) -> FiscalValidationRe
 
     from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
     engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
-    engine_rules = engine.load_rules()
+    
+    date_iso = None
+    date_val = invoice_data.get("date_of_issue") or invoice_data.get("date")
+    if date_val:
+        try:
+            from datetime import datetime
+            for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+                try:
+                    dt = datetime.strptime(date_val, fmt)
+                    date_iso = dt.strftime("%Y-%m-%d")
+                    break
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+            
+    engine_rules = engine.load_rules(date=date_iso)
     irpf_general_rate = engine_rules.get("irpf_profesionales_rate", 15.0)
     valid_irpf_rates = {0.0, 1.0, 2.0, 7.0, irpf_general_rate, 19.0}
 

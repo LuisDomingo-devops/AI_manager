@@ -101,3 +101,19 @@ def reset_db_caches():
     _dummy_conns.append(sqlite3.connect("file:main_mem?mode=memory&cache=shared", uri=True))
     
     yield
+
+
+@pytest.fixture(autouse=True)
+def prevent_qmessagebox_blocks():
+    """Previene que cualquier QMessageBox detenga la ejecución de tests si se omite un mock específico."""
+    try:
+        from unittest.mock import patch
+        import PyQt6.QtWidgets
+        with patch("PyQt6.QtWidgets.QMessageBox.information"), \
+             patch("PyQt6.QtWidgets.QMessageBox.warning"), \
+             patch("PyQt6.QtWidgets.QMessageBox.critical"), \
+             patch("PyQt6.QtWidgets.QMessageBox.question"), \
+             patch("PyQt6.QtWidgets.QMessageBox.about"):
+            yield
+    except ImportError:
+        yield

@@ -33,8 +33,7 @@ class LedgerService:
             try:
                 return datetime.strptime(date_str.strip(), fmt).year
             except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                pass
         return datetime.now().year
 
     @classmethod
@@ -169,8 +168,7 @@ class LedgerService:
                         entry_year = dt.year
                         break
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
                 if entry_year is None:
                     if str(year) in entry_date_raw:
                         entry_year = year
@@ -238,8 +236,7 @@ class LedgerService:
                         entry_year = dt.year
                         break
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
                 if entry_year is None:
                     if str(year) in entry_date_raw:
                         entry_year = year
@@ -342,8 +339,7 @@ class LedgerService:
                         entry_year = dt.year
                         break
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
                 if entry_year is None:
                     if str(year) in entry_date_raw:
                         entry_year = year
@@ -397,8 +393,7 @@ class LedgerService:
                         entry_month = dt.month
                         break
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
                 if entry_year is None:
                     if str(year) in entry_date_raw:
                         entry_year = year
@@ -550,8 +545,7 @@ class LedgerService:
                         entry_quarter = (dt.month - 1) // 3 + 1
                         break
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
                 if entry_year is None:
                     if str(year) in entry_date_raw:
                         entry_year = year

@@ -51,8 +51,7 @@ class CashFlowService:
                             "description": f"Cobro Factura {inv_id} — {client_name}"
                         })
                     except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        pass
             return inflows
         finally:
             conn.close()
@@ -143,8 +142,7 @@ class CashFlowService:
                         expense_base += base
                         expense_iva += iva
                 except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    pass
 
             vat_estimate = max(0.0, income_iva - expense_iva)
             irpf_estimate = max(0.0, (income_base - expense_base) * 0.20)

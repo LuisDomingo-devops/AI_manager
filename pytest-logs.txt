@@ -1,0 +1,96 @@
+INFO     migrations:migrations.py:49 Aplicando migración: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO     migrations:migrations.py:58 Migración 000 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 001 - Esquema inicial correcto
+INFO     migrations:migrations.py:58 Migración 001 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 002 - Esquema Veri*Factu, registro de auditoría del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO     migrations:migrations.py:58 Migración 002 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retención IRPF
+INFO     migrations:migrations.py:58 Migración 003 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO     migrations:migrations.py:58 Migración 004 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 005 - Reconstrucción y normalización atómica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO     migrations:migrations.py:58 Migración 005 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 006 - Tabla de personalización de documentos (logo, colores y plantillas)
+INFO     migrations:migrations.py:58 Migración 006 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 007 - Tabla de bienes de inversión y activos para cálculo de amortizaciones
+INFO     migrations:migrations.py:58 Migración 007 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO     migrations:migrations.py:58 Migración 008 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO     migrations:migrations.py:58 Migración 009 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 010 - Añadir campos de auditoría del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO     migrations:migrations.py:58 Migración 010 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO     migrations:migrations.py:58 Migración 011 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO     migrations:migrations.py:58 Migración 012 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO     migrations:migrations.py:58 Migración 013 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 014 - 014_user_credentials
+INFO     migrations:migrations.py:58 Migración 014 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 015 - 015_qa_schema_fixes
+INFO     migrations:migrations.py:58 Migración 015 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 016 - 016_populate_pgc_accounts
+INFO     migrations:migrations.py:58 Migración 016 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 017 - 017_missing_core_tables
+INFO     migrations:migrations.py:58 Migración 017 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 018 - Add missing columns and tables needed by tests due to legacy schema differences
+INFO     migrations:migrations.py:58 Migración 018 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 019 - Triggers de inmutabilidad fiscal para verifactu_invoices y sif_event_log
+INFO     migrations:migrations.py:58 Migración 019 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 020 - Tabla de secuencias para numeracion de facturas atomica
+INFO     migrations:migrations.py:58 Migración 020 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 021 - Certificates table for advanced electronic signatures
+INFO     migrations:migrations.py:58 Migración 021 aplicada con éxito.
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'TEST_EVENT_1' (BE964BC5163924F2E75F5C6C0CAAE6A5CB3BAC2EC19448B0DD61B29333CEA10C)
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'TEST_EVENT_2' (462D0B8B17771F301079F5C7B1D077F16E88AF264130867736FE3E707AD55946)
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'MUTATION_1' (831CD0775063DF4E1A71FD68FBDF1EDE8473DA6F3FAA2DC20877243FBC9D1028)
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'MUTATION_2' (8E0FCB134DDC7565433D2787F211741C4CD7C48F842272009E713426B155228D)
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'DELETE_CLIENT' (13C15D0CF186476E360ECFC9F89D8096963E0FD6F53CCC38A353144C4CFDFA5C)
+INFO     migrations:migrations.py:49 Aplicando migración: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO     migrations:migrations.py:58 Migración 000 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 001 - Esquema inicial correcto
+INFO     migrations:migrations.py:58 Migración 001 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 002 - Esquema Veri*Factu, registro de auditoría del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO     migrations:migrations.py:58 Migración 002 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retención IRPF
+INFO     migrations:migrations.py:58 Migración 003 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO     migrations:migrations.py:58 Migración 004 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 005 - Reconstrucción y normalización atómica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO     migrations:migrations.py:58 Migración 005 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 006 - Tabla de personalización de documentos (logo, colores y plantillas)
+INFO     migrations:migrations.py:58 Migración 006 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 007 - Tabla de bienes de inversión y activos para cálculo de amortizaciones
+INFO     migrations:migrations.py:58 Migración 007 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO     migrations:migrations.py:58 Migración 008 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO     migrations:migrations.py:58 Migración 009 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 010 - Añadir campos de auditoría del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO     migrations:migrations.py:58 Migración 010 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO     migrations:migrations.py:58 Migración 011 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO     migrations:migrations.py:58 Migración 012 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO     migrations:migrations.py:58 Migración 013 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 014 - 014_user_credentials
+INFO     migrations:migrations.py:58 Migración 014 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 015 - 015_qa_schema_fixes
+INFO     migrations:migrations.py:58 Migración 015 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 016 - 016_populate_pgc_accounts
+INFO     migrations:migrations.py:58 Migración 016 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 017 - 017_missing_core_tables
+INFO     migrations:migrations.py:58 Migración 017 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 018 - Add missing columns and tables needed by tests due to legacy schema differences
+INFO     migrations:migrations.py:58 Migración 018 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 019 - Triggers de inmutabilidad fiscal para verifactu_invoices y sif_event_log
+INFO     migrations:migrations.py:58 Migración 019 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 020 - Tabla de secuencias para numeracion de facturas atomica
+INFO     migrations:migrations.py:58 Migración 020 aplicada con éxito.
+INFO     migrations:migrations.py:49 Aplicando migración: 021 - Certificates table for advanced electronic signatures
+INFO     migrations:migrations.py:58 Migración 021 aplicada con éxito.
+INFO     app:audit_ledger.py:129 Audit Ledger: registrado evento 'API_TEST' (A637E0681AF7B4CF4B7A3DE51CAAE2818B81268F2A27CC3ABAEA9EBB12D44C99)
+INFO     app:main.py:340 HTTP GET /api/v1/compliance/audit/logs [Tenant: default]
+INFO     httpx:_client.py:1025 HTTP Request: GET http://testserver/api/v1/compliance/audit/logs?limit=10 "HTTP/1.1 200 OK"

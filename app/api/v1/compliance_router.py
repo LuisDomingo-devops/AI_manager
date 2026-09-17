@@ -32,3 +32,47 @@ async def upload_dehu_notification(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando la notificación: {str(e)}")
 
+from app.domain.services.signature_service import SignatureService
+from app.infrastructure.database.repositories.certificate_repository import CertificateRepository
+from app.adapters.memory.memory import _get_connection
+from fastapi import Form
+
+@router.post("/certificate/software")
+async def upload_software_certificate(
+    file: UploadFile = File(...),
+    password: str = Form(...)
+):
+    """Sube un certificado P12/PFX para firma automatizada."""
+    if not (file.filename.endswith(".p12") or file.filename.endswith(".pfx")):
+        raise HTTPException(status_code=400, detail="El archivo debe ser .p12 o .pfx")
+    try:
+        p12_bytes = await file.read()
+        conn = _get_connection()
+        repo = CertificateRepository(conn)
+        svc = SignatureService(repo)
+        
+        tenant_id = tenant_context.get()
+        cert_id = svc.store_software_certificate(tenant_id, p12_bytes, password)
+        return {"status": "ok", "cert_id": cert_id, "message": "Certificado guardado con éxito"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+from app.domain.services.audit_ledger import AuditLedgerService
+from fastapi import Query
+
+@router.get("/audit/logs")
+async def get_audit_logs(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0)
+):
+    """
+    Retorna el log de auditoría (Audit Ledger) paginado para el tenant actual.
+    """
+    tenant_id = tenant_context.get()
+    try:
+        logs = AuditLedgerService.get_logs(client_id=tenant_id, limit=limit, offset=offset)
+        return {"items": logs, "limit": limit, "offset": offset}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo logs de auditoría: {str(e)}")

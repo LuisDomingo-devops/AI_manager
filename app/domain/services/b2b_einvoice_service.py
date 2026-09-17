@@ -54,8 +54,7 @@ class B2BEInvoiceService:
                 issue_date_iso = datetime.strptime(date_raw, fmt).strftime("%Y-%m-%d")
                 break
             except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                pass
 
         etree.SubElement(invoice_elem, "{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}IssueDate").text = issue_date_iso
         

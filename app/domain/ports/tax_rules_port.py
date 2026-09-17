@@ -3,8 +3,8 @@ from typing import Dict, Any
 
 class TaxRulesPort(ABC):
     @abstractmethod
-    def get_rules(self) -> Dict[str, Any]:
-        """Recupera las reglas fiscales actuales."""
+    def get_rules(self, date: str = None) -> Dict[str, Any]:
+        """Recupera las reglas fiscales aplicables a una fecha dada, o las actuales si no se provee fecha."""
         pass
 
     @abstractmethod

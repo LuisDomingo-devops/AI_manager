@@ -202,3 +202,26 @@ class AuditLedgerService:
             "status": "valid",
             "message": f"Integridad del Ledger validada exitosamente. Se verificaron {len(rows)} registros sin alteraciones."
         }
+
+    @classmethod
+    def get_logs(cls, client_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Devuelve el registro paginado de auditoría para un cliente específico.
+        """
+        cls.init_ledger_schema()
+        conn = _get_connection()
+        try:
+            query = "SELECT * FROM audit_ledger_log WHERE client_id = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+            rows = conn.execute(query, (client_id, limit, offset)).fetchall()
+            logs = []
+            for r in rows:
+                logs.append({
+                    "id": r["id"],
+                    "event_type": r["event_type"],
+                    "description": r["description"],
+                    "current_hash": r["current_hash"],
+                    "created_at": r["created_at"]
+                })
+            return logs
+        finally:
+            conn.close()

@@ -553,18 +553,51 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
         layout.addWidget(self.tbl_hashes)
 
     def load_audit_data(self):
-        mock_hashes = [
-            ("EXP-2026-001", "2026-05-14", "1.450,00 €", "GENESIS_BLOCK_000000", "A3F8B9C1E2D4A6E8..."),
-            ("EXP-2026-002", "2026-05-18", "2.100,00 €", "A3F8B9C1E2D4A6E8...", "8E9F1A2B3C4D5E6F..."),
-            ("EXP-2026-003", "2026-06-01", "850,00 €", "8E9F1A2B3C4D5E6F...", "C7D8E9F0A1B2C3D4...")
-        ]
-        self.tbl_hashes.setRowCount(len(mock_hashes))
-        for row, h in enumerate(mock_hashes):
-            for col, text in enumerate(h):
-                self.tbl_hashes.setItem(row, col, QTableWidgetItem(text))
+        try:
+            main_app = self.parent()
+            while main_app is not None and not hasattr(main_app, 'api_client'):
+                main_app = main_app.parent()
+            
+            if main_app and hasattr(main_app, 'api_client'):
+                api = main_app.api_client
+                response = api.get("/compliance/audit/logs?limit=100")
+                logs = response.get("items", [])
+                self.tbl_hashes.setRowCount(len(logs))
+                for row, log in enumerate(logs):
+                    self.tbl_hashes.setItem(row, 0, QTableWidgetItem(str(log.get("event_type", ""))))
+                    self.tbl_hashes.setItem(row, 1, QTableWidgetItem(str(log.get("created_at", ""))))
+                    desc_item = QTableWidgetItem(str(log.get("description", "")))
+                    desc_item.setToolTip(str(log.get("description", "")))
+                    self.tbl_hashes.setItem(row, 2, desc_item)
+                    self.tbl_hashes.setItem(row, 3, QTableWidgetItem("")) # No prev hash in current response? we can leave it empty or map it if we add it
+                    hash_val = str(log.get("current_hash", ""))
+                    hash_item = QTableWidgetItem(hash_val[:16] + "..." if hash_val else "")
+                    hash_item.setToolTip(hash_val)
+                    self.tbl_hashes.setItem(row, 4, hash_item)
+            else:
+                raise Exception("API Client not found")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Error cargando auditoría: {e}")
 
     def verify_chain(self):
-        QMessageBox.information(self, "Verificación Criptográfica", "Cadena de hashes auditada correctamente.\nNo se han detectado inconsistencias ni alteraciones en los registros de facturación.")
+        try:
+            main_app = self.parent()
+            while main_app is not None and not hasattr(main_app, 'api_client'):
+                main_app = main_app.parent()
+            
+            if main_app and hasattr(main_app, 'api_client'):
+                api = main_app.api_client
+                response = api.get("/compliance/verify-chain")
+                status = response.get("status")
+                message = response.get("message")
+                if status == "valid":
+                    QMessageBox.information(self, "Verificación Criptográfica", f"✅ {message}")
+                else:
+                    QMessageBox.critical(self, "Alteración Detectada", f"❌ {message}")
+            else:
+                QMessageBox.warning(self, "Error", "Cliente API no disponible")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Error verificando integridad: {e}")
 
 
 class AlfonsoBoeWidget(AlfonsoBaseDialog):

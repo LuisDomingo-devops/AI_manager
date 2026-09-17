@@ -72,13 +72,13 @@ class TaxEngine:
         # 3. Fallback: la mayoría de documentos subidos por un autónomo suelen ser gastos (tickets, compras)
         return "expense"
 
-    def load_rules(self) -> Dict[str, Any]:
-        """Carga las reglas fiscales usando el puerto."""
+    def load_rules(self, date: str = None) -> Dict[str, Any]:
+        """Carga las reglas fiscales aplicables a una fecha usando el puerto."""
         if not self.tax_rules_port:
             # Fallback en caso de que no se haya inyectado
             from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
             self.tax_rules_port = FileTaxRulesAdapter()
-        return self.tax_rules_port.get_rules()
+        return self.tax_rules_port.get_rules(date=date)
 
     def update_tax_rules(self, new_rules: Dict[str, Any], boe_link: str, boe_section: str, confirmed_by_user: bool = False) -> Dict[str, Any]:
         """
