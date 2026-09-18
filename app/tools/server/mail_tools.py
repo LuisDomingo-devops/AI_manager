@@ -870,7 +870,7 @@ def send_smtp_email_if_configured(recipient: str, subject: str, body: str) -> st
             server.quit()
             return gmail_user
         except Exception as e:
-            print(f"[ERROR] Error al enviar SMTP real: {e}")
+            pass
             raise e
     return "test.user@alfonso.dev"
 

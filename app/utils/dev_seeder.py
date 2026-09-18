@@ -4,7 +4,7 @@ from app.adapters.memory.memory import _get_connection, init_all_schemas
 from app.utils.encryption import encryptor
 
 def seed_database():
-    print("Iniciando la siembra de la base de datos (Seeder) con datos de prueba realistas para 2026...")
+    pass
     
     # Asegurar que el esquema existe
     with _get_connection() as conn:
@@ -14,7 +14,7 @@ def seed_database():
         # Limpiar facturas existentes para evitar duplicados en la demo
         cursor.execute("DELETE FROM invoices")
         conn.commit()
-        print("✓ Tabla 'invoices' limpiada.")
+        pass
         
         # Datos de prueba (5 ingresos, 5 gastos del Q1 2026)
         invoices_data = [
@@ -213,7 +213,7 @@ def seed_database():
         cursor.execute("DELETE FROM ledger_entries")
         cursor.execute("DELETE FROM journal_entries")
         conn.commit()
-        print("✓ Tablas PGC ('journal_entries', 'ledger_entries') limpiadas.")
+        pass
 
         # Insertar registros cifrados
         from app.domain.services.ledger_service import LedgerService
@@ -248,7 +248,7 @@ def seed_database():
             LedgerService.record_invoice_asiento(data)
             
         conn.commit()
-        print(f"✓ {len(invoices_data)} facturas insertadas y contabilizadas bajo partida doble PGC en la base de datos.")
+        pass
 
         # --- SEMBRAR PROYECTOS MOCK ---
         cursor.execute("DELETE FROM projects")
@@ -263,7 +263,7 @@ def seed_database():
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (name, client_name, client_nif, budget, status, desc))
         conn.commit()
-        print("✓ Tabla 'projects' sembrada con 3 proyectos mock.")
+        pass
 
         # --- SEMBRAR CLIENTES MOCK ---
         cursor.execute("DELETE FROM clients")
@@ -278,7 +278,7 @@ def seed_database():
                 VALUES (?, ?, ?, ?)
             """, (name, nif, email, address))
         conn.commit()
-        print("✓ Tabla 'clients' sembrada con 3 clientes mock.")
+        pass
 
 if __name__ == "__main__":
     seed_database()

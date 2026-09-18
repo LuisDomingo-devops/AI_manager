@@ -25,7 +25,7 @@ for pkg in ["sounddevice", "numpy"]:
         MISSING.append(pkg)
 
 if MISSING:
-    print(f"[ERROR] Instala primero: pip install {' '.join(MISSING)}")
+    pass
     sys.exit(1)
 
 import numpy as np
@@ -116,19 +116,19 @@ def run_full_test(auto_device: Optional[int] = None) -> None:
     devices     = sd.query_devices()
     input_devs  = [(i, d) for i, d in enumerate(devices) if d["max_input_channels"] > 0]
 
-    print("\n" + "="*65)
-    print("  DIAGNÓSTICO DE AUDIO — Alfonso / Acer Swift 314")
-    print("="*65)
+    pass
+    pass
+    pass
 
     if auto_device is not None:
         name = devices[auto_device]["name"] if auto_device < len(devices) else "?"
-        print(f"\n  Micrófono integrado detectado automáticamente: [{auto_device}] {name}")
+        pass
     else:
-        print("\n  No se detectó micrófono integrado automáticamente.")
+        pass
 
-    print(f"\n  Probando {len(input_devs)} dispositivos de entrada...\n")
-    print(f"  {'IDX':>3}  {'NOMBRE':<40}  {'RATE':>6}  {'MEDIA':>5}  {'PICO':>5}  STATUS")
-    print("  " + "-"*75)
+    pass
+    pass
+    pass
 
     results = []
     for idx, device in input_devs:
@@ -139,47 +139,47 @@ def run_full_test(auto_device: Optional[int] = None) -> None:
             amp    = _amplitude(data)
             pk     = _peak(data)
             signal = "✓ SEÑAL" if amp > 50 else "  silencio"
-            print(f"  [{idx:>2}]  {name:<40}  {rate:>6}  {amp:>5}  {pk:>5}  {signal}")
+            pass
             if amp > 50:
                 results.append((idx, device["name"], amp, rate))
         except Exception as exc:
-            print(f"  [{idx:>2}]  {name:<40}  {rate:>6}  ERROR: {str(exc)[:25]}")
+            pass
 
-    print("\n" + "-"*65)
+    pass
 
     if not results:
-        print("\n⚠  Ningún dispositivo captó señal.")
-        print("   Posibles causas en Windows:")
-        print("   1. Privacidad → Micrófono → permitir acceso a apps de escritorio")
-        print("   2. El micrófono integrado está muteado en el mezclador de Windows")
-        print("   3. Prueba hablar más cerca del micrófono durante los 2 segundos")
-        print("\n   Prueba monitorización en tiempo real:")
+        pass
+        pass
+        pass
+        pass
+        pass
+        pass
         if auto_device is not None:
-            print(f"       python audio_check.py --live --device {auto_device}")
+            pass
         else:
             for idx, _ in input_devs[:3]:
-                print(f"       python audio_check.py --live --device {idx}")
+                pass
         return
 
     best_idx, best_name, best_amp, best_rate = max(results, key=lambda x: x[2])
-    print(f"\n✓  Dispositivos con señal:")
+    pass
     for idx, name, amp, rate in sorted(results, key=lambda x: x[2], reverse=True):
         marker = " ← RECOMENDADO" if idx == best_idx else ""
-        print(f"     [{idx}] {name[:45]}  (media: {amp}, rate: {rate}Hz){marker}")
+        pass
 
     threshold = max(80, best_amp // 4)
-    print(f"\n   Umbral de silencio sugerido: {threshold}")
-    print(f"\n   Para usar en Alfonso:")
-    print(f"       python cliente.py --device {best_idx} --threshold {threshold}")
-    print(f"\n   Para monitorizar en tiempo real:")
-    print(f"       python audio_check.py --live --device {best_idx}")
+    pass
+    pass
+    pass
+    pass
+    pass
 
     if best_rate != TARGET_RATE:
-        print(f"\n⚠  El micrófono [{best_idx}] graba a {best_rate}Hz.")
-        print(f"   Alfonso remuestreará automáticamente a {TARGET_RATE}Hz para Whisper.")
-        print(f"   No necesitas hacer nada — el nuevo AudioService lo gestiona solo.")
+        pass
+        pass
+        pass
 
-    print()
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -191,10 +191,10 @@ def live_monitor(device: int) -> None:
     name    = devices[device]["name"] if device < len(devices) else f"device {device}"
     rate    = probe_device_samplerate(device)
 
-    print(f"\n  Monitorización — [{device}] {name} @ {rate}Hz")
-    print("  Habla para ver el nivel. Ctrl+C para salir.\n")
-    print("  Nivel  0    500   1000  1500  2000  2500  3000+")
-    print("         |     |     |     |     |     |     |")
+    pass
+    pass
+    pass
+    pass
 
     try:
         while True:
@@ -208,12 +208,12 @@ def live_monitor(device: int) -> None:
                     status = "BAJO"
                 else:
                     status = "BIEN ✓"
-                print(f"\r  {_bar(amp)}  pico:{pk:5d}  {status}    ", end="", flush=True)
+                pass
             except Exception as exc:
-                print(f"\r  [ERROR: {exc}]", end="", flush=True)
+                pass
             time.sleep(0.05)
     except KeyboardInterrupt:
-        print("\n")
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +242,7 @@ if __name__ == "__main__":
 
     if args.live:
         if device is None:
-            print("[!] No se detectó micrófono automáticamente. Usa --device N")
+            pass
             sys.exit(1)
         live_monitor(device)
     else:

@@ -30,6 +30,8 @@ ENV/
 .vscode/
 .idea/
 *.log
+*.log.*
+logs/
 
 data/
 outputs/

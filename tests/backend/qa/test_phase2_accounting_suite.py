@@ -77,9 +77,9 @@ def test_profit_and_loss_statement():
     with _get_connection() as conn:
         c = conn.cursor()
         c.execute("SELECT account_code FROM ledger_entries")
-        print("LEDGER CODES:", [row[0] for row in c.fetchall()])
+        pass
         c.execute("SELECT code FROM pgc_accounts")
-        print("PGC CODES:", [row[0] for row in c.fetchall()])
+        pass
 
     # 2. Registrar gastos (1000 € base)
     LedgerService.record_invoice_asiento({

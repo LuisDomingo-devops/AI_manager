@@ -541,7 +541,7 @@ class AlfonsoSidebarWidget(QFrame):
             group.filter_items(text)
 
     def on_subcategory_selected(self, cat_id: str, subcat_id: str, title: str):
-        print(f"[SIDEBAR EMIT] cat_id={cat_id!r}  subcat_id={subcat_id!r}  title={title!r}")
+        pass
         self.set_active(cat_id, subcat_id, expand_group=True)
         self.category_selected.emit(cat_id, subcat_id, title)
 

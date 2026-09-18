@@ -444,7 +444,7 @@ class AlfonsoDocumentCustomizerWidget(QWidget):
 
             self.update_live_preview()
         except Exception as e:
-            print(f"[ERROR] No se pudo cargar la personalización en el editor: {e}")
+            pass
 
     def save_settings(self):
         """Envía el orden y la configuración al backend."""

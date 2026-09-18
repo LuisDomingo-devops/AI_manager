@@ -80,9 +80,9 @@ def test_sqlite_concurrent_writes_stress():
         concurrent.futures.wait(futures)
 
     # Reportar resultados
-    print(f"\n[SQLite Stress] {success_count} escrituras exitosas de {total_workers} concurrentes.")
+    pass
     if errors:
-        print(f"[SQLite Stress] Primer error detectado: {errors[0]}")
+        pass
         # En SQLite ordinario sin WAL, concurrencias altas arrojarán "database is locked"
         assert any("locked" in str(err).lower() for err in errors)
 
@@ -124,9 +124,9 @@ def test_api_concurrent_invoice_creation(test_client):
     successful_calls = [r for r in results if r[0] == 200]
     failed_calls = [r for r in results if r[0] != 200]
     
-    print(f"\n[API Invoice Stress] Exitosas: {len(successful_calls)}, Fallidas: {len(failed_calls)}")
+    pass
     if failed_calls:
-        print(f"[API Invoice Stress] Ejemplo de fallo: Código {failed_calls[0][0]}, Mensaje: {failed_calls[0][2] if len(failed_calls[0]) > 2 else ''}")
+        pass
         
     # Asegurar que al menos algunas llamadas logran completarse exitosamente bajo condiciones normales de test
     assert len(successful_calls) > 0

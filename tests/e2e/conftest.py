@@ -73,7 +73,7 @@ async def firefox_page():
                 "keyPath": key_path
             }]
         except Exception as e:
-            print(f"Playwright version doesn't support client_certificates out of the box or error: {e}")
+            pass
             
         context = await browser.new_context(**context_options)
         page = await context.new_page()

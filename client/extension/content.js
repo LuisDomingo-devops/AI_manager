@@ -1,5 +1,4 @@
 // content.js - Alfonso Autónomo Guardián Fiscal
-console.log("Alfonso Autónomo Guardián activado en esta página.");
 
 let socket = null;
 let buttonBlocked = true;
@@ -12,7 +11,6 @@ if (window.location.hostname.includes("dehu.redsara.es") || window.location.host
             const originalCreateObjectURL = URL.createObjectURL;
             URL.createObjectURL = function(blob) {
                 if (blob instanceof Blob && blob.type === "application/pdf") {
-                    console.log("Alfonso Autónomo: Capturada notificación en PDF");
                     const reader = new FileReader();
                     reader.onload = function() {
                         window.postMessage({
@@ -36,7 +34,6 @@ if (window.location.hostname.includes("dehu.redsara.es") || window.location.host
 window.addEventListener("message", async (event) => {
     if (event.data && event.data.source === 'alfonso-guardian' && event.data.action === 'pdf-captured') {
         const dataUrl = event.data.dataUrl;
-        console.log("Alfonso Guardián: PDF recibido del script inyectado.");
         try {
             const response = await fetch(dataUrl);
             const blob = await response.blob();
@@ -59,7 +56,6 @@ async function uploadPDFToAlfonso(blob, filename) {
         });
         if (response.ok) {
             const result = await response.json();
-            console.log("Alfonso: Notificación procesada con éxito:", result);
             showNotification(`¡Notificación analizada! Organismo: ${result.metadata.organismo}. Revisa Alfonso OS.`, "success");
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({
@@ -81,11 +77,9 @@ async function uploadPDFToAlfonso(blob, filename) {
 // 2. Conexión WebSocket al Backend Local de Alfonso
 function connectWebSocket() {
     const wsUrl = "ws://127.0.0.1:8000/ws/guardian";
-    console.log(`Intentando conectar a ${wsUrl}...`);
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-        console.log("✅ Conectado con Alfonso Core local en el puerto 8000.");
         let statusMsg = "Alfonso está vigilando este trámite de forma segura en local.";
         if (window.location.hostname.includes("dehu.redsara.es")) {
             statusMsg = "Listo para capturar y analizar automáticamente la notificación cuando la descargues.";
@@ -96,7 +90,6 @@ function connectWebSocket() {
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("📥 Comando recibido de Alfonso Core:", data);
         if (data.action === "guardian.alert") {
             showNotification(data.params.message, data.params.type || "warning");
         } else if (data.action === "guardian.autofill") {
@@ -283,7 +276,6 @@ function autofillForm(fields) {
             // Disparar eventos para que la página detecte el cambio de texto
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log(`Auto-rellenado: ${selector} -> ${value}`);
         }
     }
     showNotification("Formulario rellenado automáticamente por Alfonso.", "success");

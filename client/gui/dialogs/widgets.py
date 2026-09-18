@@ -561,7 +561,7 @@ class ConfigWidget(AlfonsoBaseDialog):
                 
             self.update_logo_preview()
         except Exception as e:
-            print(f"[ERROR] No se pudo cargar la personalización del documento: {e}")
+            pass
 
     def save_values(self):
         c = self.dashboard.config
@@ -605,7 +605,7 @@ class ConfigWidget(AlfonsoBaseDialog):
             keyring.set_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD", gmail_pass)
             os.environ["GMAIL_APP_PASSWORD"] = gmail_pass
         except Exception as e:
-            print(f"Error saving env/keyring credentials: {e}")
+            pass
             
         # Guardar personalización de documentos
         custom_data = {
@@ -620,7 +620,7 @@ class ConfigWidget(AlfonsoBaseDialog):
             if res_cust.get("status") != "ok":
                 QMessageBox.warning(self, "Advertencia", f"No se pudo guardar la personalización de diseño: {res_cust.get('message')}")
         except Exception as e:
-            print(f"[ERROR] No se pudo guardar la personalización del documento: {e}")
+            pass
 
         QMessageBox.information(
             self, 
@@ -1116,7 +1116,7 @@ class AeatAutofillWidget(AlfonsoBaseDialog):
             self.lbl_irpf_rendimiento.setText(f"{rendimiento:,.2f} €")
             self.lbl_irpf_cuota.setText(f"{cuota_20:,.2f} €")
         except Exception as e:
-            print(f"Error loading IRPF: {e}")
+            pass
 
     def export_iva_official_books(self):
         year = int(self.combo_year.currentText())
@@ -1651,7 +1651,7 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
         btn_manual.clicked.connect(self.add_manual_mov)
         btn_layout.addWidget(btn_manual)
 
-        btn_layout.addWidget(btn_transfer)
+
 
         btn_subs = QPushButton("Plan Premium")
         btn_subs.clicked.connect(self.show_subscription)
@@ -1690,7 +1690,7 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
                 display_text = f"{conn['alias']} ({conn['bank_name'] or 'Banco'})"
                 self.cb_account.addItem(display_text, conn["id"])
         except Exception as e:
-            print(f"Error loading connections: {e}")
+            pass
             
         self.cb_account.blockSignals(False)
         self.load_bank_movements()
@@ -1734,7 +1734,7 @@ class AlfonsoBankReconciliationDialog(AlfonsoBaseDialog):
                 self.table.setItem(row_idx, 3, QTableWidgetItem(importe))
                 self.table.setItem(row_idx, 4, QTableWidgetItem(estado))
         except Exception as e:
-            print(f"Error loading bank movements: {e}")
+            pass
 
     def manage_connections(self):
         dialog = AlfonsoBankConnectionsDialog(self)
@@ -1888,7 +1888,7 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
                 self.table.setItem(idx, 4, QTableWidgetItem(status_text))
                 self.table.setItem(idx, 5, QTableWidgetItem(c["last_sync_at"] or "Nunca"))
         except Exception as e:
-            print(f"Error loading connections in manager: {e}")
+            pass
 
     def show_add_connection_dialog(self):
         dialog = AlfonsoBaseDialog(self, "VINCULAR CUENTA BANCARIA O FINANCIERA")
@@ -2008,7 +2008,7 @@ class AlfonsoBankConnectionsDialog(AlfonsoBaseDialog):
                 try:
                     synced_count = BankService.sync_connection(conn_id)
                 except Exception as sync_e:
-                    print(f"Error sincronizando cuenta en alta: {sync_e}")
+                    pass
                 
                 if synced_count > 0:
                     QMessageBox.information(dialog, "Éxito", f"Cuenta {bank_name} vinculada y sincronizada correctamente.\n\nSe han descargado {synced_count} movimientos bancarios.")
@@ -2786,10 +2786,7 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
         btn_send.clicked.connect(self.send_transfer)
         self.content_layout.addWidget(btn_send)
         
-        btn_sepa = QPushButton("GENERAR REMESA SEPA (XML)")
-        btn_sepa.setStyleSheet("background-color: rgba(16, 185, 129, 0.15); border-color: #10B981; color: #34D399; font-weight: bold;")
-        btn_sepa.clicked.connect(self.generate_sepa_file)
-        self.content_layout.addWidget(btn_sepa)
+
         
         btn_cancel = QPushButton("CANCELAR")
         btn_cancel.clicked.connect(self.reject)
@@ -2836,26 +2833,6 @@ class AlfonsoInitiateTransferDialog(AlfonsoBaseDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al procesar la transferencia: {e}")
 
-    def generate_sepa_file(self):
-        try:
-            from app.domain.services.sepa_service import SepaService
-            res = SepaService.generate_remittance_xml()
-            if res.get("status") == "ok":
-                from PyQt6.QtWidgets import QFileDialog
-                file_path, _ = QFileDialog.getSaveFileName(
-                    self, 
-                    "Guardar Remesa SEPA", 
-                    "remesa_sepa_v1.xml", 
-                    "XML Files (*.xml)"
-                )
-                if file_path:
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(res["xml_content"])
-                    QMessageBox.information(self, "Éxito", f"Archivo SEPA guardado correctamente.\nPagos incluidos: {len(res['transfer_ids'])}\nTotal: {res['total_sum']:.2f} €")
-            else:
-                QMessageBox.warning(self, "Aviso", res.get("message", "Error desconocido."))
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Fallo en la generación SEPA: {e}")
 
 
 class AlfonsoManualEntryDialog(AlfonsoBaseDialog):
@@ -3377,7 +3354,7 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
                 self.lbl_balance_status.setStyleSheet("font-weight: bold; color: #EF4444; font-size: 11px;")
                 
         except Exception as e:
-            print(f"Error loading ledger: {e}")
+            pass
 
     def load_mayor_data(self):
         code = self.cmb_mayor_account.currentData()
@@ -3431,7 +3408,7 @@ class AlfonsoLedgerDialog(AlfonsoBaseDialog):
             self.lbl_mayor_total_haber.setText(f"Total Haber: {total_haber:.2f} €")
             self.lbl_mayor_saldo_final.setText(f"Saldo Final: {saldo_final:.2f} €")
         except Exception as e:
-            print(f"Error loading mayor data: {e}")
+            pass
 
     def export_mayor_csv(self):
         code = self.cmb_mayor_account.currentData()
@@ -3916,7 +3893,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                     
                 self.list_widget.addItem(item)
         except Exception as e:
-            print(f"Error loading archive files: {e}")
+            pass
 
     def sidebar_filter_selected(self):
         sender_btn = self.sender()
@@ -4004,7 +3981,7 @@ class AlfonsoArchiveBrowserDialog(AlfonsoBaseDialog):
                             
                         self.list_widget.addItem(item)
         except Exception as e:
-            print(f"Error en filter_files: {e}")
+            pass
 
     def show_file_details(self):
         selected_items = self.list_widget.selectedItems()
@@ -4778,7 +4755,7 @@ class AlfonsoKPIDashboardDialog(AlfonsoBaseDialog):
             self.expense_dist.set_data(dict(expense_concepts))
             
         except Exception as e:
-            print(f"Error cargando KPIs: {e}")
+            pass
             
     def run_economic_audit(self):
         try:

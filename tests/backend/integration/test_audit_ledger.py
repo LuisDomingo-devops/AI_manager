@@ -209,7 +209,7 @@ def test_get_audit_logs_endpoint():
         
         response = client.get("/api/v1/compliance/audit/logs?limit=10", headers={"X-Tenant-ID": "default"})
         if response.status_code != 200:
-            print("ERROR 500 details:", response.text)
+            pass
         assert response.status_code == 200
         data = response.json()
         assert "items" in data

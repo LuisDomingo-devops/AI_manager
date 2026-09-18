@@ -90,18 +90,18 @@ def test_qa_alfonso_breaking_point(test_client):
     max_latency_observed = 0.0
     errors_encountered = []
 
-    print("\n" + "="*60)
-    print(" INICIANDO CAMPAÑA DE CONTROL DE CALIDAD DE ESTRÉS DE ALFONSO")
-    print("="*60)
+    pass
+    pass
+    pass
 
     for stage in stages:
         if broken:
-            print(f"\n[STRESS CAMP] Saltando {stage['desc']} - Alfonso ya se encuentra roto.")
+            pass
             continue
             
         concurrency = stage["concurrency"]
         requests_to_run = stage["requests"]
-        print(f"\n[STAGE] Ejecutando: {stage['desc']} (Concurrencia: {concurrency}, Peticiones totales: {requests_to_run})")
+        pass
         
         stage_results = []
         
@@ -163,7 +163,7 @@ def test_qa_alfonso_breaking_point(test_client):
         max_latency_in_stage = max((r["latency"] for r in stage_results), default=0.0)
         error_rate_in_stage = errors_in_stage / len(stage_results)
         
-        print(f" -> Resultados de Fase: Exito: {success_in_stage}, Errores: {errors_in_stage}, Max Latencia: {max_latency_in_stage:.3f}s")
+        pass
 
         if error_rate_in_stage > 0.05:
             broken = True
@@ -175,26 +175,26 @@ def test_qa_alfonso_breaking_point(test_client):
             breaking_reason = f"Degradacion de latencia maxima ({max_latency_in_stage:.2f}s > {latency_threshold}s)"
 
     # Reporte final del punto de ruptura
-    print("\n" + "="*60)
-    print(" INFORME FINAL DE ESTRÉS DE ALFONSO")
-    print("="*60)
-    print(f"Total facturas procesadas correctamente: {total_successful_invoices}")
-    print(f"Total consultas chat respondidas:        {total_successful_chats}")
-    print(f"Latencia maxima registrada:             {max_latency_observed:.3f}s")
+    pass
+    pass
+    pass
+    pass
+    pass
+    pass
     
     if broken:
-        print(f"\n[ESTADO] ALFONSO SE ROMPIÓ [X]")
-        print(f"Punto de ruptura: {breaking_stage}")
-        print(f"Causa de la rotura: {breaking_reason}")
+        pass
+        pass
+        pass
         if errors_encountered:
-            print(f"Errores reportados: {errors_encountered[:5]}")
+            pass
     else:
-        print(f"\n[ESTADO] ALFONSO SOBREVIVIÓ AL ESTRÉS COMPLETO! ¡Resistente y robusto! QA Aprobado. ✅")
+        pass
 
     # VALIDACIÓN DE LA INTEGRIDAD CRIPTOGRÁFICA POST-ESTRÉS (Requisito Veri*Factu)
     # A pesar del estrés, la base de datos y la cadena de bloques Verifactu no deben estar corruptas.
     audit = VerifactuService.verify_chain_integrity()
-    print(f"Auditoria Verifactu post-estres: {audit['status']}")
+    pass
     assert audit["status"] == "valid", "El estres rompio la integridad del registro de facturas"
 
 
@@ -216,9 +216,9 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
     crash_exception = None
     
     # 1. Stress Secuencial Rápido (fatiga simple)
-    print("\n" + "="*60)
-    print(" INICIANDO PRUEBA DE ESTRÉS DE FATIGA SECUENCIAL HASTA CRASH")
-    print("="*60)
+    pass
+    pass
+    pass
     
     for i in range(1, 101):  # Hasta 100 consecutivas secuenciales
         try:
@@ -248,22 +248,22 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
         except Exception as e:
             crashed = True
             crash_exception = e
-            print(f"\n[FATIGA SECUENCIAL] ¡CRASH DETECTADO en la iteración {i}!")
+            pass
             break
             
     if crashed:
-        print("\n" + "="*60)
-        print(" INFORME DE ROTURA DE ALFONSO (FATIGA SECUENCIAL)")
-        print("="*60)
-        print(f"Total Facturas Emitidas:      {count_emitted}")
-        print(f"Total Facturas Procesadas:    {count_processed}")
-        print(f"Causa de la rotura: {crash_exception}")
+        pass
+        pass
+        pass
+        pass
+        pass
+        pass
         return
         
     # 2. Stress Concurrente en Hilos (para forzar bloqueos reales en SQLite y colisiones de archivo)
-    print("\n" + "="*60)
-    print(" INICIANDO PRUEBA DE ESTRÉS DE CONCURRENCIA EN HILOS HASTA CRASH")
-    print("="*60)
+    pass
+    pass
+    pass
     
     concurrency_levels = [5, 10, 20, 45, 75]
     
@@ -271,7 +271,7 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
         if crashed:
             break
             
-        print(f"\n[BATCH] Ejecutando lote de {level} hilos concurrentes simultáneos...")
+        pass
         
         errors = []
         
@@ -314,20 +314,20 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
         if errors:
             crashed = True
             crash_exception = errors[0]
-            print(f"\n[CONCURRENCIA] ¡CRASH DETECTADO bajo lote de {level} hilos concurrentes!")
+            pass
             break
         else:
-            print(f" -> Lote de {level} completado con éxito.")
+            pass
             
-    print("\n" + "="*60)
-    print(" INFORME FINAL DE ROTURA DE ALFONSO POR PROCESAMIENTO COMPLETO")
-    print("="*60)
-    print(f"Total Facturas Emitidas:      {count_emitted}")
-    print(f"Total Facturas Procesadas:    {count_processed}")
+    pass
+    pass
+    pass
+    pass
+    pass
     
     if crashed:
-        print(f"\n[RESULTADO] Alfonso hizo CRASH ❌")
-        print(f"Causa de la rotura: {crash_exception}")
+        pass
+        pass
     else:
-        print(f"\n[RESULTADO] Alfonso soportó toda la carga concurrente sin romperse! ✅")
+        pass
 

@@ -25,7 +25,7 @@ root_dir = os.path.dirname(client_dir)
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-print("Cargando cliente de voz Alfonso...")
+pass
 
 import argparse
 import base64
@@ -44,7 +44,7 @@ from services.audio import AudioService, auto_select_device
 from core.api_client import AlfonsoAPI
 from core.processor import ResponseProcessor
 
-print("Importaciones completadas.")
+pass
 # ---------------------------------------------------------------------------
 # Calibración de umbral automática
 # ---------------------------------------------------------------------------
@@ -54,16 +54,16 @@ def calibrate_threshold(audio: AudioService, device: Optional[int], seconds: flo
     Graba `seconds` segundos de silencio ambiente y calcula el umbral.
     Devuelve max(nivel_ambiente * 3, 80) para tener margen.
     """
-    print("  Calibrando umbral de silencio (no hables)...", end=" ", flush=True)
+    pass
     try:
         raw  = audio.record_raw(seconds, device=device)
         # Convertir a int16 para usar la misma escala que has_voice
         amp_i16 = int(np.abs(raw).mean() * 32767)
         threshold = max(amp_i16 * 3, 80)
-        print(f"OK -> umbral={threshold}")
+        pass
         return threshold
     except Exception as exc:
-        print(f"ERROR ({exc}), usando umbral por defecto {SILENCE_THRESHOLD}")
+        pass
         return SILENCE_THRESHOLD
 
 
@@ -82,7 +82,7 @@ def run(
     debug: bool,
 ) -> None:
     
-    print("Iniciando cliente de voz Alfonso...")
+    pass
 
     # Cargar o crear Session ID persistente en ui/logs/session_config.json
     import os, json
@@ -114,159 +114,159 @@ def run(
     # Mostrar el dispositivo que se va a usar
     import sounddevice as sd
 
-    print("AudioService inicializado.\n")
+    pass
     effective_device = audio.device
     device_name = "predeterminado del sistema"
-    print(f"Dispositivo de entrada seleccionado: [{effective_device}] {device_name}\n")
+    pass
     if effective_device is not None:
         try:
-            print("Probando grabacion para calibracion de umbral...", end=" ", flush=True)
+            pass
             device_name = sd.query_devices(effective_device)["name"]
         except Exception:
-            print("ERROR al acceder al dispositivo, usando nombre generico.")
+            pass
             pass
 
-    print(f"\n{'='*60}")
-    print(f"  Alfonso - Cliente de Voz")
-    print(f"  Servidor      : {server_url}")
-    print(f"  Wake word     : '{keyword}'")
-    print(f"  Dispositivo   : [{effective_device}] {device_name}")
-    print(f"  Samplerate    : {audio._native_rate}Hz -> 16000Hz (Whisper)")
-    print(f"  Sesion        : {session_id[:8]}...")
-    print(f"{'='*60}\n")
+    pass
+    pass
+    pass
+    pass
+    pass
+    pass
+    pass
+    pass
 
-    print("Conectando con el servidor...", end=" ", flush=True)
+    pass
     if not api.ping():
-        print("ERROR")
-        print(f"  No se puede conectar a {server_url}")
-        print("  Arranca el servidor: uvicorn app.main:app --reload")
+        pass
+        pass
+        pass
         sys.exit(1)
-    print("OK\n")
+    pass
 
     # Calibración de umbral si no se pasó explícitamente
     if threshold is None:
         threshold = calibrate_threshold(audio, effective_device)
-    print(f"  Umbral de voz activo: {threshold}\n")
+    pass
 
     if debug:
         devs = audio.list_input_devices()
-        print("Dispositivos de entrada disponibles:")
+        pass
         for d in devs:
             marker = " ← EN USO" if d["index"] == effective_device else ""
-            print(f"  [{d['index']:>2}] {d['name']:<45} {d['default_samplerate']:>6}Hz{marker}")
-        print()
+            pass
+        pass
 
-    print(f"Escuchando wake word '{keyword}'… (Ctrl+C para salir)\n")
+    pass
 
     try:
-        print("Cargando cliente de voz Alfonso…\n")
+        pass
         while True:
             # ── FASE 1: esperar wake word ──────────────────────────────
-            print(".", end="", flush=True)
+            pass
 
             try:
-                print("\nGrabando…", end=" ", flush=True)
+                pass
                 wav = audio.record_chunk(int(CHUNK_SECONDS), device=effective_device)
             except Exception as exc:
-                print(f"\n[ERROR grabando] {exc}")
+                pass
                 continue
 
             # Detección de Wake Word local mediante STT local
             if not audio.has_voice(wav, threshold):
                 continue
             
-            print("\n[Voz] Analizando wake word localmente...", end=" ")
+            pass
             wakeword_text = audio.transcribe_local(wav)
             
             if keyword.lower() not in wakeword_text.lower():
-                print("skip.")
+                pass
                 continue
             
             # Si llegamos aquí, es que el keyword está en el texto transcrito localmente.
             # No necesitamos wakeword_res porque la validación es local.
             if not wakeword_text:
-                print("  Wake word NO detectada, intentando nuevamente…")
+                pass
                 continue
 
-            print(f"\n\n✓ Wake word detectada")
+            pass
 
             # ── FASE 2: loop de conversación ───────────────────────────
             first_order = processor.extract_order(wakeword_text, keyword)
-            print(f"  Primera orden extraída: '{first_order}'" if first_order else "  No se extrajo orden de la wake word, esperando a que hables…")
+            pass
 
             while True:
                 if first_order:
-                    print("  Usando la orden extraída de la wake word, sin necesidad de hablar.")
+                    pass
                     user_text  = first_order
                     first_order = None
-                    print(f"  Tú: {user_text}")
+                    pass
                 else:
-                    print("  Escuchando… (habla ahora)", end=" ", flush=True)
+                    pass
                     audio_buffer = []
                     silence_time = 0.0
                     chunk_dur    = 0.8
 
                     while True:
                         try:
-                            print(f"\n[DEBUG] Grabando chunk de {chunk_dur}s para análisis de voz…", end=" ", flush=True)
+                            pass
                             chunk = audio.record_raw(chunk_dur, device=effective_device)
                         except Exception as exc:
-                            print(f"\n[ERROR grabando orden] {exc}")
+                            pass
                             break
 
                         level = int(np.abs(chunk).mean() * 32767)
                         if level > threshold:
                             audio_buffer.append(chunk)
                             silence_time = 0.0
-                            print(".", end="", flush=True)
+                            pass
                         else:
                             silence_time += chunk_dur
                             if audio_buffer:
-                                print("_", end="", flush=True)
+                                pass
                                 if silence_time >= MAX_SILENCE_SECONDS:
                                     break
                             elif silence_time >= 5.0:
                                 break
 
                     if not audio_buffer:
-                        print("\n  Silencio prolongado — volviendo a wake word\n")
+                        pass
                         break
 
-                    print(" analizando…", end=" ", flush=True)
+                    pass
                     wav_order = audio.get_audio_bytes(audio_buffer)
-                    print("transcribiendo…", end=" ", flush=True)
+                    pass
 
                     # Transcripción local para evitar el 404 del endpoint /stt
                     user_text = audio.transcribe_local(wav_order)
 
                     if not user_text:
-                        print("(no entendido)")
+                        pass
                         continue
 
-                    print(f"OK\n  Tú: {user_text}")
+                    pass
 
                 if processor.is_exit_command(user_text):
-                    print("\n  Alfonso: Hasta luego.\n")
-                    print(f"Escuchando wake word '{keyword}'…\n")
+                    pass
+                    pass
                     break
 
-                print(f"\n[CLIENTE_INFO] Enviando a /chat del servidor: '{user_text}' (session: {session_id[:8]}...)")
+                pass
                 chat = api.send_chat(user_text, session_id)
                 
                 status = chat.get("status") if isinstance(chat, dict) else "unknown"
-                print(f"[CLIENTE_INFO] Respuesta del servidor recibida (Estado: {status})")
+                pass
 
                 if debug:
-                    print(f"\n[debug chat] {chat}")
+                    pass
 
                 if not isinstance(chat, dict) or chat.get("status") not in ("ok", "success"):
                     err_msg = chat.get('message', 'Formato de respuesta inválido') if isinstance(chat, dict) else 'Error de red/conexión'
-                    print(f"[!] Chat error: {err_msg}")
+                    pass
                     continue
 
                 result_data   = chat.get("result", {})
                 response_text = processor.format_response(result_data)
-                print(response_text + "\n")
+                pass
 
                 audio_b64 = result_data.get("audio")
                 if audio_b64:
@@ -287,10 +287,10 @@ def run(
                      except Exception as e:
                          # Silencioso en modo normal, mostrar en debug
                          if debug:
-                             print(f"\n[debug] Error generando TTS local en cliente: {e}")
+                             pass
 
     except KeyboardInterrupt:
-        print("\n\nHasta luego.\n")
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -317,27 +317,27 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    print(f"Argumentos recibidos: {args}\n")
+    pass
     if args.list_devices:
-        print("Listando dispositivos de audio disponibles...\n")
+        pass
         svc = AudioService(auto_detect=False)
-        print("\nDispositivos de entrada:")
+        pass
         for d in svc.list_input_devices():
             auto = " <- integrado detectado" if d["index"] == auto_select_device() else ""
-            print(f"  [{d['index']:>2}] {d['name']:<50} {d['default_samplerate']:>6}Hz{auto}")
-        print("\nDispositivos de salida:")
+            pass
+        pass
         for d in svc.list_output_devices():
-            print(f"  [{d['index']:>2}] {d['name']:<50} {d['default_samplerate']:>6}Hz")
+            pass
         sys.exit(0)
 
     if args.gui:
-        print("Lanzando interfaz grafica...")
+        pass
         from gui.app import launch
         config = vars(args)
         config["url"] = config["url"].rstrip("/")
         launch(config)
     else:
-        print("Iniciando cliente de voz Alfonso...\n")
+        pass
         run(
             server_url    = args.url.rstrip("/"),
             keyword       = args.keyword,

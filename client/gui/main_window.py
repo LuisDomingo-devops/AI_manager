@@ -212,15 +212,15 @@ class AlfonsoHUDDashboard(QMainWindow, AlfonsoStyledWidget):
 
     def switch_to_view(self, key):
         idx = self.VIEW_MAP.get(key, None)
-        print(f"[DEBUG switch_to_view] key={key!r}  idx={idx}  MAP_keys={list(self.VIEW_MAP.keys())}")
+        pass
         if idx is None:
-            print(f"[DEBUG] CLAVE NO ENCONTRADA EN VIEW_MAP, mostrando 0")
+            pass
             idx = 0
         self.central_stack.setCurrentIndex(idx)
 
     def on_sidebar_category_selected(self, category, subcategory, title=""):
         key = (category.lower(), subcategory.lower())
-        print(f"[DEBUG sidebar] category={category!r}  subcategory={subcategory!r}  title={title!r}  key={key!r}")
+        pass
         self.switch_to_view(key)
         self.lbl_view_title.setText((title or subcategory).upper())
 

@@ -24,4 +24,4 @@ def test_leak():
         # Did it leak?
         data = r2.json()
         assert len(data.get("messages", [])) == 0, f"Leaked! {data}"
-        print("No leak detected!")
+        pass

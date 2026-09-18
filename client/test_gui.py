@@ -17,11 +17,12 @@ config = {
     'gui': True
 }
 
-try:
-    from client.gui.main_window import launch
-    launch(config)
-except Exception as e:
-    import traceback
-    with open("c:/Users/luisd/Desktop/Alfonso_Autonomo/gui_error.log", "w", encoding="utf-8") as f:
-        f.write(traceback.format_exc())
-    sys.exit(1)
+if __name__ == '__main__':
+    try:
+        from client.gui.main_window import launch
+        launch(config)
+    except Exception as e:
+        import traceback
+        with open("c:/Users/luisd/Desktop/Alfonso_Autonomo/gui_error.log", "w", encoding="utf-8") as f:
+            f.write(traceback.format_exc())
+        sys.exit(1)

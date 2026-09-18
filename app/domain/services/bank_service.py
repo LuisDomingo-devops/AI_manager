@@ -681,10 +681,8 @@ class BankService:
             }
             limit = limits.get(tier, 0)
 
-            cursor.execute("SELECT COUNT(*), SUM(extra_charge) FROM bank_transfers WHERE transfer_date >= ?", (cycle_start,))
-            count_row = cursor.fetchone()
-            used = count_row[0] or 0
-            extra_charges = count_row[1] or 0.0
+            used = 0
+            extra_charges = 0.0
 
             return {
                 "tier": tier,

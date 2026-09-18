@@ -220,9 +220,9 @@ class AssistantThread(QThread):
                 if not self.audio.has_voice(wav, threshold):
                     continue
 
-                print("[DEBUG] Voz detectada, verificando wake word...")
+                pass
                 if self.audio.has_voice(wav, threshold):
-                    print(f"[OK] Wake word '{keyword}' detectada.")
+                    pass
                     self.state_changed.emit("listening")
                     self.new_message.emit("Alfonso", "Dime, te escucho...")
 
@@ -230,11 +230,11 @@ class AssistantThread(QThread):
                     wav_order = await asyncio.to_thread(self.audio.record_chunk, 5, device=device)
                     self.state_changed.emit("thinking")
 
-                    print("[INFO] Procesando transcripcion local...")
+                    pass
                     user_text = await asyncio.to_thread(self.audio.transcribe_local, wav_order)
 
                     if user_text:
-                        print(f"[OK] Alfonso ha entendido: '{user_text}'")
+                        pass
                         self.new_message.emit("Tu", user_text)
 
                         chat_res = await asyncio.to_thread(self.api.send_chat, user_text, self.session_id)
@@ -265,14 +265,14 @@ class AssistantThread(QThread):
                                 if audio_bytes:
                                     await asyncio.to_thread(self.audio.play_audio, audio_bytes, device=output_device)
                     else:
-                        print("[WARN] El audio se proceso pero no se detectaron palabras.")
+                        pass
                         self.new_message.emit("Alfonso", "Lo siento, no te he oido bien.")
 
-                    print("[INFO] Volviendo a modo escucha...")
+                    pass
                     self.state_changed.emit("idle")
 
             except Exception as e:
-                print(f"[ERROR] Error en el loop de audio: {e}")
+                pass
                 self.state_changed.emit("error")
                 await asyncio.sleep(2)
                 continue
@@ -282,15 +282,15 @@ class AssistantThread(QThread):
         asyncio.set_event_loop(self.loop)
 
         self.state_changed.emit("connecting")
-        print(f"[INFO] Intentando conectar al servidor backend: {self.api.base_url}")
+        pass
         try:
             if not self.api.ping():
-                print(f"[ERROR] No se pudo conectar al backend {self.api.base_url}.")
+                pass
                 self.state_changed.emit("error")
                 return
-            print("[OK] Conexion con el servidor backend establecida.")
+            pass
         except Exception as e:
-            print(f"[CRITICAL] Error durante la conexion al backend: {e}")
+            pass
             self.state_changed.emit("error")
             return
 
@@ -298,10 +298,10 @@ class AssistantThread(QThread):
         try:
             self.loop.run_until_complete(self._audio_loop())
         except asyncio.CancelledError:
-            print("[INFO] AssistantThread tasks cancelled.")
+            pass
         finally:
             self.loop.close()
-            print("[INFO] Asyncio event loop closed.")
+            pass
 
     def stop(self):
         self.running = False

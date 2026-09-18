@@ -335,7 +335,7 @@ class WiseProvider(BaseBankProvider):
                         biz_profiles = [p for p in profiles if p.get("type") == "business"]
                         profile_id = str(biz_profiles[0]["id"]) if biz_profiles else str(profiles[0]["id"])
             except Exception as e:
-                print(f"Error discovering Wise profile: {e}")
+                pass
                 
         if not profile_id:
             return []
@@ -355,7 +355,7 @@ class WiseProvider(BaseBankProvider):
                         if "id" in b:
                             balance_ids.append(str(b["id"]))
             except Exception as e:
-                print(f"Error discovering Wise balances: {e}")
+                pass
 
         # 3. Descargar extractos por cada balance
         for b_id in balance_ids:
@@ -402,7 +402,7 @@ class WiseProvider(BaseBankProvider):
                             "reference": ref
                         })
             except Exception as e:
-                print(f"Error fetching Wise balance statement {b_id}: {e}")
+                pass
 
         # 4. Si no se obtuvieron por balance, consultar endpoint de actividades
         if not all_movements:
@@ -443,7 +443,7 @@ class WiseProvider(BaseBankProvider):
                             "reference": str(act.get("id", ""))
                         })
             except Exception as e:
-                print(f"Error fetching Wise activities: {e}")
+                pass
 
         return all_movements
 
@@ -758,7 +758,7 @@ class TinkProvider(BaseBankProvider):
                     })
                 return mapped
         except Exception as e:
-            print(f"Error fetching from Tink: {e}")
+            pass
         return []
 
 

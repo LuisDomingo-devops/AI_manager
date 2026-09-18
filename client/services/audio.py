@@ -292,7 +292,7 @@ class AudioService:
         Graba `duration` segundos y devuelve bytes WAV 16kHz mono.
         En caso de error devuelve silencio y loguea el problema.
         """
-        print(f"Grabando chunk de {duration} segundos…", end=" ", flush=True)
+        pass
         try:
             raw = self.record_raw(float(duration), device=device)
             return ndarray_to_wav_bytes(raw, TARGET_RATE)
@@ -391,7 +391,7 @@ class AudioService:
             return SILENCE_THRESHOLD
 
     def play_audio_file(self, path: str) -> None:
-        print(f"Reproduciendo fichero de audio: {path}")
+        pass
         try:
             import pygame
             pygame.mixer.init()
@@ -435,7 +435,7 @@ class AudioService:
             if level > 5:
                  status = "VOZ" if level > threshold else "RUIDO"
                  # Limpiamos con espacios al final para evitar restos visuales en consola
-                 print(f" [Audio] Nivel: {level:4d} | Umbral: {threshold:3d} | Estado: {status}    ", end="\r")
+                 pass
 
             return level > threshold
         except Exception:

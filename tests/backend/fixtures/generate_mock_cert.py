@@ -37,4 +37,4 @@ os.makedirs("tests/backend/fixtures", exist_ok=True)
 with open("tests/backend/fixtures/mock_cert.p12", "wb") as f:
     f.write(p12)
 
-print("Mock cert generated at tests/backend/fixtures/mock_cert.p12")
+pass

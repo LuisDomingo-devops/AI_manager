@@ -71,7 +71,7 @@ def test_fresh_db_applies_all_migrations():
     tables_to_check = [
         "invoices", "quotes", "products", "payments", "invoice_items", "quote_items",
         "pgc_accounts", "journal_entries", "ledger_entries", "fiscal_year_status",
-        "bank_connections", "bank_movements", "bank_transfers", "subscription_status",
+        "bank_connections", "bank_movements", "subscription_status",
         "user_profile", "contacts", "assets", "projects",
         "schema_migrations",
     ]

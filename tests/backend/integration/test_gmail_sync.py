@@ -73,7 +73,7 @@ This is a test gmail message.
 """
     
     def side_effect(e_id, query):
-        print(f"FETCH CALLED WITH: e_id={e_id}, query={query}")
+        pass
         if query in ("(RFC822)", "(BODY.PEEK[])", "BODY.PEEK[]"):
             return ("OK", [(None, email_bytes)])
         elif query == "(FLAGS)":

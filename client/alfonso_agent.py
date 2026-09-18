@@ -32,7 +32,7 @@ try:
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 except Exception as e:
-    print(f"No se pudo crear el archivo de logs del agente: {e}")
+    pass
 
 pyautogui.FAILSAFE = True
 IS_WINDOWS = platform.system() == "Windows"

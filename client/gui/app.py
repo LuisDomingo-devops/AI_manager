@@ -156,7 +156,7 @@ class AssistantThread(QThread):
                 try:
                     threshold = await asyncio.to_thread(self.audio.calibrate_threshold, effective_device)
                 except Exception as e:
-                    print(f"[WARN] Error al calibrar micrófono: {e}. Usando umbral por defecto 500.")
+                    pass
                     threshold = 500
             else:
                 try:
@@ -250,10 +250,10 @@ class AssistantThread(QThread):
                 if not self.audio.has_voice(wav, threshold):
                     continue
 
-                print("[DEBUG] Voz detectada, verificando wake word...")
+                pass
                 wake_word_detected_locally = self.audio.has_voice(wav, threshold)
                 if wake_word_detected_locally:
-                    print(f"[OK] Wake word '{keyword}' detectada (mediante actividad de voz local).")
+                    pass
                     self.state_changed.emit("listening")
                     self.new_message.emit("Alfonso", "Dime, te escucho...")
 
@@ -262,11 +262,11 @@ class AssistantThread(QThread):
                     wav_order = await asyncio.to_thread(self.audio.record_chunk, 5, device=device)
                     self.state_changed.emit("thinking")
                     
-                    print(f"\n[INFO] Procesando transcripción local...")
+                    pass
                     user_text = await asyncio.to_thread(self.audio.transcribe_local, wav_order)
                     
                     if user_text:
-                        print(f"[OK] Alfonso ha entendido: '{user_text}'")
+                        pass
                         self.new_message.emit("Tú", user_text)
                         
                         chat_res = await asyncio.to_thread(self.api.send_chat, user_text, self.session_id)
@@ -331,14 +331,14 @@ class AssistantThread(QThread):
                                     if audio_bytes:
                                         await asyncio.to_thread(self.audio.play_audio, audio_bytes, device=output_device)
                     else:
-                        print("[WARN] El audio se procesó pero no se detectaron palabras.")
+                        pass
                         self.new_message.emit("Alfonso", "Lo siento, no te he oído bien.")
                     
-                    print("[INFO] Volviendo a modo escucha (esperando wake word)...")
+                    pass
                     self.state_changed.emit("idle")
 
             except Exception as e:
-                print(f"[ERROR] Error en el loop de audio: {e}")
+                pass
                 self.state_changed.emit("error")
                 await asyncio.sleep(2)
                 continue
@@ -348,19 +348,19 @@ class AssistantThread(QThread):
         asyncio.set_event_loop(self.loop)
 
         self.state_changed.emit("connecting")
-        print(f"[INFO] Intentando conectar al servidor backend: {self.api.base_url}")
+        pass
         while self.running:
             try:
                 if self.api.ping():
-                    print("[OK] Conexión con el servidor backend establecida.")
+                    pass
                     self.state_changed.emit("idle")
                     break
                 else:
-                    print(f"[WARN] Esperando al backend en {self.api.base_url}...")
+                    pass
                     self.state_changed.emit("error")
                     self.msleep(2000)
             except Exception as e:
-                print(f"[WARN] Error conectando al backend: {e}. Reintentando...")
+                pass
                 self.state_changed.emit("error")
                 self.msleep(2000)
                 
@@ -372,14 +372,14 @@ class AssistantThread(QThread):
         try:
             self.loop.run_until_complete(self._audio_loop())
         except asyncio.CancelledError:
-            print("[INFO] AssistantThread tasks cancelled.")
+            pass
         except Exception as e:
             import traceback
-            print(f"[CRITICAL] Error fatal no controlado en AssistantThread._audio_loop: {e}")
+            pass
             traceback.print_exc()
         finally:
             self.loop.close()
-            print("[INFO] Asyncio event loop closed.")
+            pass
 
     def stop(self):
         self.running = False
@@ -1345,7 +1345,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         self.ipc_server = QTcpServer(self)
         self.ipc_server.newConnection.connect(self.handle_ipc_connection)
         if not self.ipc_server.listen(QHostAddress(QHostAddress.SpecialAddress.LocalHost), 9876):
-            print(f"Advertencia: No se pudo iniciar el servidor IPC en el puerto 9876: {self.ipc_server.errorString()}")
+            pass
 
         self.start_agent()
         self.start_assistant()
@@ -1372,7 +1372,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             elif cmd.get("action") == "open_archive":
                 self.show_archive()
         except Exception as e:
-            print(f"Error procesando comando IPC: {e}")
+            pass
 
     def show_native_viewer(self, filepath=None):
         try:
@@ -1424,7 +1424,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             self.viewer.raise_()
             self.viewer.activateWindow()
         except Exception as e:
-            print(f"Error abriendo visor desde IPC: {e}")
+            pass
 
     def check_onboarding(self):
         try:
@@ -1451,7 +1451,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                     wizard = AlfonsoOnboardingWizard(self, api_client)
                     wizard.exec()
         except Exception as e:
-            print(f"Error checking onboarding status: {e}")
+            pass
 
     def start_agent(self):
         try:
@@ -1493,7 +1493,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 creationflags=creation_flags
             )
         except Exception as e:
-            print(f"Error al iniciar el agente: {e}")
+            pass
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Escape:
@@ -2518,7 +2518,7 @@ class AlfonsoHUDDashboard(QMainWindow):
         try:
             os.makedirs(dest_dir, exist_ok=True)
         except Exception as e:
-            print(f"Error creando directorio de facturas: {e}")
+            pass
             return
             
         for path in filepaths:
@@ -2543,7 +2543,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.attachments_layout.addWidget(file_widget, row, col)
                 self.attached_files.append((path, file_widget, dest_path))
             except Exception as e:
-                print(f"Error procesando archivo adjunto: {e}")
+                pass
                 
         if self.attached_files:
             self.attachments_container.setVisible(True)
@@ -2564,7 +2564,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 if os.path.exists(dest_path):
                     os.remove(dest_path)
             except Exception as e:
-                print(f"Error al eliminar archivo: {e}")
+                pass
                 
             # Limpiar layout sin destruir los widgets restantes
             while self.attachments_layout.count() > 0:
@@ -2772,7 +2772,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             elif idx == 32 and hasattr(self, 'view_document_customizer') and hasattr(self.view_document_customizer, 'load_settings'):
                 self.view_document_customizer.load_settings()
         except Exception as e:
-            print(f"Error actualizando vista {title_text}: {e}")
+            pass
 
     def show_dashboard(self):
         self.switch_to_view("Dashboard")
@@ -2836,7 +2836,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 invoice_id = invoice_data.get("invoice_id")
                 self.thread.send_text_message(f"Confirmo la emisión y registro de la factura {invoice_id} en la AEAT de forma firme.")
         except Exception as e:
-            print(f"Error mostrando confirmación de factura: {e}")
+            pass
 
     def update_module_button_states(self):
         pass
@@ -3021,7 +3021,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                 self.projects_dialog.select_project(first_item)
                 
         except Exception as e:
-            print(f"[ERROR] No se pudo refrescar navegador de proyectos: {e}")
+            pass
 
     def load_project_session_from_ui(self, item):
         """Carga la conversación seleccionada en la UI al hacer doble clic."""
@@ -3376,7 +3376,7 @@ class AlfonsoHUDDashboard(QMainWindow):
                     """)
         except Exception as e:
             err_msg = f"Error updating metrics: {e}\n{traceback.format_exc()}"
-            print(err_msg)
+            pass
             try:
                 with open(r"c:\Users\luisd\Desktop\Alfonso_Autonomo\logs\tools.log", "a", encoding="utf-8") as f:
                     f.write(err_msg + "\n")
@@ -3395,7 +3395,7 @@ class AlfonsoHUDDashboard(QMainWindow):
             self.kpi_dashboard = AlfonsoKPIDashboardDialog(self)
             self.kpi_dashboard.show()
         except Exception as e:
-            print(f"Error opening KPI Dashboard: {e}")
+            pass
 
     def close_gui(self):
         try:

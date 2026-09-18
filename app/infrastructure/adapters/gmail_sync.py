@@ -147,7 +147,7 @@ def _sync_from_gmail_blocking() -> int:
         mail.logout()
         return inserted_count
     except Exception as e:
-        print(f"[ERROR] Error al sincronizar con Gmail: {e}")
+        pass
         return 0
 
 

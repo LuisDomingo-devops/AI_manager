@@ -35,7 +35,7 @@ LAWS = {
 
 async def fetch_law_xml(boe_id: str) -> str:
     url = f"https://boe.es/datosabiertos/api/legislacion-consolidada/id/{boe_id}"
-    print(f"Descargando norma {boe_id} de {url}...")
+    pass
     headers = {"Accept": "application/xml"}
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.get(url, headers=headers)
@@ -44,7 +44,7 @@ async def fetch_law_xml(boe_id: str) -> str:
         return response.text
 
 def parse_law_xml(xml_content: str, law_name: str) -> list[dict]:
-    print(f"Procesando XML de {law_name}...")
+    pass
     root = ET.fromstring(xml_content.encode("utf-8"))
     
     # Encontrar todos los bloques
@@ -88,7 +88,7 @@ def parse_law_xml(xml_content: str, law_name: str) -> list[dict]:
             }
         })
         
-    print(f"Se encontraron {len(articles)} artículos/preceptos en {law_name}.")
+    pass
     return articles
 
 async def seed_law(law_name: str, boe_id: str):
@@ -97,7 +97,7 @@ async def seed_law(law_name: str, boe_id: str):
         articles = parse_law_xml(xml_content, law_name)
         
         if not articles:
-            print(f"No se encontraron artículos para {law_name}.")
+            pass
             return
             
         # Ingestar en lotes (batching) para evitar sobrecargar memoria/DB
@@ -113,28 +113,28 @@ async def seed_law(law_name: str, boe_id: str):
                 documents=documents,
                 metadatas=metadatas
             )
-            print(f"Indexados artículos {i+1} a {min(i+batch_size, len(articles))} de {law_name}...")
+            pass
             
-        print(f"¡Ingesta exitosa de {law_name}!")
+        pass
     except Exception as e:
-        print(f"Error procesando {law_name}: {e}")
+        pass
         app_logger.exception("Error en legal_seeder")
 
 async def main():
-    print("Iniciando la ingesta de leyes tributarias para Marcos...")
+    pass
     
     # Limpiar colección legal_knowledge para evitar mezclar leyes antiguas
     try:
         vector_memory.client.delete_collection("legal_knowledge")
-        print("Colección legal_knowledge anterior eliminada para limpieza.")
+        pass
     except Exception as e:
-        print(f"No se pudo eliminar la colección legal_knowledge (tal vez no existía): {e}")
+        pass
         
     vector_memory._refresh_collection()
     
     for law_name, boe_id in LAWS.items():
         await seed_law(law_name, boe_id)
-    print("¡Ingesta completa de todas las leyes tributarias en ChromaDB!")
+    pass
 
 if __name__ == "__main__":
     asyncio.run(main())

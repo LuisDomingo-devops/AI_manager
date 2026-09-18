@@ -132,7 +132,7 @@ class AlfonsoAPI:
             r.raise_for_status()
             return r.json()
         except Exception as e:
-            print(f"[ERROR] get_emails falló: {e}")
+            pass
             return []
 
     def get_email(self, email_id: int) -> dict:
@@ -239,7 +239,7 @@ class AlfonsoAPI:
             r.raise_for_status()
             return r.json()
         except Exception as e:
-            print(f"[ERROR] get_dev_files falló: {e}")
+            pass
             return []
 
     def get_dev_file(self, filename: str) -> dict:
@@ -435,5 +435,5 @@ class AlfonsoAPI:
             r.raise_for_status()
             return r.json()
         except requests.exceptions.RequestException as e:
-            print(f"[API] Error obteniendo /dashboard/sync: {e}")
+            pass
             return {"status": "error", "message": str(e)}

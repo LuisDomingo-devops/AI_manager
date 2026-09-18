@@ -82,7 +82,7 @@ class AlfonsoContactsListPanel(AlfonsoBasePanel):
                 self.table.setCellWidget(i, 6, btn_del)
                 
         except Exception as e:
-            print(f"[ERROR] load_data en contactos_list_panel falló: {repr(e)}")
+            pass
             import traceback
             traceback.print_exc()
             QMessageBox.warning(self, "Error", f"No se pudo cargar el directorio: {repr(e)}")
