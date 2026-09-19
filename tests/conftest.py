@@ -12,8 +12,37 @@ os.environ["ALFONSO_CLIENT_SECRET"] = "mock_secret"
 os.environ["ALFONSO_API_KEY"] = "test_api_key_default"
 os.environ["ALFONSO_BRIDGE_TOKEN"] = "test_bridge_token_default"
 
+from app.main import app
+from app.api.routes import verify_api_key
 
+# 1. Conservamos el dependency_override por si acaso
+app.dependency_overrides[verify_api_key] = lambda: "test_api_key_default"
 
+# 2. Inyectamos la cabecera en el TestClient para que las rutas que usan Depends(api_key_header) o los routers anidados funcionen
+from starlette.testclient import TestClient as OriginalTestClient
+
+_original_request = OriginalTestClient.request
+
+def _patched_request(self, method, url, **kwargs):
+    headers = kwargs.get("headers")
+    if headers is None:
+        headers = {}
+    if "X-API-Key" not in headers:
+        headers["X-API-Key"] = "test_api_key_default"
+    elif headers["X-API-Key"] == "":
+        del headers["X-API-Key"]
+        
+    kwargs["headers"] = headers
+    return _original_request(self, method, url, **kwargs)
+
+OriginalTestClient.request = _patched_request
+
+@pytest.fixture(autouse=True)
+def mock_approval_service():
+    """Mock global para simular que el usuario siempre aprueba por WebSocket en los tests."""
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = True
+        yield mocked
 
 @pytest.fixture
 def session_memory_fixture():

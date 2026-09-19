@@ -35,15 +35,18 @@ def setup_test_db():
 @pytest.mark.asyncio
 async def test_payroll_tools_guardrails_require_confirmation():
     # 1. Intentar dar de alta sin confirmación expresa
-    res_alta = await create_employee_tool(
-        nif="12345678Z",
-        nss="281234567890",
-        full_name="CARLOS SÁNCHEZ",
-        gross_annual_salary=24000.0,
-        start_date="2026-01-01",
-        
-    )
-    assert res_alta["status"] == "pending_confirmation"
+    from unittest.mock import patch, AsyncMock
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = False
+        res_alta = await create_employee_tool(
+            nif="12345678Z",
+            nss="281234567890",
+            full_name="CARLOS SÁNCHEZ",
+            gross_annual_salary=24000.0,
+            start_date="2026-01-01",
+            
+        )
+        assert res_alta["status"] == "pending_confirmation"
 
     # 2. Confirmar alta
     res_alta_ok = await create_employee_tool(
@@ -58,8 +61,10 @@ async def test_payroll_tools_guardrails_require_confirmation():
     emp_id = res_alta_ok["employee_id"]
 
     # 3. Intentar emitir nómina sin confirmación
-    res_nom = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, )
-    assert res_nom["status"] == "pending_confirmation"
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked2:
+        mocked2.return_value = False
+        res_nom = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, )
+        assert res_nom["status"] == "pending_confirmation"
 
 
 @pytest.mark.asyncio

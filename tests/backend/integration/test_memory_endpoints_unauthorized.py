@@ -14,11 +14,11 @@ def test_memory_endpoints_unauthorized_spoofing():
     # sin token (lo que debería dar 401) y asegurarnos de que inyectar X-Client-ID no bypassa la seguridad.
 
     # 1. Sin autenticación y sin X-Client-ID -> 401
-    resp = client.get("/conversations")
+    resp = client.get("/conversations", headers={"X-API-Key": ""})
     assert resp.status_code == 401
 
     # 2. Intentar hacer spoofing de X-Client-ID a "admin" sin tener el token -> 401
-    resp_spoof = client.get("/conversations", headers={"X-Client-ID": "admin"})
+    resp_spoof = client.get("/conversations", headers={"X-Client-ID": "admin", "X-API-Key": ""})
     assert resp_spoof.status_code == 401
 
     # 3. Probando la vulnerabilidad concreta solucionada:

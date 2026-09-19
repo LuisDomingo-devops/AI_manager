@@ -155,7 +155,7 @@ def test_api_license_status_and_activation(rsa_keypair):
 
     with patch("app.utils.license_validator.PUBLIC_KEY_PEM", pub_pem):
         # 1. Activar licencia vía POST
-        res_act = client.post("/api/v1/subscriptions/activate-license", json={"license_data": license_data})
+        res_act = client.post("/api/v1/subscriptions/activate-license", json={"license_data": license_data}, headers={"X-API-Key": "test_api_key_default"})
         assert res_act.status_code == 200
         data_act = res_act.json()
         assert data_act["installed"] is True

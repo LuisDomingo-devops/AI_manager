@@ -12,13 +12,13 @@ def test_leak():
     
     with TestClient(app) as client:
         # Try without auth
-        r1 = client.get("/memory/leak_session")
+        r1 = client.get("/memory/leak_session", headers={"X-API-Key": ""})
         assert r1.status_code == 401, f"No auth should be 401, got {r1.status_code}"
         
         # Try with attacker token
         from app.infrastructure.security.session_manager import SessionManager
         attacker_token = SessionManager.create_session("attacker")
-        r2 = client.get("/memory/leak_session", headers={"X-Session-Token": attacker_token})
+        r2 = client.get("/memory/leak_session", headers={"X-Session-Token": attacker_token, "X-API-Key": ""})
         assert r2.status_code == 200
         
         # Did it leak?

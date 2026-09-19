@@ -62,11 +62,11 @@ def test_memory_endpoints_unauthorized():
     from app.main import app
     with TestClient(app) as client_unauth:
         app.dependency_overrides.clear()
-        resp1 = client_unauth.get("/memory")
+        resp1 = client_unauth.get("/memory", headers={"X-API-Key": ""})
         assert resp1.status_code == 401
-        resp2 = client_unauth.get("/memory/test_session")
+        resp2 = client_unauth.get("/memory/test_session", headers={"X-API-Key": ""})
         assert resp2.status_code == 401
-        resp3 = client_unauth.delete("/memory/test_session")
+        resp3 = client_unauth.delete("/memory/test_session", headers={"X-API-Key": ""})
         assert resp3.status_code == 401
 
 

@@ -118,7 +118,6 @@ async def create_invoice_endpoint(req: InvoiceCreateRequest):
         concept=req.concept,
         iva_rate=req.iva_rate,
         irpf_rate=req.irpf_rate,
-        confirmed_by_user=req.confirmed_by_user,
         items=[i.model_dump() for i in req.items] if req.items else None
     )
     return res
@@ -244,7 +243,7 @@ async def api_update_product(sku: str, req: ProductUpdateRequest, _=Depends(veri
 @router.delete("/products/{sku}")
 async def delete_product_endpoint(sku: str, confirmed_by_user: bool = False):
     """Elimina (Soft Delete) un producto o servicio por su SKU."""
-    res = await delete_product(sku=sku, confirmed_by_user=confirmed_by_user)
+    res = await delete_product(sku=sku)
     if res.get("status") == "error":
         raise HTTPException(status_code=400, detail=res.get("message"))
     return res

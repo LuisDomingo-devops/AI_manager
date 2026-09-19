@@ -23,7 +23,7 @@ def test_session_auth_flow():
     client = TestClient(app)
     
     # 1. Intentar acceder a un endpoint protegido sin credenciales -> 401
-    resp = client.get("/memory")
+    resp = client.get("/memory", headers={"X-API-Key": ""})
     assert resp.status_code == 401
     
     # 2. Intentar login con API Key incorrecta -> 401
@@ -39,13 +39,13 @@ def test_session_auth_flow():
     session_token = body["session_token"]
     
     # 4. Acceder al endpoint protegido usando el X-Session-Token -> 200
-    resp_protected = client.get("/memory", headers={"X-Session-Token": session_token})
+    resp_protected = client.get("/memory", headers={"X-Session-Token": session_token, "X-API-Key": ""})
     assert resp_protected.status_code == 200
     
     # 5. Hacer logout con el token de sesión -> 200
-    resp_logout = client.post("/auth/logout", headers={"X-Session-Token": session_token})
+    resp_logout = client.post("/auth/logout", headers={"X-Session-Token": session_token, "X-API-Key": ""})
     assert resp_logout.status_code == 200
     
     # 6. Intentar acceder de nuevo tras logout -> 401
-    resp_post_logout = client.get("/memory", headers={"X-Session-Token": session_token})
+    resp_post_logout = client.get("/memory", headers={"X-Session-Token": session_token, "X-API-Key": ""})
     assert resp_post_logout.status_code == 401

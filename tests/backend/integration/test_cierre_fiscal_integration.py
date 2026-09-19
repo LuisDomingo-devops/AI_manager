@@ -13,6 +13,13 @@ def test_cierre_fiscal_db_integration():
     cursor.execute("DELETE FROM journal_entries WHERE entry_date LIKE '2026-%'")
     cursor.execute("DELETE FROM ledger_entries")
     
+    # Insertar cuentas PGC faltantes
+    cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('70000000', 'Ventas de mercaderías', 'ingreso')")
+    cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47700000', 'H.P. IVA repercutido', 'pasivo')")
+    cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('60000000', 'Compras de mercaderías', 'gasto')")
+    cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47200000', 'H.P. IVA soportado', 'activo')")
+    cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('41000000', 'Acreedores por prestaciones de servicios', 'pasivo')")
+    
     # Insertar un asiento de ingresos (700) y gastos (600)
     cursor.execute("INSERT INTO journal_entries (id, concept, entry_date) VALUES (101, 'Ventas', '2026-05-15 10:00:00')")
     cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '43000000', 1210, 0)")
@@ -27,8 +34,9 @@ def test_cierre_fiscal_db_integration():
     
     # 2. Ejecutar cierre
     res = ClosingService.close_fiscal_year(2026)
+    print("CIERRE FISCAL RESULT:", res)
     assert res["status"] == "ok"
-    assert res["resultado"] == 500.0 # Ingresos 1000 - Gastos 500
+    assert res["resultado_ejercicio"] == 500.0 # Ingresos 1000 - Gastos 500
     
     # 3. Comprobar que está cerrado en BD
     cursor.execute("SELECT is_closed FROM fiscal_year_status WHERE year = 2026")
@@ -43,11 +51,11 @@ def test_cierre_fiscal_db_integration():
     for row in cursor.fetchall():
         try:
             concept = encryptor.decrypt(row["concept"])
-            if concept == 'Asiento de regularización cierre 2026':
+            if concept == 'Asiento de Regularización de Ingresos y Gastos - Ejercicio 2026':
                 j_row = row
                 break
         except:
-            if row["concept"] == 'Asiento de regularización cierre 2026':
+            if row["concept"] == 'Asiento de Regularización de Ingresos y Gastos - Ejercicio 2026':
                 j_row = row
                 break
                 

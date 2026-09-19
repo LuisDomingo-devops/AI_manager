@@ -57,9 +57,11 @@ async def test_generate_modelo_303_autofill_script():
 
 @pytest.mark.asyncio
 async def test_fill_modelo_303_guardian_no_confirmation():
-    res = await fill_modelo_303_guardian(2026, 1, )
-    assert res["status"] == "pending_confirmation"
-    assert "confirmar" in res["message"].lower() or "continuar" in res["message"].lower()
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mock_appr:
+        mock_appr.return_value = False
+        res = await fill_modelo_303_guardian(2026, 1)
+        assert res["status"] == "pending_confirmation"
+        assert "deseas continuar" in res["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -75,7 +77,7 @@ async def test_fill_modelo_303_guardian_no_connection():
         with patch("app.core.websocket_manager.guardian_ws_manager.active_connections", []):
             res = await fill_modelo_303_guardian(2026, 1, )
             assert res["status"] == "error"
-            assert "conexión" in res["message"].lower() or "conectada" in res["message"].lower()
+            assert "no hay clientes guardian conectados" in res["message"].lower() or "conectada" in res["message"].lower()
 
 
 @pytest.mark.asyncio

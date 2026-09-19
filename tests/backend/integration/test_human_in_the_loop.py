@@ -14,8 +14,11 @@ from app.adapters.memory.memory import _get_connection
 @pytest.mark.asyncio
 async def test_bank_reconciliation_confirmation():
     # Sin confirmacion
-    res = await run_bank_reconciliation()
-    assert res["status"] == "pending_confirmation"
+    from unittest.mock import patch, AsyncMock
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = False
+        res = await run_bank_reconciliation()
+        assert res["status"] == "error"
 
     # Con confirmacion
     with patch("app.domain.services.bank_service.BankService.reconcile_matching_algorithm", return_value=[]):
@@ -24,31 +27,34 @@ async def test_bank_reconciliation_confirmation():
 
 @pytest.mark.asyncio
 async def test_aeat_models_confirmation():
-    # Playwright launch helpers without confirmation
-    for fill_func in [
-        fill_modelo_303_playwright,
-        fill_modelo_130_playwright,
-        fill_modelo_111_playwright,
-        fill_modelo_115_playwright
-    ]:
-        res = await fill_func(year=2026, quarter=3, )
-        assert res["status"] == "pending_confirmation"
+    from unittest.mock import patch, AsyncMock
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = False
+        # Playwright launch helpers without confirmation
+        for fill_func in [
+            fill_modelo_303_playwright,
+            fill_modelo_130_playwright,
+            fill_modelo_111_playwright,
+            fill_modelo_115_playwright
+        ]:
+            res = await fill_func(year=2026, quarter=3, )
+            assert res["status"] == "pending_confirmation"
 
-    res_200 = await fill_modelo_200_playwright(year=2026, )
-    assert res_200["status"] == "pending_confirmation"
+        res_200 = await fill_modelo_200_playwright(year=2026, )
+        assert res_200["status"] == "pending_confirmation"
 
-    # Script generators without confirmation
-    for gen_func in [
-        generate_modelo_303_autofill_script,
-        generate_modelo_130_autofill_script,
-        generate_modelo_111_autofill_script,
-        generate_modelo_115_autofill_script
-    ]:
-        res = await gen_func(year=2026, quarter=3, )
-        assert res["status"] == "pending_confirmation"
+        # Script generators without confirmation
+        for gen_func in [
+            generate_modelo_303_autofill_script,
+            generate_modelo_130_autofill_script,
+            generate_modelo_111_autofill_script,
+            generate_modelo_115_autofill_script
+        ]:
+            res = await gen_func(year=2026, quarter=3, )
+            assert res["status"] == "pending_confirmation"
 
-    res_202 = await generate_modelo_202_autofill_script(year=2026, period=1, )
-    assert res_202["status"] == "pending_confirmation"
+        res_202 = await generate_modelo_202_autofill_script(year=2026, period=1, )
+        assert res_202["status"] == "pending_confirmation"
 
 @pytest.mark.asyncio
 async def test_delete_operations_confirmation():
@@ -68,13 +74,16 @@ async def test_delete_operations_confirmation():
     finally:
         conn.close()
 
-    # 1. Delete client without confirmation
-    res_cli_fail = await delete_client(client_id=client_id, )
-    assert res_cli_fail["status"] == "pending_confirmation"
-
-    # 2. Delete product without confirmation
-    res_prod_fail = await delete_product(sku="TESTDEL", )
-    assert res_prod_fail["status"] == "pending_confirmation"
+    from unittest.mock import patch, AsyncMock
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = False
+        # 1. Delete client without confirmation
+        res_cli_fail = await delete_client(client_id=client_id, )
+        assert res_cli_fail["status"] == "error"
+    
+        # 2. Delete product without confirmation
+        res_prod_fail = await delete_product(sku="TESTDEL", )
+        assert res_prod_fail["status"] == "error"
 
     # 3. Delete client WITH confirmation
     res_cli_ok = await delete_client(client_id=client_id, )
