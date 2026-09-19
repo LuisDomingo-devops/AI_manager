@@ -67,7 +67,7 @@ El sistema sigue los principios de la **Arquitectura Hexagonal (Puertos y Adapta
 
 #### B. Orquestador Lógico (`PlannerOrchestrator`)
 - No retiene estado en memoria para evitar cuellos de botella y fugas de memoria.
-- Actúa como un evaluador semántico: analiza la intención del texto o comando del usuario y lo deriva al Agente Especialista adecuado (por ejemplo, si detecta la palabra "ciberseguridad", delega el control al `CyberSecurityAgent`).
+- Actúa como un enrutador determinista de alta seguridad: para evitar errores en operaciones legales y fiscales críticas, el enrutamiento se realiza de forma estricta, garantizando que cada petición es procesada por el Agente Especialista correcto sin margen de alucinación (por ejemplo, si detecta la palabra "ciberseguridad", delega el control al `CyberSecurityAgent`).
 
 #### C. Agente de Ciberseguridad (`CyberSecurityAgent`)
 - **Protección Activa (WAF):** Emplea expresiones regulares compiladas para abortar en tiempo real inyecciones SQL (`UNION SELECT`, `DROP TABLE`), Command Injection (`&& bash`, `subprocess`) y Path Traversal (`../../`).
