@@ -45,7 +45,7 @@ async def test_generate_modelo_303_autofill_script():
         "net_result": 1300.0
     }]
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=mock_data):
-        res = await generate_modelo_303_autofill_script(2026, 1, confirmed_by_user=True)
+        res = await generate_modelo_303_autofill_script(2026, 1, )
         assert res["status"] == "ok"
         assert "1500.0" in res["script"]
         assert "315.0" in res["script"]
@@ -57,7 +57,7 @@ async def test_generate_modelo_303_autofill_script():
 
 @pytest.mark.asyncio
 async def test_fill_modelo_303_guardian_no_confirmation():
-    res = await fill_modelo_303_guardian(2026, 1, confirmed_by_user=False)
+    res = await fill_modelo_303_guardian(2026, 1, )
     assert res["status"] == "pending_confirmation"
     assert "confirmar" in res["message"].lower() or "continuar" in res["message"].lower()
 
@@ -73,7 +73,7 @@ async def test_fill_modelo_303_guardian_no_connection():
     }]
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=mock_data):
         with patch("app.core.websocket_manager.guardian_ws_manager.active_connections", []):
-            res = await fill_modelo_303_guardian(2026, 1, confirmed_by_user=True)
+            res = await fill_modelo_303_guardian(2026, 1, )
             assert res["status"] == "error"
             assert "conexión" in res["message"].lower() or "conectada" in res["message"].lower()
 
@@ -94,7 +94,7 @@ async def test_fill_modelo_303_guardian_success():
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=mock_data):
         with patch("app.core.websocket_manager.guardian_ws_manager.active_connections", [mock_connection]):
             with patch("app.core.websocket_manager.guardian_ws_manager.send_json", mock_send) as mock_send_method:
-                res = await fill_modelo_303_guardian(2026, 1, confirmed_by_user=True)
+                res = await fill_modelo_303_guardian(2026, 1, )
                 assert res["status"] == "ok"
                 assert res["data_used"]["income_base"] == 1500.0
                 
@@ -128,7 +128,7 @@ async def test_fill_modelo_130_guardian_success():
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=mock_data):
         with patch("app.core.websocket_manager.guardian_ws_manager.active_connections", [mock_connection]):
             with patch("app.core.websocket_manager.guardian_ws_manager.send_json", mock_send) as mock_send_method:
-                res = await fill_modelo_130_guardian(2026, 1, confirmed_by_user=True)
+                res = await fill_modelo_130_guardian(2026, 1, )
                 assert res["status"] == "ok"
                 assert res["data_used"]["net_result"] == 800.0
                 assert res["data_used"]["pago_fraccionado"] == 160.0  # 800 * 20%

@@ -33,7 +33,7 @@ async def test_invoice_draft_creation_and_finalization():
         amount=100.0,
         concept="Servicios de desarrollo de software",
         date="15/07/2026",
-        confirmed_by_user=True
+        
     )
     
     assert res_draft["status"] == "ok"
@@ -79,7 +79,7 @@ async def test_invoice_draft_creation_and_finalization():
         concept="Servicios de desarrollo de software",
         invoice_id=draft_id, # ID del borrador a completar
         date="15/07/2026",
-        confirmed_by_user=True
+        
     )
 
     assert res_firm["status"] == "ok"

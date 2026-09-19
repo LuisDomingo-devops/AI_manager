@@ -87,11 +87,11 @@ async def test_soft_delete_clients_and_products():
     cli_id = cli["id"]
 
     # 2. Ejecutar Soft Delete
-    del_cli = await delete_client(cli_id, confirmed_by_user=True)
+    del_cli = await delete_client(cli_id, )
     assert del_cli["status"] == "ok"
     assert "desactivado" in del_cli["message"].lower()
 
-    del_prod = await delete_product(f"SKU-AUDIT-{uid}", confirmed_by_user=True)
+    del_prod = await delete_product(f"SKU-AUDIT-{uid}", )
     assert del_prod["status"] == "ok"
 
     # 3. Comprobar que ya no aparecen en el catálogo activo

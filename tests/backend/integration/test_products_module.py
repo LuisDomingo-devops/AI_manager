@@ -53,7 +53,7 @@ async def test_products_crud_flow():
     assert res_up_fail["status"] == "error"
 
     # 5. Eliminar producto
-    res_del = await delete_product(sku="SERV-001", confirmed_by_user=True)
+    res_del = await delete_product(sku="SERV-001", )
     assert res_del["status"] == "ok"
 
     res_list_final = await get_products()
@@ -61,5 +61,5 @@ async def test_products_crud_flow():
     assert not any(p["sku"] == "SERV-001" for p in res_list_final["products"])
 
     # Intentar eliminar producto inexistente
-    res_del_fail = await delete_product(sku="SERV-001", confirmed_by_user=True)
+    res_del_fail = await delete_product(sku="SERV-001", )
     assert res_del_fail["status"] == "error"

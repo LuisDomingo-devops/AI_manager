@@ -33,7 +33,7 @@ class WebhookSimulationRequest(BaseModel):
     stripe_customer_id: Optional[str] = "cus_mock123"
     stripe_subscription_id: Optional[str] = "sub_mock123"
 
-@router.post("/checkout-session", summary="Generar sesión de pago en Stripe")
+@router.post("/checkout-session", summary="Generar sesión de pago en Stripe", dependencies=[Depends(verify_api_key)])
 async def create_checkout_session(payload: CheckoutSessionRequest):
     """
     Crea una sesión de checkout de Stripe para la suscripción de un nuevo autónomo o asesoría.
@@ -233,7 +233,7 @@ async def get_local_license_status():
 class LicenseActivationRequest(BaseModel):
     license_data: Dict[str, Any] = Field(..., description="Diccionario con datos de licencia y firma RSA")
 
-@router.post("/activate-license", summary="Instalar y activar archivo de licencia local")
+@router.post("/activate-license", summary="Instalar y activar archivo de licencia local", dependencies=[Depends(verify_api_key)])
 async def activate_local_license(payload: LicenseActivationRequest):
     """
     Instala un nuevo archivo de licencia criptográfico en el almacenamiento local (data/license.lic).

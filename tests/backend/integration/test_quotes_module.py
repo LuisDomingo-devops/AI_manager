@@ -56,7 +56,7 @@ async def test_quotes_flow():
     assert q["status"] == "borrador"
 
     # 4. Convertir a factura
-    res_conv = await convert_quote_to_invoice(quote_id=quote_id, confirmed_by_user=True)
+    res_conv = await convert_quote_to_invoice(quote_id=quote_id, )
     assert res_conv["status"] == "ok"
     invoice_id = res_conv["invoice_id"]
 

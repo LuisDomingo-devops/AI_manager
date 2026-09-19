@@ -45,7 +45,7 @@ async def test_presupuestos_a_factura_integration():
     quote_id = res["quote_id"]
     
     # Convertir
-    conv_res = await convert_quote_to_invoice(quote_id, confirmed_by_user=True)
+    conv_res = await convert_quote_to_invoice(quote_id, )
     assert conv_res["status"] == "ok"
     
     invoice_id = conv_res["invoice_id"]

@@ -230,7 +230,7 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
                 concept=f"Factura de fatiga secuencial {i}",
                 iva_rate=21.0,
                 irpf_rate=0.0,
-                confirmed_by_user=True
+                
             )
             if res_emit.get("status") == "error":
                 raise RuntimeError(f"Fallo en emision secuencial: {res_emit.get('message')}")
@@ -288,7 +288,7 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
                     concept=f"Factura de estres concurrente {level}_{index}",
                     iva_rate=21.0,
                     irpf_rate=0.0,
-                    confirmed_by_user=True
+                    
                 ))
                 if res_emit.get("status") == "error":
                     raise RuntimeError(f"Fallo en emision concurrente: {res_emit.get('message')}")

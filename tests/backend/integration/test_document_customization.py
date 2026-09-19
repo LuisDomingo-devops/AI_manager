@@ -98,7 +98,7 @@ async def test_pdf_generation_with_customization():
         concept="Servicios de branding y diseño a medida",
         iva_rate=21.0,
         irpf_rate=15.0,
-        confirmed_by_user=False # Se genera como Borrador de forma segura
+         # Se genera como Borrador de forma segura
     )
     
     assert res["status"] == "ok"

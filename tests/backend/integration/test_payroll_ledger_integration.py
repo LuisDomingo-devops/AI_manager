@@ -41,7 +41,7 @@ async def test_payroll_tools_guardrails_require_confirmation():
         full_name="CARLOS SÁNCHEZ",
         gross_annual_salary=24000.0,
         start_date="2026-01-01",
-        confirmed_by_user=False
+        
     )
     assert res_alta["status"] == "pending_confirmation"
 
@@ -52,13 +52,13 @@ async def test_payroll_tools_guardrails_require_confirmation():
         full_name="CARLOS SÁNCHEZ",
         gross_annual_salary=24000.0,
         start_date="2026-01-01",
-        confirmed_by_user=True
+        
     )
     assert res_alta_ok["status"] == "ok"
     emp_id = res_alta_ok["employee_id"]
 
     # 3. Intentar emitir nómina sin confirmación
-    res_nom = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, confirmed_by_user=False)
+    res_nom = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, )
     assert res_nom["status"] == "pending_confirmation"
 
 
@@ -75,7 +75,7 @@ async def test_issue_monthly_payroll_records_journal_entry():
     })
 
     # Emitir nómina de Abril 2026
-    res = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, confirmed_by_user=True)
+    res = await issue_monthly_payroll_tool(emp_id, month=4, year=2026, )
     assert res["status"] == "ok"
     assert res["journal_entry_id"] > 0
 
@@ -114,7 +114,7 @@ async def test_issue_settlement_and_dismissal_records_journal_and_updates_status
         termination_date="2026-06-30",
         vacation_days_taken=10.0,
         motive_desc="Reorganización productiva del área de desarrollo",
-        confirmed_by_user=True
+        
     )
 
     assert res["status"] == "ok"

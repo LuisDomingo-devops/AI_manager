@@ -14,12 +14,12 @@ from app.adapters.memory.memory import _get_connection
 @pytest.mark.asyncio
 async def test_bank_reconciliation_confirmation():
     # Sin confirmacion
-    res = await run_bank_reconciliation(confirmed_by_user=False)
+    res = await run_bank_reconciliation()
     assert res["status"] == "pending_confirmation"
 
     # Con confirmacion
     with patch("app.domain.services.bank_service.BankService.reconcile_matching_algorithm", return_value=[]):
-        res_ok = await run_bank_reconciliation(confirmed_by_user=True)
+        res_ok = await run_bank_reconciliation()
         assert res_ok["status"] == "ok"
 
 @pytest.mark.asyncio
@@ -31,10 +31,10 @@ async def test_aeat_models_confirmation():
         fill_modelo_111_playwright,
         fill_modelo_115_playwright
     ]:
-        res = await fill_func(year=2026, quarter=3, confirmed_by_user=False)
+        res = await fill_func(year=2026, quarter=3, )
         assert res["status"] == "pending_confirmation"
 
-    res_200 = await fill_modelo_200_playwright(year=2026, confirmed_by_user=False)
+    res_200 = await fill_modelo_200_playwright(year=2026, )
     assert res_200["status"] == "pending_confirmation"
 
     # Script generators without confirmation
@@ -44,10 +44,10 @@ async def test_aeat_models_confirmation():
         generate_modelo_111_autofill_script,
         generate_modelo_115_autofill_script
     ]:
-        res = await gen_func(year=2026, quarter=3, confirmed_by_user=False)
+        res = await gen_func(year=2026, quarter=3, )
         assert res["status"] == "pending_confirmation"
 
-    res_202 = await generate_modelo_202_autofill_script(year=2026, period=1, confirmed_by_user=False)
+    res_202 = await generate_modelo_202_autofill_script(year=2026, period=1, )
     assert res_202["status"] == "pending_confirmation"
 
 @pytest.mark.asyncio
@@ -69,17 +69,17 @@ async def test_delete_operations_confirmation():
         conn.close()
 
     # 1. Delete client without confirmation
-    res_cli_fail = await delete_client(client_id=client_id, confirmed_by_user=False)
+    res_cli_fail = await delete_client(client_id=client_id, )
     assert res_cli_fail["status"] == "pending_confirmation"
 
     # 2. Delete product without confirmation
-    res_prod_fail = await delete_product(sku="TESTDEL", confirmed_by_user=False)
+    res_prod_fail = await delete_product(sku="TESTDEL", )
     assert res_prod_fail["status"] == "pending_confirmation"
 
     # 3. Delete client WITH confirmation
-    res_cli_ok = await delete_client(client_id=client_id, confirmed_by_user=True)
+    res_cli_ok = await delete_client(client_id=client_id, )
     assert res_cli_ok["status"] == "ok"
 
     # 4. Delete product WITH confirmation
-    res_prod_ok = await delete_product(sku="TESTDEL", confirmed_by_user=True)
+    res_prod_ok = await delete_product(sku="TESTDEL", )
     assert res_prod_ok["status"] == "ok"

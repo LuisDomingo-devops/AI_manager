@@ -60,7 +60,7 @@ async def test_full_rectificativa_flow():
         concept="Desarrollo de software T1",
         iva_rate=21.0,
         irpf_rate=15.0,
-        confirmed_by_user=True
+        
     )
     assert res_orig["status"] == "ok"
     assert res_orig["is_draft"] is False
@@ -75,7 +75,7 @@ async def test_full_rectificativa_flow():
         amount=200.0, # Rectificación parcial de 200€
         iva_rate=21.0,
         irpf_rate=15.0,
-        confirmed_by_user=True
+        
     )
     assert res_rect["status"] == "ok"
     assert res_rect["is_draft"] is False

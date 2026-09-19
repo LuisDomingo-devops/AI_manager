@@ -68,7 +68,7 @@ def test_update_service(api_headers):
 
 def test_delete_service(api_headers):
     """Test para dar de baja el servicio."""
-    response = client.delete(f"/billing/products/{TEST_SERVICE_SKU}?confirmed_by_user=true", headers=api_headers)
+    response = client.delete(f"/billing/products/{TEST_SERVICE_SKU}?", headers=api_headers)
     if response.status_code == 200:
         data = response.json()
         assert data["status"] in ("ok", "error")

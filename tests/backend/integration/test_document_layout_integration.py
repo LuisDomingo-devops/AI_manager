@@ -89,7 +89,7 @@ async def test_invoice_pdf_generation_with_custom_layout():
         concept="Prueba de integración de reordenación de PDF",
         iva_rate=21.0,
         irpf_rate=15.0,
-        confirmed_by_user=False  # Genera borrador
+          # Genera borrador
     )
     
     assert res["status"] == "ok"

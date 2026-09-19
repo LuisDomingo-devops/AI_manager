@@ -135,14 +135,14 @@ async def test_sqlite_asset_repository_and_tools():
     all_assets = adapter.list_assets("default")
     assert len(all_assets) >= 1
 
-    # 4. Probar propuesta de amortización sin confirmación (confirmed_by_user=False)
+    # 4. Probar propuesta de amortización sin confirmación ()
     res_proposal = await generate_depreciation_proposal_tool(2026)
     assert res_proposal["status"] == "pending_confirmation"
     assert len(res_proposal["proposal"]) == 1
     # Cuota anual: (1200 - 200) / 10 = 100. Prorrata 8 meses de uso (mayo a diciembre): 100 * (8/12) = 66.67
     assert res_proposal["proposal"][0]["amount"] == 66.67
 
-    # 5. Probar propuesta con confirmación (confirmed_by_user=True)
+    # 5. Probar propuesta con confirmación ()
     # Creamos tabla journal/ledger de prueba si no existe
     with _get_connection("default") as conn:
         conn.execute("""

@@ -35,7 +35,7 @@ async def test_payments_flow(mock_mail):
         concept="Desarrollo de Modulo de Pagos",
         iva_rate=21.0,
         irpf_rate=15.0,
-        confirmed_by_user=True
+        
     )
     assert res_inv["status"] == "ok"
     invoice_id = res_inv["invoice_id"]

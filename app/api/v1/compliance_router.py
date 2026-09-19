@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from app.domain.services.verifactu_service import VerifactuService
 from app.domain.services.dehu_service import DEHUService
 from app.adapters.memory.memory import tenant_context
+from app.api.routes import verify_api_key
 
-router = APIRouter(prefix="/compliance")
+router = APIRouter(prefix="/compliance", dependencies=[Depends(verify_api_key)])
 
 @router.get("/declaration")
 async def get_declaration_dossier():

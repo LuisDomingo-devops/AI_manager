@@ -284,15 +284,14 @@ async def update_client(client_id: int, name: str = None, nif: str = None, email
         res_upd["message"] = f"Cliente con ID {client_id} actualizado con éxito."
     return res_upd
 
-async def delete_client(client_id: int, confirmed_by_user: bool = False) -> dict:
+async def delete_client(client_id: int) -> dict:
     """
     Elimina (Soft Delete) un cliente existente por su ID. Preserva la integridad referencial histórica contable.
     """
-    if not confirmed_by_user:
-        return {
-            "status": "pending_confirmation",
-            "message": f"¿Confirmas que deseas desactivar al cliente con ID {client_id} de tu base de datos?"
-        }
+    from app.domain.services.approval_service import approval_service
+    approved = await approval_service.request_approval("delete_client", {"client_id": client_id})
+    if not approved:
+        return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
 
     res = await delete_contact(client_id)
     if res["status"] == "ok":
@@ -459,15 +458,14 @@ async def update_product(sku: str, name: str = None, price: float = None, descri
         tool_logger.exception("Error al actualizar producto")
         return {"status": "error", "message": str(e)}
 
-async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
+async def delete_product(sku: str) -> dict:
     """
     Elimina (Soft Delete) un producto o servicio del catálogo por su SKU.
     """
-    if not confirmed_by_user:
-        return {
-            "status": "pending_confirmation",
-            "message": f"¿Confirmas que deseas desactivar el producto/servicio con SKU '{sku}' del catálogo?"
-        }
+    from app.domain.services.approval_service import approval_service
+    approved = await approval_service.request_approval("delete_product", {"sku": sku})
+    if not approved:
+        return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
 
     try:
         conn = _get_connection()
@@ -504,30 +502,34 @@ async def delete_product(sku: str, confirmed_by_user: bool = False) -> dict:
         tool_logger.exception("Error al eliminar producto")
         return {"status": "error", "message": str(e)}
 
-async def process_inventory_document(text: str, document_type: str, confirmed_by_user: bool = False) -> dict:
+async def process_inventory_document(text: str, document_type: str) -> dict:
     """
     Procesa el texto OCR de un albarán de entrega o factura de compras, extrae las líneas de producto, 
     las empareja por descripción con el catálogo, y actualiza el stock o crea nuevos artículos.
     Si se detectan marcas diferentes o hay dudas sobre si es un producto nuevo o existente, requiere confirmación.
     """
     try:
-        if not confirmed_by_user:
-            # En una implementación real, aquí llamaríamos al LLM (via llm_client) pasándole el texto del documento
-            # y el catálogo actual (get_products) con un prompt estricto de desambiguación.
-            # Como esto es una tool de demostración para el IDE de Alfonso, simulamos el comportamiento del LLM.
-            
-            # Simulamos el análisis del LLM y si hay dudas:
-            if "Rodamiento" in text and "Marca X" in text:
-                return {
-                    "status": "requires_confirmation",
-                    "message": "He encontrado 100 uds de 'Rodamiento Marca X'. En tu catálogo tienes 'Rodamiento FAG 608ZZ'. ¿Quieres que cree un producto nuevo para la marca SKF/Marca X o lo sumo al existente?"
-                }
-            
-            # Si el LLM estuviera seguro, devolvería la confirmación directamente en la siguiente iteración.
+        from app.domain.services.approval_service import approval_service
+        approved = await approval_service.request_approval("process_inventory_document", {"document_type": document_type})
+        if not approved:
+            return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
+        
+        # En una implementación real, aquí llamaríamos al LLM (via llm_client) pasándole el texto del documento
+        # y el catálogo actual (get_products) con un prompt estricto de desambiguación.
+        # Como esto es una tool de demostración para el IDE de Alfonso, simulamos el comportamiento del LLM.
+        
+        # Simulamos el análisis del LLM y si hay dudas:
+        if "Rodamiento" in text and "Marca X" in text:
             return {
                 "status": "requires_confirmation",
-                "message": f"He analizado el {document_type}. Detecto X artículos nuevos y X a actualizar. ¿Procedo?"
+                "message": "He encontrado 100 uds de 'Rodamiento Marca X'. En tu catálogo tienes 'Rodamiento FAG 608ZZ'. ¿Quieres que cree un producto nuevo para la marca SKF/Marca X o lo sumo al existente?"
             }
+            
+        # Si el LLM estuviera seguro, devolvería la confirmación directamente en la siguiente iteración.
+        return {
+            "status": "requires_confirmation",
+            "message": f"He analizado el {document_type}. Detecto X artículos nuevos y X a actualizar. ¿Procedo?"
+        }
             
         # Cuando el usuario confirma:
         conn = _get_connection()
@@ -938,7 +940,7 @@ async def update_quote_status(quote_id: str, new_status: str) -> dict:
         tool_logger.exception("Error al actualizar el estado del presupuesto")
         return {"status": "error", "message": str(e)}
 
-async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = False) -> dict:
+async def convert_quote_to_invoice(quote_id: str) -> dict:
     """
     Convierte un presupuesto existente en una factura formal.
     """
@@ -992,7 +994,6 @@ async def convert_quote_to_invoice(quote_id: str, confirmed_by_user: bool = Fals
             concept=quote_data["concept"],
             iva_rate=quote_data["iva_rate"],
             irpf_rate=quote_data["irpf_rate"],
-            confirmed_by_user=confirmed_by_user,
             items=quote_data.get("items")
         )
         if res["status"] == "error":
@@ -1028,7 +1029,6 @@ async def generate_invoice_pdf(
     date: str = None,
     iva_rate: float = 21.0,
     irpf_rate: float = 15.0,
-    confirmed_by_user: bool = False,
     items: list = None
 ) -> dict:
     """
@@ -1052,9 +1052,12 @@ async def generate_invoice_pdf(
 
         # Capa de confirmación humana obligatoria antes de emitir factura firme
         force_draft_msg = None
-        if not is_draft and not confirmed_by_user:
-            is_draft = True
-            force_draft_msg = "La factura tiene todos los campos necesarios, pero se ha generado como BORRADOR sin validez fiscal porque requiere la confirmación explícita del usuario (confirmed_by_user=True) para su registro firme en Verifactu (AEAT)."
+        if not is_draft:
+            from app.domain.services.approval_service import approval_service
+            approved = await approval_service.request_approval("generate_invoice_pdf", {"client_name": client_name, "amount": amount})
+            if not approved:
+                is_draft = True
+                force_draft_msg = "La factura tiene todos los campos necesarios, pero se ha generado como BORRADOR sin validez fiscal porque el usuario denegó o ignoró la confirmación para su registro firme en Verifactu (AEAT)."
 
         # 3. Resolver fechas e identificadores secuenciales
         now = datetime.now()
@@ -1987,8 +1990,7 @@ async def create_rectificativa_invoice(
     concept: str = None,
     date: str = None,
     iva_rate: float = None,
-    irpf_rate: float = None,
-    confirmed_by_user: bool = False
+    irpf_rate: float = None
 ) -> dict:
     """
     Emite una Factura Rectificativa oficial (RD 1619/2012 Art. 15 y Verifactu RD 1007/2023) vinculada a una factura ordinaria previa.
@@ -2014,10 +2016,12 @@ async def create_rectificativa_invoice(
         rect_concept = concept if concept else f"Rectificación de Factura {original_invoice_id}: {reason}"
 
         # Evaluar confirmación humana
-        is_draft = not confirmed_by_user
+        from app.domain.services.approval_service import approval_service
+        approved = await approval_service.request_approval("create_rectificativa_invoice", {"original_invoice_id": original_invoice_id})
+        is_draft = not approved
         force_draft_msg = None
         if is_draft:
-            force_draft_msg = f"La factura rectificativa se ha generado como BORRADOR (R-BORRADOR) porque requiere la confirmación explícita del usuario (confirmed_by_user=True) para su registro firme en Verifactu (AEAT)."
+            force_draft_msg = f"La factura rectificativa se ha generado como BORRADOR (R-BORRADOR) porque el usuario denegó o ignoró la confirmación para su registro firme en Verifactu (AEAT)."
 
         now = datetime.now()
         date_str = date if date else now.strftime("%d/%m/%Y")

@@ -21,7 +21,7 @@ class ApprovalService:
         
         try:
             # Enviar solicitud al frontend
-            await alfonso_bridge.send_event("approval_required", {
+            await alfonso_bridge.send_command("approval_required", params={
                 "action_id": action_id,
                 "action_type": action_type,
                 "details": details,

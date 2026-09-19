@@ -216,7 +216,7 @@ async def test_tools_b2b_and_advisor_endpoints():
         client_nif="A11223344",
         amount=1200.0,
         concept="Auditoría de Sistemas",
-        confirmed_by_user=True
+        
     )
     assert res_inv["status"] == "ok"
     inv_id = res_inv["invoice_id"]

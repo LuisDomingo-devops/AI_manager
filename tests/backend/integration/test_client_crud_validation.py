@@ -64,12 +64,12 @@ async def test_client_crud_flow():
     assert client["email"] == "new@test.com"
 
     # 5. Eliminar cliente
-    res = await delete_client(client_id=client_id, confirmed_by_user=True)
+    res = await delete_client(client_id=client_id, )
     assert res["status"] == "ok"
 
     res_list = await get_clients()
     assert len(res_list["clients"]) == 0
 
     # 6. Intentar eliminar cliente inexistente
-    res = await delete_client(client_id=99999, confirmed_by_user=True)
+    res = await delete_client(client_id=99999, )
     assert res["status"] == "error"

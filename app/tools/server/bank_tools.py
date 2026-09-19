@@ -38,16 +38,15 @@ async def import_bank_statement(filepath: str) -> dict:
         tool_logger.exception("Error al importar extracto bancario")
         return {"status": "error", "message": str(e)}
 
-async def run_bank_reconciliation(confirmed_by_user: bool = False) -> dict:
+async def run_bank_reconciliation() -> dict:
     """
     Ejecuta el algoritmo de conciliación contable automática cruzando movimientos y facturas.
-    Requiere confirmación explícita del usuario.
+    Requiere confirmación explícita del usuario vía OOB.
     """
-    if not confirmed_by_user:
-        return {
-            "status": "pending_confirmation",
-            "message": "Se va a ejecutar el proceso automático de conciliación bancaria que asocia los cobros reales a tus facturas. ¿Deseas proceder con la conciliación?"
-        }
+    from app.domain.services.approval_service import approval_service
+    approved = await approval_service.request_approval("run_bank_reconciliation", {})
+    if not approved:
+        return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
 
     try:
         pairs = BankService.reconcile_matching_algorithm()

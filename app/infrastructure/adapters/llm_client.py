@@ -319,7 +319,7 @@ class GeminiClient(LLMPort):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code == 429 and attempt < 3:
                 import time
-                app_logger.warning(f"Rate limit en chat/LLM (429), intento {attempt+1}. Esperando 30s...")
+                llm_logger.warning(f"Rate limit en chat/LLM (429), intento {attempt+1}. Esperando 30s...")
                 await asyncio.sleep(30)
                 continue
             elif response.status_code != 200:

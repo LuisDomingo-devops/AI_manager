@@ -102,13 +102,13 @@ def test_update_tax_rules_workflow():
         section = "Artículo 2.1"
         
         # Fase 1: Sin confirmación
-        res_pending = engine.update_tax_rules(proposed_rules, boe_link=link, boe_section=section, confirmed_by_user=False)
+        res_pending = engine.update_tax_rules(proposed_rules, boe_link=link, boe_section=section, )
         assert res_pending["status"] == "pending_confirmation"
         res_ok = engine.update_tax_rules(
             {"iva_general_rate": 23.0},
             boe_link="https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-12345",
             boe_section="Artículo 2",
-            confirmed_by_user=True
+            
         )
         assert res_ok["status"] == "ok"
         

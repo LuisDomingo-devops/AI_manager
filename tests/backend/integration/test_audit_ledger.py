@@ -79,7 +79,7 @@ async def test_audit_ledger_tool_integration():
         conn.commit()
         
     # Eliminar al cliente con la herramienta (confirmado)
-    res_del = await delete_client(client_id=client_id, confirmed_by_user=True)
+    res_del = await delete_client(client_id=client_id, )
     assert res_del["status"] == "ok"
     
     # Comprobar que se ha creado un registro en el Ledger
@@ -177,7 +177,7 @@ async def test_audit_ledger_tool_integration():
         conn.commit()
         
     # Eliminar al cliente con la herramienta (confirmado)
-    res_del = await delete_client(client_id=client_id, confirmed_by_user=True)
+    res_del = await delete_client(client_id=client_id, )
     assert res_del["status"] == "ok"
     
     # Comprobar que se ha creado un registro en el Ledger

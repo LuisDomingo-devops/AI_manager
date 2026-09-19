@@ -52,11 +52,14 @@ class ChangePasswordRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+from app.api.routes import verify_api_key
+
 @router.post(
     "/setup",
     status_code=status.HTTP_201_CREATED,
     summary="Crear el usuario inicial de la licencia",
     description="Crea el usuario único asociado a esta licencia. Solo puede llamarse una vez.",
+    dependencies=[Depends(verify_api_key)],
 )
 async def setup_user(payload: SetupRequest):
     """
