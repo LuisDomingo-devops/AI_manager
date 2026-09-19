@@ -94,7 +94,7 @@ def test_chain_propagation_corruption():
     with _get_connection() as conn:
         conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
         conn.execute(
-            "UPDATE verifactu_invoices SET base_imponible = 99.0 WHERE invoice_number = 'FAC-PROP-0002'"
+            "UPDATE verifactu_invoices SET total_amount = 99.0 WHERE invoice_number = 'FAC-PROP-0002'"
         )
         conn.commit()
         

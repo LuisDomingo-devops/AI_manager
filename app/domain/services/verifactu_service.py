@@ -140,7 +140,7 @@ class VerifactuService:
             concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{tipo_factura}|{iva_amount}|{total_amount}|{ph}|{gen_timestamp}"
         else:
             # Cadena concatenada oficial Verifactu
-            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{base_imponible}|{iva_amount}|{total_amount}|{ph}"
+            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{tipo_factura}|{iva_amount}|{total_amount}|{ph}"
         
         return hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
 
@@ -174,7 +174,7 @@ class VerifactuService:
 
             from lxml import etree
             import signxml
-            from signxml import XMLSigner
+            from signxml.xades import XAdESSigner
 
             # Obtener claves y certificado para la firma XMLDSig por tenant
             private_key = cls.get_or_create_private_key()
@@ -184,6 +184,29 @@ class VerifactuService:
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
             )
+
+            # Generar certificado X.509 temporal para que XAdES-BES pueda incluir el SigningCertificate
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            import datetime as dt
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Alfonso Autonomo SIF"),
+                x509.NameAttribute(NameOID.COMMON_NAME, str(invoice_data.get("issuer_nif", "SIF"))),
+            ])
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                dt.datetime.now(dt.UTC)
+            ).not_valid_after(
+                dt.datetime.now(dt.UTC) + dt.timedelta(days=3650)
+            ).sign(private_key, hashes.SHA256())
+            cert_pem_bytes = cert.public_bytes(serialization.Encoding.PEM)
 
             # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
             from app.utils.encryption import encryptor
@@ -283,9 +306,9 @@ class VerifactuService:
                     app_logger.error(f"Error de validación contra el esquema XSD de Veri*Factu (Alta): {xml_err}")
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
-            # Firmar digitalmente el elemento XMLDSig/XAdES envelopado
-            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
-            signed_root = signer.sign(registro_xml, key=pem_key_bytes)
+            # Firmar digitalmente el elemento XAdES-BES
+            signer = XAdESSigner(signature_algorithm="rsa-sha256")
+            signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
             
             xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
             real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
@@ -386,7 +409,7 @@ class VerifactuService:
 
             from lxml import etree
             import signxml
-            from signxml import XMLSigner
+            from signxml.xades import XAdESSigner
 
             # Obtener claves y firmar
             private_key = cls.get_or_create_private_key()
@@ -395,6 +418,29 @@ class VerifactuService:
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
             )
+            
+            # Generar certificado X.509 temporal para que XAdES-BES pueda incluir el SigningCertificate
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            import datetime as dt
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Alfonso Autonomo SIF"),
+                x509.NameAttribute(NameOID.COMMON_NAME, str(row["issuer_nif"])),
+            ])
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                dt.datetime.now(dt.UTC)
+            ).not_valid_after(
+                dt.datetime.now(dt.UTC) + dt.timedelta(days=3650)
+            ).sign(private_key, hashes.SHA256())
+            cert_pem_bytes = cert.public_bytes(serialization.Encoding.PEM)
 
             # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
             from app.utils.encryption import encryptor
@@ -453,8 +499,8 @@ class VerifactuService:
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
             # Firmar
-            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
-            signed_root = signer.sign(registro_xml, key=pem_key_bytes)
+            signer = XAdESSigner(signature_algorithm="rsa-sha256")
+            signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
             
             xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
             real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")

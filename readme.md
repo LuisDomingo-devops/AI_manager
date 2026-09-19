@@ -78,8 +78,8 @@ El sistema sigue los principios de la **Arquitectura Hexagonal (Puertos y Adapta
   - Logs del sistema para identificar picos anómalos de errores (ej. `Exception`).
 
 #### D. Motor de Cumplimiento Legal y Veri*Factu
-- **Inmutabilidad y Antifraude:** Implementa el estándar técnico de la AEAT. Cada factura genera un hash SHA-256 que toma como "semilla" el hash de la factura anterior, creando una cadena criptográfica irrompible (blockchain local).
-- **Firma Electrónica:** Integración de bibliotecas de bajo nivel para generar firmas XML (XAdES-BES) que certifican la autenticidad del documento con un certificado FNMT.
+- **Inmutabilidad y Antifraude:** Implementa el estándar técnico de la AEAT (Orden HAC/1177/2024). Cada factura genera una huella criptográfica exacta (ID, Fecha, Tipo, Cuotas) encadenada a la anterior, creando una cadena criptográfica irrompible (blockchain local).
+- **Firma Electrónica (XAdES-BES):** Integración de bibliotecas de bajo nivel para generar firmas XML avanzadas (XAdES-BES) que certifican la autenticidad del documento con un certificado X.509/FNMT, cumpliendo estrictamente con el formato oficial de la AEAT.
 - **Declaraciones Dinámicas:** Generador en tiempo real de la "Declaración Responsable" en formato PDF requerido por la normativa de Sistemas Informáticos de Facturación (SIF).
 
 #### E. Motor de Memoria (`Memory Lite`)
@@ -94,6 +94,14 @@ El sistema sigue los principios de la **Arquitectura Hexagonal (Puertos y Adapta
 #### G. Licenciamiento y Facturación Integrada
 - **Modelo On-Premise:** Utiliza criptografía asimétrica (RSA). El cliente provee una licencia que se descifra contra una clave pública, validando caducidad y módulos contratados de manera offline.
 - **Modelo Híbrido (Stripe):** Endpoint específico de webhooks (`/webhook/stripe`) que verifica las firmas criptográficas de Stripe (`stripe-signature`) e implementa llaves de idempotencia para procesar altas, bajas o impagos de suscripciones.
+
+#### H. Módulos de Negocio Avanzados Integrados
+- **Contabilidad PGC:** Motor contable completo adaptado al Plan General Contable (PGC) español, con generación automática de asientos y conciliación.
+- **Nóminas y TGSS:** Gestión de recursos humanos con generación de nóminas, seguros sociales (ficheros AFI/CRA para TGSS) y modelos fiscales.
+- **Open Banking PSD2:** Sincronización bancaria automatizada con soporte multi-proveedor para reconciliación de movimientos bancarios en tiempo real.
+- **Presupuestos y Cotizaciones:** Ciclo completo de ventas desde la cotización y presupuesto hasta la conversión en factura firme.
+- **Facturae B2B:** Integración completa para el intercambio electrónico de facturas estructuradas B2B (Facturae) entre empresas según la Ley Crea y Crece.
+- **Cliente Gráfico (PyQt6):** Interfaz gráfica de usuario multiplataforma desarrollada en PyQt6 que permite una interacción visual rica y robusta.
 
 ---
 
