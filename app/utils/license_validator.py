@@ -168,7 +168,7 @@ def get_machine_fingerprint() -> str:
                     raw_components.append(f"win_guid:{guid.strip()}")
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 2. Linux Machine ID
     elif platform.system() == "Linux":
@@ -179,7 +179,7 @@ def get_machine_fingerprint() -> str:
                     break
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 3. Fallbacks de hardware universales
     try:
@@ -187,7 +187,7 @@ def get_machine_fingerprint() -> str:
         raw_components.append(f"mac:{node_mac}")
     except Exception:
         from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        error_logger.warning("Excepción interceptada:", exc_info=True)
 
     raw_components.append(f"host:{platform.node()}")
     raw_components.append(f"arch:{platform.machine()}")
@@ -214,7 +214,7 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
                 return False
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
 
     try:
         CLOCK_INTEGRITY_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -227,7 +227,7 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
         )
     except Exception:
         from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        error_logger.warning("Excepción interceptada:", exc_info=True)
 
     return True
 

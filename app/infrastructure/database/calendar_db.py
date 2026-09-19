@@ -144,7 +144,7 @@ def list_events(start_date: Optional[str] = None, end_date: Optional[str] = None
             results.sort(key=lambda x: x.get("start_time", ""))
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
             
         return results
 

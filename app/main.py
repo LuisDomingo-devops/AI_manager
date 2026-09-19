@@ -312,7 +312,7 @@ async def request_id_middleware(request: Request, call_next):
             request._receive = receive
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente al decodificar body.")
+            error_logger.warning("Excepción interceptada al decodificar body:", exc_info=True)
 
     # 2. Inspección del WAF Local (Solo si NO hay WAF gestionado externo o si queremos protección en profundidad)
     if not managed_waf_enabled:

@@ -138,7 +138,33 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
 
     logger.info("Recibido evento de webhook Stripe: %s", event_type)
 
+    event_id = event.get("id") if endpoint_secret else raw_data.get("id")
+    
     if event_type in ("checkout.session.completed", "invoice.payment_succeeded"):
+        # Idempotency check
+        if event_id:
+            try:
+                from app.utils.paths import DATA_DIR
+                events_file = DATA_DIR / "stripe_events.json"
+                
+                processed_events = []
+                if events_file.exists():
+                    try:
+                        with open(events_file, "r", encoding="utf-8") as f:
+                            processed_events = json.load(f)
+                    except Exception:
+                        pass
+                
+                if event_id in processed_events:
+                    logger.info("Evento de Stripe %s ya fue procesado. Ignorando para mantener idempotencia.", event_id)
+                    return {"status": "ignored", "reason": "already_processed", "event": event_type}
+                
+                processed_events.append(event_id)
+                with open(events_file, "w", encoding="utf-8") as f:
+                    json.dump(processed_events, f)
+            except Exception as e:
+                logger.warning("No se pudo procesar la idempotencia del evento de Stripe: %s", str(e), exc_info=True)
+
         metadata = stripe_obj.get("metadata", {})
         
         client_id = metadata.get("client_id") or stripe_obj.get("client_id") or stripe_obj.get("client_reference_id", "default")

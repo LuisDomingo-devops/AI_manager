@@ -1,14 +1,8 @@
 ---
-title: Alfonso Autónomo
-emoji: 🤖
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
+title: Alfonso Ai Konta
 ---
 
-# Alfonso Autónomo 🤖
+# Alfonso Autónomo 
 
 > **"El asistente inteligente definitivo para el autónomo español: Privado, Seguro y Legal."**
 

@@ -407,7 +407,7 @@ def get_tool_schemas() -> list[dict]:
                         required.append(param_name)
             except Exception:
                 from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                error_logger.warning("Excepción interceptada:", exc_info=True)
             parameters = {
                 "type": "object",
                 "properties": properties,

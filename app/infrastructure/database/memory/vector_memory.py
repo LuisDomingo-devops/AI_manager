@@ -259,7 +259,7 @@ class VectorMemory(VectorMemoryPort):
             self.client.delete_collection("alfonso_memory")
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
         self._refresh_collection()
 
 

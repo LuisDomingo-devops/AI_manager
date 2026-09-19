@@ -24,8 +24,7 @@ from app.config import settings
 from app.adapters.http_client import client
 from app.adapters.tool_registry import get_tool
 from app.domain.prompt_generator import generate_tool_prompt
-from app.utils.logger import attach_request_id, llm_logger, error_logger
-
+from app.utils.logger import attach_request_id, llm_logger, error_logger, app_logger
 # ---------------------------------------------------------------------
 # REGEX
 # ---------------------------------------------------------------------
@@ -83,7 +82,7 @@ def get_system_prompt(mode: str, client_id: str | None = None) -> str:
             template = template + "\n\n" + client_ctx
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
     elif mode == "raw":
         return "Eres un asistente de procesamiento de datos útil y preciso."
     else:
@@ -142,7 +141,7 @@ def extract_json_robust(raw: str) -> dict | None:
         return json.loads(raw)
     except Exception:
         from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 0.1. Fix robusto para "no_op" con comillas sin escapar en el mensaje
     if "no_op" in raw and "message" in raw:
@@ -159,7 +158,7 @@ def extract_json_robust(raw: str) -> dict | None:
                 }
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 0.5. Si hay múltiples líneas (ej. múltiples herramientas generadas), probar línea por línea
     if "\n" in raw:
@@ -172,7 +171,7 @@ def extract_json_robust(raw: str) -> dict | None:
                         return data
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 1. JSON block (fallback regex)
     m = _JSON_BLOCK.search(raw)
@@ -189,7 +188,7 @@ def extract_json_robust(raw: str) -> dict | None:
         return json.loads(clean)
     except Exception:
         from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        error_logger.warning("Excepción interceptada:", exc_info=True)
 
     # 3. tool: {json}
     m = _TOOL_SPLIT_COLON.match(clean)
@@ -240,7 +239,7 @@ def extract_json_robust(raw: str) -> dict | None:
                                 }
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
 
                 # Mapeo manual alternativo para herramientas comunes
                 CLIENT_ARGS_MAPPING = {
@@ -368,25 +367,7 @@ class GeminiClient(LLMPort):
             content, p_tok, c_tok = await self._call_gemini_api(anonymized_messages, temperature=temp)
             model_name = settings.GEMINI_MODEL_NAME
         else:
-            payload = {
-                "model": settings.GEMINI_MODEL_NAME,
-                "messages": anonymized_messages,
-                "stream": False,
-                "keep_alive": -1,
-            }
-            if "options" in kwargs:
-                payload["options"] = kwargs["options"]
-            
-            response = await client.post(
-                f"{settings.OLLAMA_BASE_URL}/api/chat",
-                json=payload,
-            )
-            if response.status_code != 200:
-                raise RuntimeError(response.text)
-            data = response.json()
-            content = data.get("message", {}).get("content", "").strip()
-            p_tok = data.get("prompt_eval_count", 0)
-            c_tok = data.get("eval_count", 0)
+            raise RuntimeError("GEMINI_PROXY_URL no está configurado. La conexión a Ollama ha sido descontinuada.")
 
         latency_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -451,23 +432,7 @@ class GeminiClient(LLMPort):
                     if chunk:
                         yield chunk
         else:
-            # Fallback a Ollama stream
-            payload = {
-                "model": model_name,
-                "messages": anonymized_messages,
-                "stream": True,
-                "keep_alive": -1,
-            }
-            async with client.stream("POST", f"{settings.OLLAMA_BASE_URL}/api/chat", json=payload) as response:
-                async for line in response.aiter_lines():
-                    if line:
-                        try:
-                            import json
-                            data = json.loads(line)
-                            yield data.get("message", {}).get("content", "")
-                        except:
-                            from app.utils.logger import error_logger
-                            error_logger.warning("Excepción anónima interceptada silenciosamente.")
+            raise RuntimeError("GEMINI_PROXY_URL no está configurado para streaming. La conexión a Ollama ha sido descontinuada.")
 
     async def generate(
         self,

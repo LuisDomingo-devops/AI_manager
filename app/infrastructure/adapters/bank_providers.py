@@ -267,7 +267,7 @@ class WiseProvider(BaseBankProvider):
                         accounts = [str(b["id"]) for b in balances if "id" in b]
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
                 
                 return {
                     "valid": True,
@@ -434,7 +434,7 @@ class WiseProvider(BaseBankProvider):
                                 amt_val = float(parts[0].replace(",", ""))
                             except Exception:
                                 from app.utils.logger import error_logger
-                                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                                error_logger.warning("Excepción interceptada:", exc_info=True)
                                 
                         all_movements.append({
                             "date": fmt_date,
@@ -515,7 +515,7 @@ class RevolutProvider(BaseBankProvider):
                 return mapped
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
         return []
 
 
@@ -624,7 +624,7 @@ class StripeProvider(BaseBankProvider):
                 return mapped
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
         return []
 
 

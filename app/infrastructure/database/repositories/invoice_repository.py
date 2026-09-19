@@ -176,7 +176,7 @@ class InvoiceRepository:
                             break
                     except Exception:
                         from app.utils.logger import error_logger
-                        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                        error_logger.warning("Excepción interceptada:", exc_info=True)
             finally:
                 conn.close()
         return existing_id_db, existing_file_path, client_name, client_nif, amount, concept
@@ -219,7 +219,7 @@ class InvoiceRepository:
                         }
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
             return None
         finally:
             conn.close()
@@ -311,7 +311,7 @@ class InvoiceRepository:
                         return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
             return None
         finally:
             conn.close()
@@ -352,7 +352,7 @@ class InvoiceRepository:
                     })
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
             return invoices
         finally:
             conn.close()

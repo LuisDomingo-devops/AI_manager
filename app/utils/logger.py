@@ -68,7 +68,7 @@ class JSONFormatter(logging.Formatter):
                 tenant_id = tenant_val
         except Exception:
             from app.utils.logger import error_logger
-            error_logger.warning("Excepción genérica interceptada silenciosamente.")
+            error_logger.warning("Excepción interceptada:", exc_info=True)
 
         log_data = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -100,7 +100,7 @@ class SafeRotatingFileHandler(RotatingFileHandler):
                 self.stream.close()
             except Exception:
                 from app.utils.logger import error_logger
-                error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                error_logger.warning("Excepción interceptada:", exc_info=True)
             self.stream = None
         try:
             super().doRollover()
@@ -113,7 +113,7 @@ class SafeRotatingFileHandler(RotatingFileHandler):
                     self.stream = self._open()
                 except Exception:
                     from app.utils.logger import error_logger
-                    error_logger.warning("Excepción genérica interceptada silenciosamente.")
+                    error_logger.warning("Excepción interceptada:", exc_info=True)
 
 
 formatter = RequestIdFormatter(FORMAT)

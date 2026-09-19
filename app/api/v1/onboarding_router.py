@@ -64,7 +64,7 @@ async def get_onboarding_status(client_id: Optional[str] = None):
                     }
     except Exception:
         from app.utils.logger import error_logger
-        error_logger.warning("Excepción genérica interceptada silenciosamente.")
+        error_logger.warning("Excepción interceptada:", exc_info=True)
 
     is_completed = has_profile and license_result.is_operational
 
