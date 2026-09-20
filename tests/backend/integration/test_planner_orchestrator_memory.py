@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.adapters.memory import memory, vector_memory
 
@@ -21,7 +21,8 @@ def clean_databases():
 
 
 @pytest.mark.anyio
-async def test_orchestrator_memory_lifecycle():
+@patch("app.config.Settings.get_client_role", return_value="admin")
+async def test_orchestrator_memory_lifecycle(mock_get_role):
     orchestrator = PlannerOrchestrator()
     session_id = "test_e2e_session"
 
@@ -29,37 +30,43 @@ async def test_orchestrator_memory_lifecycle():
     # El usuario da una orden que no activa el analizador estático pero sí al LLM en modo tool.
     mock_llm = MagicMock()
     mock_llm.generate = AsyncMock()
-    # Forzar una llamada a la tool save_user_preference, luego terminar con chat
+    # Forzar una llamada a la tool save_user_preference, luego terminar con chat, luego el resumen
     mock_llm.generate.side_effect = [
         '{"tool": "save_user_preference", "args": {"fact": "El perro del usuario se llama Toby."}}',
-        'Preferencia guardada.'
+        'Preferencia guardada.',
+        'Resumen de la conversación.'
     ]
 
     # Ejecutar en el orquestador (forzamos que vaya a la tool usando una keyword)
     result = await orchestrator.run(
         user_message="crea un registro indicando que mi perro se llama Toby.",
         llm=mock_llm,
-        session_id=session_id
+        session_id=session_id,
+        client_id="test_client"
     )
 
     # Verificar que el hecho se guardó en ChromaDB mediante la tool
-    facts = vector_memory.get_all_facts()
+    facts = vector_memory.get_all_facts(client_id="test_client")
     assert len(facts) == 1
     assert facts[0]["text"] == "El perro del usuario se llama Toby."
     assert facts[0]["session_id"] == session_id
 
     # --- FASE 2: Recuperación del contexto semántico en el siguiente turno ---
     # El usuario pregunta cómo se llama su perro.
-    mock_llm.generate = AsyncMock(return_value='{"tool": "no_op", "args": {"message": "Buscando..."}}')
+    mock_llm.generate = AsyncMock(side_effect=[
+        '{"tool": "no_op", "args": {"message": "Buscando..."}}',
+        'Resumen de la conversación.'
+    ])
 
     await orchestrator.run(
         user_message="¿Cómo se llama mi perro?",
         llm=mock_llm,
-        session_id=session_id
+        session_id=session_id,
+        client_id="test_client"
     )
 
     # Verificar que mock_llm.generate fue llamado con el contexto de la memoria recuperada
-    args, kwargs = mock_llm.generate.call_args
+    args, kwargs = mock_llm.generate.call_args_list[0]
     memory_context = kwargs.get("memory")
     assert memory_context is not None
     assert "El perro del usuario se llama Toby." in memory_context
@@ -69,40 +76,47 @@ async def test_orchestrator_memory_lifecycle():
     mock_llm.generate = AsyncMock()
     mock_llm.generate.side_effect = [
         '{"tool": "forget_user_fact", "args": {"query": "Toby"}}',
-        'He borrado ese recuerdo.'
+        'He borrado ese recuerdo.',
+        'Resumen de la conversación.'
     ]
 
     await orchestrator.run(
         user_message="elimina de mi perfil el nombre de mi perro",
         llm=mock_llm,
-        session_id=session_id
+        session_id=session_id,
+        client_id="test_client"
     )
 
     # Verificar que ya no queden recuerdos en la base de datos vectorial
-    facts_after = vector_memory.get_all_facts()
+    facts_after = vector_memory.get_all_facts(client_id="test_client")
     assert len(facts_after) == 0
 
 
 @pytest.mark.anyio
-async def test_orchestrator_style_injection():
+@patch("app.config.Settings.get_client_role", return_value="admin")
+async def test_orchestrator_style_injection(mock_get_role):
     orchestrator = PlannerOrchestrator()
     session_id = "test_style_session"
 
     # Insertar una directriz de estilo en ChromaDB
-    vector_memory.add_fact(session_id, "Responder siempre de forma muy concisa y usando viñetas.")
+    vector_memory.add_fact(session_id, "Responder siempre de forma muy concisa y usando viñetas.", client_id="test_client")
 
     # Simular una consulta del usuario
     mock_llm = MagicMock()
-    mock_llm.generate = AsyncMock(return_value='{"tool": "no_op", "args": {"message": "Listo"}}')
+    mock_llm.generate = AsyncMock(side_effect=[
+        '{"tool": "no_op", "args": {"message": "Listo"}}',
+        'Resumen de la conversación.'
+    ])
 
     await orchestrator.run(
         user_message="Dame el estado del servidor",
         llm=mock_llm,
-        session_id=session_id
+        session_id=session_id,
+        client_id="test_client"
     )
 
     # Verificar que la directriz se recuperó e inyectó bajo el bloque de estilo
-    args, kwargs = mock_llm.generate.call_args
+    args, kwargs = mock_llm.generate.call_args_list[0]
     memory_context = kwargs.get("memory")
     assert memory_context is not None
     assert "[Directrices de estilo preferidas por el usuario:]" in memory_context

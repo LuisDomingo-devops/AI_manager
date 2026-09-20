@@ -149,7 +149,21 @@ def test_integration_anonymization_and_llm_payload_safety():
     assert "500€" in final_user_response
 
 
-def test_integration_verifactu_cryptographic_chaining():
+from unittest.mock import patch
+import os
+
+def _get_test_certs():
+    try:
+        with open("data/certificados_prueba/certificado_pruebas.pem", "rb") as f:
+            cert = f.read()
+        with open("data/certificados_prueba/clave_pruebas.pem", "rb") as f:
+            key = f.read()
+        return cert, key
+    except Exception:
+        return b"dummy_cert", b"dummy_key"
+
+@patch("app.utils.signature.get_certificate_and_key", return_value=_get_test_certs())
+def test_integration_verifactu_cryptographic_chaining(mock_get_cert):
     """
     TEST QA & INTEGRACIÓN 3:
     Verifica el flujo técnico Verifactu 2027:

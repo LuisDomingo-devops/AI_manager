@@ -1,18 +1,26 @@
-# Quickstart Validation Guide: VeriFactu Base
+# Quickstart: Validación de VeriFactu (AEAT)
 
-## Prerrequisitos
-- Python 3.11+
-- Dependencias instaladas: `pip install -r requirements.txt` (incluyendo `pytest`, `lxml`, `httpx`).
-- Certificado de pruebas de la AEAT (`test_cert.p12`) ubicado en el directorio raíz o en las variables de entorno.
+## Escenario de Validación 1: Envío de Factura Exitosa al Sandbox AEAT
+Este escenario valida que el encadenamiento de facturas, la firma XMLDSig y la conexión con el sandbox prewww10.aeat.es funcionan correctamente.
 
-## Escenario de Validación 1: Generación y Firma
-**Objetivo**: Validar que una factura se transforma en XML correcto y se firma (Unit test).
-1. Ejecutar el test unitario de esquemas:
-   `pytest tests/backend/unit/test_verifactu_schema_and_endpoint_unit.py -v`
-**Resultado Esperado**: El test pasa, indicando que el XML generado es válido contra el XSD de VeriFactu y la firma XMLDSig es correcta.
+**Prerequisites**: 
+- Los certificados de prueba proporcionados en `data/certificados_prueba` cargados en la base de datos o disponibles vía `app.config`.
 
-## Escenario de Validación 2: Envío a AEAT Sandbox
-**Objetivo**: Validar el envío real/simulado al entorno de pruebas de la AEAT (Integration test).
-1. Ejecutar el test de integración de envío:
-   `pytest tests/backend/integration/test_verifactu_real_soap.py -v` o `test_verifactu.py`
-**Resultado Esperado**: Se recibe un estado `Aceptado` (o el equivalente 200 OK con el XML de respuesta de la AEAT) y se genera un log de ejecución `pytest-logs.txt` en el directorio actual.
+**Test Command**:
+```bash
+venv\Scripts\python.exe -m pytest tests\backend\integration\test_verifactu.py -v
+```
+
+**Expected Outcome**:
+El test de integración debe pasar. Se conectará (o mockeará condicionalmente si configurado así, pero verificará la firma) y la AEAT debe responder `HTTP 200` y `status="accepted"`.
+
+## Escenario de Validación 2: Inmutabilidad (Hash Chaining)
+Este escenario valida que si se altera un hash anterior, se rompe la cadena.
+
+**Test Command**:
+```bash
+venv\Scripts\python.exe -m pytest tests\backend\integration\test_verifactu_integrity.py -v
+```
+
+**Expected Outcome**:
+La alteración del `sif_event_log` debe lanzar una excepción o fallar, indicando que el trigger de inmutabilidad fiscal ha prevenido la manipulación o el test verifica que los hashes se rompen si se altera a nivel bajo.

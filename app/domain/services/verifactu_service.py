@@ -46,62 +46,19 @@ class VerifactuService:
     @classmethod
     def get_or_create_private_key(cls, client_id: Optional[str] = None) -> rsa.RSAPrivateKey:
         """
-        Obtiene la clave privada RSA de Verifactu local o la crea si no existe.
-        Soporta aislamiento de claves por tenant (client_id).
-        Representa la firma digital (FNMT/DNIe) en el modelo local-first.
+        Retrieves the private key for the tenant from the certificates table.
+        This represents the real digital signature for the local-first model.
         """
-        from app.utils.encryption import encryptor
         from app.adapters.memory.memory import tenant_context
+        from app.utils.signature import get_certificate_and_key
         
         cid = (client_id or tenant_context.get() or "default").strip().lower()
-        if cid == "default":
-            key_path = cls._private_key_path
-        else:
-            key_path = cls._private_key_path.parent / f"{cid}_verifactu_private_key.pem"
-
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        if key_path.exists():
-            try:
-                with open(key_path, "r", encoding="utf-8") as key_file:
-                    content = key_file.read().strip()
-                if content.startswith("gAAAA"):
-                    decrypted_bytes = encryptor.decrypt(content).encode('utf-8')
-                else:
-                    raise ValueError("Plaintext key")
-            except Exception:
-                # Caso fallback o migración si es texto plano
-                with open(key_path, "rb") as raw_file:
-                    raw_pem = raw_file.read()
-                try:
-                    encrypted_pem = encryptor.encrypt(raw_pem.decode('utf-8'))
-                    with open(key_path, "w", encoding="utf-8") as key_file:
-                        key_file.write(encrypted_pem)
-                except Exception:
-                    pass
-                decrypted_bytes = raw_pem
-
-            return serialization.load_pem_private_key(
-                decrypted_bytes,
-                password=None
-            )
+        cert_pem, key_pem = get_certificate_and_key(cid)
         
-        # Generar nueva clave de 2048 bits
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
-        
-        # Guardar en disco local de forma segura/cifrada
-        pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        encrypted_pem = encryptor.encrypt(pem.decode('utf-8'))
-        with open(key_path, "w", encoding="utf-8") as key_file:
-            key_file.write(encrypted_pem)
+        if not key_pem:
+            raise ValueError(f"No certificate configured for tenant {cid}")
             
-        return private_key
+        return serialization.load_pem_private_key(key_pem, password=None)
 
     @classmethod
     def get_last_invoice_hash(cls) -> Optional[str]:
@@ -173,40 +130,14 @@ class VerifactuService:
             current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
 
             from lxml import etree
-            import signxml
-            from signxml import XMLSigner
+            from app.utils.signature import get_certificate_and_key, sign_xml_dsig
+            from app.adapters.memory.memory import tenant_context
 
-            # Obtener claves y certificado para la firma XMLDSig por tenant
-            private_key = cls.get_or_create_private_key()
-            # Exportar clave pública simulando un certificado auto-firmado
-            pem_key_bytes = private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-
-            # Generar certificado X.509 temporal para la firma XMLDSig
-            from cryptography import x509
-            from cryptography.x509.oid import NameOID
-            import datetime as dt
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Alfonso Autonomo SIF"),
-                x509.NameAttribute(NameOID.COMMON_NAME, str(invoice_data.get("issuer_nif", "SIF"))),
-            ])
-            cert = x509.CertificateBuilder().subject_name(
-                subject
-            ).issuer_name(
-                issuer
-            ).public_key(
-                private_key.public_key()
-            ).serial_number(
-                x509.random_serial_number()
-            ).not_valid_before(
-                dt.datetime.now(dt.UTC)
-            ).not_valid_after(
-                dt.datetime.now(dt.UTC) + dt.timedelta(days=3650)
-            ).sign(private_key, hashes.SHA256())
-            cert_pem_bytes = cert.public_bytes(serialization.Encoding.PEM)
+            cid = (tenant_context.get() or "default").strip().lower()
+            cert_pem_bytes, pem_key_bytes = get_certificate_and_key(cid)
+            
+            if not cert_pem_bytes or not pem_key_bytes:
+                raise ValueError(f"Certificado no encontrado en base de datos para el tenant {cid}.")
 
             # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
             from app.utils.encryption import encryptor
@@ -307,12 +238,10 @@ class VerifactuService:
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
             # Firmar digitalmente el elemento (XMLDSig enveloped)
-            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
-            signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
+            xml_firmado_str = sign_xml_dsig(registro_xml, pem_key_bytes, cert_pem_bytes)
             
-            xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
-            
-            # Extraer el valor real de la firma (SignatureValue)
+            # Re-parsear para extraer el SignatureValue
+            signed_root = etree.fromstring(xml_firmado_str.encode('utf-8'))
             sig_val = signed_root.find(".//ds:SignatureValue", namespaces={'ds': 'http://www.w3.org/2000/09/xmldsig#'})
             real_sig_base64 = sig_val.text.strip() if sig_val is not None else ""
 
@@ -411,39 +340,14 @@ class VerifactuService:
             current_hash = cls.calculate_invoice_hash(invoice_data, prev_hash)
 
             from lxml import etree
-            import signxml
-            from signxml import XMLSigner
+            from app.utils.signature import get_certificate_and_key, sign_xml_dsig
+            from app.adapters.memory.memory import tenant_context
 
-            # Obtener claves y firmar
-            private_key = cls.get_or_create_private_key()
-            pem_key_bytes = private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
+            cid = (tenant_context.get() or "default").strip().lower()
+            cert_pem_bytes, pem_key_bytes = get_certificate_and_key(cid)
             
-            # Generar certificado X.509 temporal para la firma XMLDSig
-            from cryptography import x509
-            from cryptography.x509.oid import NameOID
-            import datetime as dt
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Alfonso Autonomo SIF"),
-                x509.NameAttribute(NameOID.COMMON_NAME, str(row["issuer_nif"])),
-            ])
-            cert = x509.CertificateBuilder().subject_name(
-                subject
-            ).issuer_name(
-                issuer
-            ).public_key(
-                private_key.public_key()
-            ).serial_number(
-                x509.random_serial_number()
-            ).not_valid_before(
-                dt.datetime.now(dt.UTC)
-            ).not_valid_after(
-                dt.datetime.now(dt.UTC) + dt.timedelta(days=3650)
-            ).sign(private_key, hashes.SHA256())
-            cert_pem_bytes = cert.public_bytes(serialization.Encoding.PEM)
+            if not cert_pem_bytes or not pem_key_bytes:
+                raise ValueError(f"Certificado no encontrado en base de datos para el tenant {cid}.")
 
             # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
             from app.utils.encryption import encryptor
@@ -502,12 +406,10 @@ class VerifactuService:
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
             # Firmar (XMLDSig enveloped)
-            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
-            signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
-            
-            xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
+            xml_firmado_str = sign_xml_dsig(registro_xml, pem_key_bytes, cert_pem_bytes)
             
             # Extraer el valor real de la firma
+            signed_root = etree.fromstring(xml_firmado_str.encode('utf-8'))
             sig_val = signed_root.find(".//ds:SignatureValue", namespaces={'ds': 'http://www.w3.org/2000/09/xmldsig#'})
             real_sig_base64 = sig_val.text.strip() if sig_val is not None else ""
 
@@ -726,50 +628,25 @@ class VerifactuService:
         cert_pem_file = None
         key_pem_file = None
 
-        # Obtener certificado de la DB (user_profile)
-        cert_path_db = None
-        cert_password_db = None
-        try:
-            with _get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT cert_path, cert_password FROM user_profile LIMIT 1")
-                row = cursor.fetchone()
-                if row:
-                    if row["cert_path"]:
-                        cert_path_db = encryptor.decrypt(row["cert_path"])
-                    if row["cert_password"]:
-                        cert_password_db = encryptor.decrypt(row["cert_password"])
-        except Exception:
-            pass
-
-        # Si hay certificado en la DB, extraer clave y cert a archivos temporales PEM
-        if cert_path_db and os.path.exists(cert_path_db):
-            try:
-                with open(cert_path_db, "rb") as f:
-                    p12_data = f.read()
-                
-                password = cert_password_db.encode("utf-8") if cert_password_db else None
-                private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
-                    p12_data, password
-                )
-                
-                if private_key and certificate:
-                    cert_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
-                    cert_pem_file.write(certificate.public_bytes(serialization.Encoding.PEM))
-                    cert_pem_file.close()
-                    
-                    key_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
-                    key_pem_file.write(private_key.private_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PrivateFormat.PKCS8,
-                        encryption_algorithm=serialization.NoEncryption()
-                    ))
-                    key_pem_file.close()
-                    
-                    cert_path = cert_pem_file.name
-                    key_path = key_pem_file.name
-            except Exception as cert_err:
-                app_logger.warning("No se pudo cargar el certificado P12/PFX del perfil para mTLS: %s", cert_err)
+        from app.utils.signature import get_certificate_and_key
+        from app.adapters.memory.memory import tenant_context
+        
+        cid = (tenant_context.get() or "default").strip().lower()
+        cert_pem_bytes, pem_key_bytes = get_certificate_and_key(cid)
+        
+        if cert_pem_bytes and pem_key_bytes:
+            cert_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
+            cert_pem_file.write(cert_pem_bytes)
+            cert_pem_file.close()
+            
+            key_pem_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
+            key_pem_file.write(pem_key_bytes)
+            key_pem_file.close()
+            
+            cert_path = cert_pem_file.name
+            key_path = key_pem_file.name
+        else:
+            app_logger.warning("No se pudo cargar el certificado desde la base de datos para mTLS.")
 
         # Fallback a variables de entorno para compatibilidad y testing
         if not cert_path and not key_path:
@@ -840,6 +717,10 @@ class VerifactuService:
                     }
             
             # Fallback removido: En producción es obligatorio un certificado cualificado.
+            # Lanzar NotImplementedError para impedir inserciones falsas en producción.
+            if aeat_env == "production":
+                raise NotImplementedError("Simulación offline (offline_simulated) no permitida en producción. Se requiere certificado cualificado.")
+            
             return {
                 "status": "rejected",
                 "delivery_status": "ERROR_AUTH",

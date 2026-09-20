@@ -152,7 +152,8 @@ def _sync_from_gmail_blocking() -> int:
         mail.logout()
         return inserted_count
     except Exception as e:
-        pass
+        from app.utils.logger import error_logger
+        error_logger.warning("Error sincronizando gmail: %s", e)
         return 0
 
 

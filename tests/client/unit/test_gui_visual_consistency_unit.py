@@ -152,7 +152,8 @@ def test_ledger_dialog_mayor_and_diario_synchronization_unit(qapp):
     from app.utils.encryption import encryptor
 
     with _get_connection() as conn:
-        conn.execute("INSERT OR IGNORE INTO journal_entries (id, entry_date, concept) VALUES (9999, '2026-08-01', 'Test')")
+        enc_concept = encryptor.encrypt("Test")
+        conn.execute("INSERT OR IGNORE INTO journal_entries (id, entry_date, concept) VALUES (9999, '2026-08-01', ?)", (enc_concept,))
         enc_debe = encryptor.encrypt("100.0")
         enc_haber = encryptor.encrypt("0.0")
         conn.execute("INSERT OR IGNORE INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)", (9999, '70500000', enc_debe, enc_haber))

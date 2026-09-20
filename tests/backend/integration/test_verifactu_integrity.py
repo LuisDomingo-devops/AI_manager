@@ -19,6 +19,25 @@ def clean_verifactu_db(tmp_path, monkeypatch):
     with _get_connection() as conn:
         conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
         conn.execute("DELETE FROM verifactu_invoices")
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_sif")
+        conn.execute("DELETE FROM sif_event_log")
+        
+        # Insert test cert to prevent ValueError
+        from app.utils.encryption import encryptor
+        try:
+            with open("data/certificados_prueba/certificado_pruebas.pem", "r") as f_cert:
+                cert_data = f_cert.read()
+            with open("data/certificados_prueba/clave_pruebas.pem", "r") as f_key:
+                key_data = f_key.read()
+            enc_data = encryptor.encrypt(cert_data + "\n" + key_data)
+            
+            conn.execute(
+                "INSERT OR IGNORE INTO certificates (id, tenant_id, cert_type, encrypted_p12, subject_name) "
+                "VALUES ('test-cert', 'default', 'AEAT_PRUEBA', ?, 'Pruebas AEAT')",
+                (enc_data,)
+            )
+        except FileNotFoundError:
+            pass
         conn.commit()
     yield
     with _get_connection() as conn:

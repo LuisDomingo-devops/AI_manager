@@ -75,7 +75,7 @@ async def test_orchestrator_server_tool_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch("app.config.settings.get_client_role", return_value="admin"):
+         patch("app.config.Settings.get_client_role", return_value="admin"):
         # El LLM devuelve el JSON de tool en el primer turno y texto en el segundo
         mock_llm.generate.side_effect = [
             '{"tool": "get_current_datetime", "args": {}}',
@@ -89,7 +89,8 @@ async def test_orchestrator_server_tool_flow(mock_llm, session_memory_fixture):
             result = await orchestrator.run(
                 user_message="qué hora es",
                 llm=mock_llm,
-                session_id="test_session"
+                session_id="test_session",
+                client_id="test_client"
             )
             
             assert result["type"] == "chat"
@@ -111,7 +112,7 @@ async def test_orchestrator_mail_bypass_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch("app.config.settings.get_client_role", return_value="admin"):
+         patch("app.config.Settings.get_client_role", return_value="admin"):
         
         mock_mail_func = AsyncMock(return_value={"status": "ok", "message": "Inyectados"})
         
@@ -120,7 +121,8 @@ async def test_orchestrator_mail_bypass_flow(mock_llm, session_memory_fixture):
             result = await orchestrator.run(
                 user_message="Genera correos de prueba",
                 llm=mock_llm,
-                session_id="test_session"
+                session_id="test_session",
+                client_id="test_client"
             )
             
             assert result["type"] == "chat"

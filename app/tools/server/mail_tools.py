@@ -870,7 +870,7 @@ def send_smtp_email_if_configured(recipient: str, subject: str, body: str) -> st
             server.quit()
             return gmail_user
         except Exception as e:
-            pass
+            app_logger.warning("Error en send_message SMTP: %s", e)
             raise e
     return "test.user@alfonso.dev"
 

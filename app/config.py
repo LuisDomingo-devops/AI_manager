@@ -19,7 +19,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any, Dict
-from pydantic import model_validator
+from pydantic import model_validator, Field
 from pydantic_settings import BaseSettings
 
 
@@ -28,14 +28,14 @@ class Settings(BaseSettings):
     GEMINI_MODEL_NAME: str = "gemini-3.1-flash-lite"
     GEMINI_API_VERSION: str = "v1beta"
     GEMINI_PROXY_URL: str = ""
-    ALFONSO_CLIENT_SECRET: str = ""
+    ALFONSO_CLIENT_SECRET: str = Field(default="", repr=False)
 
     ANONYMIZE_LLM_CALLS: bool = True
 
-    DATABASE_ENCRYPTION_KEY: str = ""
+    DATABASE_ENCRYPTION_KEY: str = Field(default="", repr=False)
 
-    ALFONSO_API_KEY: str = ""
-    ALFONSO_BRIDGE_TOKEN: str = ""
+    ALFONSO_API_KEY: str = Field(default="", repr=False)
+    ALFONSO_BRIDGE_TOKEN: str = Field(default="", repr=False)
     VERIFACTU_ACTIVE: bool = True
     ALFONSO_SIF_PRODUCER_NIF: str = "B12345678"
     ALFONSO_AEAT_URL: str = ""
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     ALFONSO_USER_NIF: str = ""
 
     # ── Credenciales Open Banking PSD2 (GoCardless / Nordigen) ─────────
-    GOCARDLESS_SECRET_ID: str = ""
-    GOCARDLESS_SECRET_KEY: str = ""
+    GOCARDLESS_SECRET_ID: str = Field(default="", repr=False)
+    GOCARDLESS_SECRET_KEY: str = Field(default="", repr=False)
 
     CHAT_PROMPT_PATH: str = "app/prompts/chat_system.txt"
 

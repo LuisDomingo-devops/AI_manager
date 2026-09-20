@@ -113,3 +113,20 @@ Alfonso implementa un trazado exhaustivo diseñado para la depuración y auditor
 - `cybersecurity.log`: Alertas, detecciones heurísticas e intentos de intrusión documentados por IP y payload.
 - `errors.log`: Recolección centralizada de excepciones para que el Agente de Seguridad las evalúe en segundo plano.
 - *Traceability:* Se asigna un UUID a cada transacción HTTP, el cual se propaga por todo el sistema y archivos de registro.
+
+---
+
+## 5. Configuración Legal y Veri*Factu
+
+Para que el sistema emita facturas 100% legales y compatibles con el sistema Veri*Factu de la AEAT, es imperativo configurar las siguientes variables de entorno en el archivo `.env`:
+
+```env
+VERIFACTU_ACTIVE=True
+ALFONSO_AEAT_URL=https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP  # Cambiar a la URL de producción en entorno real
+```
+
+**Gestión de Certificados Criptográficos (Seguridad Cero-Confianza):**
+1. Alfonso utiliza el estándar **XMLDSig enveloped** para firmar las facturas emitidas a la AEAT.
+2. Cada inquilino (tenant) debe poseer su par de claves (Certificado Público y Clave Privada).
+3. Por diseño de seguridad riguroso, **nunca** se leen los certificados en crudo desde el disco en producción. Deben inyectarse previamente cifrados en la base de datos (tabla `certificates`) vinculados a su `tenant_id`. 
+4. El sistema `VerifactuService` extraerá y descifrará el certificado en tiempo real en memoria usando la `DATABASE_ENCRYPTION_KEY` maestra definida en la configuración, lo que previene la sustracción de claves fiscales en caso de que se vulnere el sistema de archivos del servidor.

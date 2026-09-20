@@ -93,7 +93,6 @@ def test_afi_syntax_and_compliance():
 
     with _get_connection() as conn:
         _init_db_schema(conn)
-        EmployeeService.init_schema()
 
     # 1. Empleado de prueba
     emp_data = {

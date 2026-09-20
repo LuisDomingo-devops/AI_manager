@@ -226,47 +226,61 @@ class InvoiceRepository:
 
     @staticmethod
     def _get_next_sequence_value(year: int, prefix: str) -> int:
+        import time
+        import sqlite3
+        max_retries = 10
         conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            # Iniciar transaccion explicita con bloqueo para concurrencia
-            cursor.execute("BEGIN EXCLUSIVE TRANSACTION")
-            
-            cursor.execute("SELECT last_value FROM invoice_sequences WHERE year = ? AND prefix = ?", (year, prefix))
-            row = cursor.fetchone()
-            
-            if row:
-                next_val = row["last_value"] + 1
-                cursor.execute("UPDATE invoice_sequences SET last_value = ? WHERE year = ? AND prefix = ?", (next_val, year, prefix))
-            else:
-                # Fallback inicial: calcular max_val basandose en la BD existente (solo ocurre la primera vez)
-                cursor.execute("SELECT invoice_id FROM invoices")
-                rows = cursor.fetchall()
-                max_val = 100 # Empezamos en 101 por defecto
+        for attempt in range(max_retries):
+            try:
+                cursor = conn.cursor()
+                # Iniciar transaccion explicita con bloqueo para concurrencia
+                cursor.execute("BEGIN EXCLUSIVE TRANSACTION")
                 
-                # Para evitar problemas con el mock de pruebas, contamos simplemente las que coincidan
-                for r in rows:
-                    try:
-                        dec_id = encryptor.decrypt(r["invoice_id"])
-                        if dec_id.startswith(f"{prefix}{year}-"):
-                            parts = dec_id.split("-")
-                            if len(parts) >= 3 and parts[-1].isdigit():
-                                val = int(parts[-1])
-                                if val > max_val:
-                                    max_val = val
-                    except Exception:
-                        pass
+                cursor.execute("SELECT last_value FROM invoice_sequences WHERE year = ? AND prefix = ?", (year, prefix))
+                row = cursor.fetchone()
                 
-                next_val = max_val + 1
-                cursor.execute("INSERT INTO invoice_sequences (year, prefix, last_value) VALUES (?, ?, ?)", (year, prefix, next_val))
-            
-            conn.commit()
-            return next_val
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+                if row:
+                    next_val = row["last_value"] + 1
+                    cursor.execute("UPDATE invoice_sequences SET last_value = ? WHERE year = ? AND prefix = ?", (next_val, year, prefix))
+                else:
+                    # Fallback inicial: calcular max_val basandose en la BD existente (solo ocurre la primera vez)
+                    cursor.execute("SELECT invoice_id FROM invoices")
+                    rows = cursor.fetchall()
+                    max_val = 100 # Empezamos en 101 por defecto
+                    
+                    # Para evitar problemas con el mock de pruebas, contamos simplemente las que coincidan
+                    for r in rows:
+                        try:
+                            dec_id = encryptor.decrypt(r["invoice_id"])
+                            if dec_id.startswith(f"{prefix}{year}-"):
+                                parts = dec_id.split("-")
+                                if len(parts) >= 3 and parts[-1].isdigit():
+                                    val = int(parts[-1])
+                                    if val > max_val:
+                                        max_val = val
+                        except Exception:
+                            pass
+                    
+                    next_val = max_val + 1
+                    cursor.execute("INSERT INTO invoice_sequences (year, prefix, last_value) VALUES (?, ?, ?)", (year, prefix, next_val))
+                
+                conn.commit()
+                return next_val
+            except sqlite3.OperationalError as e:
+                conn.rollback()
+                if "locked" in str(e) and attempt < max_retries - 1:
+                    time.sleep(0.1)
+                    continue
+                raise
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                if attempt == max_retries - 1 or not locals().get('e', None) or "locked" not in str(locals().get('e', '')):
+                    pass # We will close the connection below outside the loop or on raise
+
+        conn.close()
+        return -1
 
     @staticmethod
     def generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:

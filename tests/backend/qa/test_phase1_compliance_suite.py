@@ -11,7 +11,38 @@ from app.tools.server.billing_tools import (
 )
 from app.adapters.memory.memory import _get_connection, tenant_context, _init_db_schema
 from app.utils.encryption import encryptor
+from unittest.mock import patch
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
+_test_keys = {}
+
+def _mock_get_cert(tenant_id="default"):
+    if tenant_id == "compliance_tenant":
+        try:
+            with open("data/certificados_prueba/certificado_pruebas.pem", "rb") as f:
+                cert = f.read()
+            with open("data/certificados_prueba/clave_pruebas.pem", "rb") as f:
+                key = f.read()
+            return cert, key
+        except Exception:
+            pass
+            
+    if tenant_id not in _test_keys:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        _test_keys[tenant_id] = key_pem
+    
+    return b"dummy_cert", _test_keys[tenant_id]
+
+@pytest.fixture(autouse=True)
+def mock_certs():
+    with patch("app.utils.signature.get_certificate_and_key", side_effect=_mock_get_cert):
+        yield
 @pytest.fixture(autouse=True)
 def setup_test_env():
     # Establecer tenant para tests

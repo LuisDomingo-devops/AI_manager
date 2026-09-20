@@ -40,10 +40,12 @@ def test_tenant_provisioning_service():
     assert status["profile"]["razon_social"] == "Soluciones Autónomas S.L."
     assert status["subscription"]["tier"] == "pro"
 
-def test_subscriptions_router_endpoints():
+def test_subscriptions_router_endpoints(monkeypatch):
     """
     Verifica los endpoints de checkout y procesamiento de webhooks de Stripe.
     """
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
+
     # 1. Checkout session
     checkout_payload = {
         "client_id": "test_checkout_tenant_99",
@@ -74,7 +76,17 @@ def test_subscriptions_router_endpoints():
             }
         }
     }
-    res_hook = client.post("/api/v1/subscriptions/webhook", json=webhook_payload)
+    
+    # Mockear el módulo stripe para que construct_event devuelva el payload directamente
+    import sys
+    from unittest.mock import MagicMock
+    mock_stripe = MagicMock()
+    mock_stripe.Webhook.construct_event.return_value = webhook_payload
+    monkeypatch.setitem(sys.modules, "stripe", mock_stripe)
+    
+    # En entorno de tests, el stripe_signature no se valida criptográficamente (ver override_stripe_signature si existe)
+    # pero requiere el header para pasar la validación
+    res_hook = client.post("/api/v1/subscriptions/webhook", json=webhook_payload, headers={"stripe-signature": "t=1,v1=test"})
     assert res_hook.status_code == 200
     hook_data = res_hook.json()
     assert hook_data["status"] == "processed"

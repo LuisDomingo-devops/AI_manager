@@ -92,7 +92,8 @@ async def test_orchestrator_self_correction_loop(session_memory_fixture):
             result = await orchestrator.run(
                 user_message="crea el archivo python",
                 llm=mock_llm,
-                session_id="test_session"
+                session_id="test_session",
+                client_id="test_tenant"
             )
             
             # The second attempt should succeed

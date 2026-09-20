@@ -240,7 +240,7 @@ class BankService:
                 with open(filepath, "r", encoding=enc) as f:
                     content = f.read()
                 break
-            except Exception:
+            except UnicodeDecodeError:
                 continue
                 
         if not content:
@@ -323,7 +323,8 @@ class BankService:
                         raw_amt = raw_amt.replace(",", ".")
                     try:
                         amount = float(raw_amt)
-                    except Exception:
+                    except ValueError as e:
+                        app_logger.warning("Error parseando importe: %s", e)
                         amount = 0.0
                 elif col_debit or col_credit:
                     deb = float(str(row.get(col_debit, "0")).replace(",", ".") or 0) if col_debit else 0.0
@@ -441,7 +442,8 @@ class BankService:
                             connection_id
                         ))
                         count += 1
-                    except Exception:
+                    except Exception as e:
+                        app_logger.warning("Error procesando línea Norma 43: %s", e)
                         continue
             conn.commit()
         return count

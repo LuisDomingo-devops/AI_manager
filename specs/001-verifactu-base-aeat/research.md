@@ -1,21 +1,13 @@
-# Research & Technical Decisions: VeriFactu Base
+# Research: VeriFactu & AEAT Integration
 
-## Decision 1: Lenguaje y Entorno
-- **Decision**: Python 3.11+
-- **Rationale**: Es el lenguaje estándar de facto para herramientas AI Manager y scripts de este tipo.
-- **Alternatives considered**: N/A (el entorno local asume Python para scripts).
+## Certificados de Prueba
+- **Decisión**: Se utilizarán los certificados de prueba que están ubicados en la carpeta `data/certificados_prueba`.
+- **Razón**: Permite realizar las pruebas y desarrollo utilizando la pasarela sandbox/preproducción de la AEAT (`prewww10.aeat.es`) sin afectar el entorno real. El usuario ha confirmado su disponibilidad.
 
-## Decision 2: Librería XML y Firma
-- **Decision**: `lxml` para XML y `signxml` (o `cryptography` directa) para XMLDSig/Hash.
-- **Rationale**: VeriFactu requiere firmar y generar XML estricto. `lxml` soporta canonicalización requerida por firmas XML.
-- **Alternatives considered**: `xml.etree` (rechazado por no soportar bien canonicalización C14N out-of-the-box).
+## Criptografía XMLDSig
+- **Decisión**: Se utilizará `signxml` (o la librería más apropiada disponible en el entorno) para firmar los payload XML.
+- **Razón**: `signxml` soporta los estándares de XMLDSig requeridos por la AEAT (inclusive algoritmos y transformaciones C14N como http://www.w3.org/TR/2001/REC-xml-c14n-20010315).
 
-## Decision 3: Framework de Testing (TDD)
-- **Decision**: `pytest` con `pytest-cov` y `responses` o `httpretty`.
-- **Rationale**: Cumple la Constitución del proyecto (TDD, tests unitarios y de integración, reporte de logs). `pytest` permite fixtures para certificados de prueba y simular la AEAT fácilmente.
-- **Alternatives considered**: `unittest` (rechazado por ser más verboso y tener ecosistema de plugins más pequeño).
-
-## Decision 4: Cliente HTTP
-- **Decision**: `httpx`
-- **Rationale**: Permite cargar certificados cliente fácilmente y tiene una API asíncrona por si escala, aunque síncrona basta de momento.
-- **Alternatives considered**: `requests` (válido, pero `httpx` es más moderno).
+## Chaining y Hashes SIF
+- **Decisión**: Los hashes `prev_event_hash` y `current_hash` deben ser firmemente calculados con SHA-256 usando UTF-8 según lo define la Orden Ministerial, antes de firmar el XML.
+- **Razón**: Inmutabilidad. Cualquier desajuste provocaría el rechazo de la factura actual y las posteriores por la AEAT.

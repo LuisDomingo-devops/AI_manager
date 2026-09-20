@@ -26,8 +26,8 @@ async def test_payments_flow(mock_mail):
         # Insertar contacto mock con email para el recordatorio
         cursor.execute("DELETE FROM contacts WHERE name = ?", ("Cliente Pagos Test",))
         cursor.execute(
-            "INSERT INTO contacts (name, nif, type, email) VALUES (?, ?, ?, ?)", 
-            ("Cliente Pagos Test", "12345678Z", "client", "cliente@pagos.test")
+            "INSERT INTO contacts (name, nif, contact_type, email) VALUES (?, ?, ?, ?)", 
+            ("Cliente Pagos Test", "12345678Z", "Cliente", "cliente@pagos.test")
         )
         conn.commit()
     finally:

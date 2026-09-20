@@ -146,3 +146,23 @@ def prevent_qmessagebox_blocks():
             yield
     except ImportError:
         yield
+
+@pytest.fixture(autouse=True)
+def mock_certificate_and_key_for_tests(request):
+    """Mock global para que las pruebas que emiten facturas no fallen por falta de certificado."""
+    # Omitir el mock en pruebas que verifican explícitamente la criptografía, la infraestructura o el aislamiento
+    db_tests = ["test_encryption", "test_license", "isolation", "test_real_certs"]
+    if any(x in request.node.nodeid for x in db_tests):
+        yield
+        return
+        
+    try:
+        with open("data/certificados_prueba/certificado_pruebas.pem", "rb") as f:
+            cert_bytes = f.read()
+        with open("data/certificados_prueba/clave_pruebas.pem", "rb") as f:
+            key_bytes = f.read()
+    except FileNotFoundError:
+        cert_bytes, key_bytes = b"dummy_cert", b"dummy_key"
+        
+    with patch("app.utils.signature.get_certificate_and_key", return_value=(cert_bytes, key_bytes)):
+        yield
