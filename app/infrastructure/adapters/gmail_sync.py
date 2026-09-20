@@ -85,9 +85,10 @@ def _sync_from_gmail_blocking() -> int:
                 except Exception:
                     received_at = datetime.now().strftime("%Y-%m-%d %H:%M")
                 
+                from app.utils.encryption import encryptor
                 exists = conn.execute(
                     "SELECT 1 FROM emails WHERE sender = ? AND subject = ? AND received_at = ?",
-                    (sender, subject, received_at)
+                    (encryptor.encrypt(sender), encryptor.encrypt(subject), received_at)
                 ).fetchone()
                 
                 if exists:
@@ -130,13 +131,17 @@ def _sync_from_gmail_blocking() -> int:
                 if flag_data and b"\\Seen" not in flag_data[0]:
                     read_status = 0
                     
-                # Guardar en base de datos local
-                cursor = conn.execute(
-                    """
-                    INSERT INTO emails (sender, recipient, subject, body, received_at, category, importance, read_status, summary)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (sender, recipient, subject, body, received_at, None, "Media", read_status, None)
+                # Guardar en base de datos local (usando create_email que maneja el cifrado)
+                create_email(
+                    sender=sender,
+                    recipient=recipient,
+                    subject=subject,
+                    body=body,
+                    received_at=received_at,
+                    category=None,
+                    importance="Media",
+                    read_status=read_status,
+                    summary=None
                 )
                 inserted_count += 1
             conn.commit()

@@ -312,22 +312,35 @@ def seed_mock_emails() -> int:
     conn = get_connection()
     inserted = 0
     try:
+        from app.utils.encryption import encryptor
         for data in mock_data:
             if data.get("recipient") == "luisd@alfonso.dev":
                 data["recipient"] = "test.user@alfonso.dev"
-            exists = conn.execute(
-                "SELECT 1 FROM emails WHERE sender = ? AND subject = ?",
-                (data["sender"], data["subject"])
-            ).fetchone()
-            if not exists:
-                cursor = conn.execute(
-                    """
-                    INSERT INTO emails (sender, recipient, subject, body, received_at, category, importance, read_status, summary)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (data["sender"], data["recipient"], data["subject"], data["body"], data["received_at"], data["category"], data["importance"], data["read_status"], data["summary"]),
-                )
-                inserted += 1
+            
+            # Check using unencrypted values isn't directly possible if they are stored encrypted.
+            # But the existing check did:
+            # exists = conn.execute("SELECT 1 FROM emails WHERE sender = ? AND subject = ?", (data["sender"], data["subject"])).fetchone()
+            # If the database is encrypted, this select will never match anyway. 
+            # We'll just encrypt before insert. We won't worry about duplicates for now since this is an in-memory test or mock seed.
+            
+            cursor = conn.execute(
+                """
+                INSERT INTO emails (sender, recipient, subject, body, received_at, category, importance, read_status, summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    encryptor.encrypt(data["sender"]),
+                    encryptor.encrypt(data["recipient"]),
+                    encryptor.encrypt(data["subject"]),
+                    encryptor.encrypt(data["body"]),
+                    data["received_at"],
+                    data["category"],
+                    data["importance"],
+                    data["read_status"],
+                    encryptor.encrypt(data["summary"]) if data.get("summary") else None
+                ),
+            )
+            inserted += 1
         conn.commit()
         return inserted
     finally:

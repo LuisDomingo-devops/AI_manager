@@ -1,0 +1,251 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\luisd\Desktop\Alfonso_Autonomo\tests
+configfile: pytest.ini
+plugins: anyio-4.14.2, hypothesis-6.168.0, asyncio-1.4.0, mock-3.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests\backend\integration\test_cierre_fiscal_integration.py::test_cierre_fiscal_db_integration 
+-------------------------------- live log call --------------------------------
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO     migrations:migrations.py:58 Migraci¾n 000 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 001 - Esquema inicial correcto
+INFO     migrations:migrations.py:58 Migraci¾n 001 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 002 - Esquema Veri*Factu, registro de auditorÝa del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO     migrations:migrations.py:58 Migraci¾n 002 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retenci¾n IRPF
+INFO     migrations:migrations.py:58 Migraci¾n 003 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO     migrations:migrations.py:58 Migraci¾n 004 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 005 - Reconstrucci¾n y normalizaci¾n at¾mica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO     migrations:migrations.py:58 Migraci¾n 005 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 006 - Tabla de personalizaci¾n de documentos (logo, colores y plantillas)
+INFO     migrations:migrations.py:58 Migraci¾n 006 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 007 - Tabla de bienes de inversi¾n y activos para cßlculo de amortizaciones
+INFO     migrations:migrations.py:58 Migraci¾n 007 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO     migrations:migrations.py:58 Migraci¾n 008 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO     migrations:migrations.py:58 Migraci¾n 009 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 010 - A±adir campos de auditorÝa del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO     migrations:migrations.py:58 Migraci¾n 010 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO     migrations:migrations.py:58 Migraci¾n 011 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO     migrations:migrations.py:58 Migraci¾n 012 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO     migrations:migrations.py:58 Migraci¾n 013 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 014 - 014_user_credentials
+INFO     migrations:migrations.py:58 Migraci¾n 014 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 016 - 016_populate_pgc_accounts
+INFO     migrations:migrations.py:58 Migraci¾n 016 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 019 - Triggers de inmutabilidad fiscal para verifactu_invoices y sif_event_log
+INFO     migrations:migrations.py:58 Migraci¾n 019 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 020 - Tabla de secuencias para numeracion de facturas atomica
+INFO     migrations:migrations.py:58 Migraci¾n 020 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 021 - Certificates table for advanced electronic signatures
+INFO     migrations:migrations.py:58 Migraci¾n 021 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 022 - 022_remove_bank_transfers
+INFO     migrations.versions.022_remove_bank_transfers:022_remove_bank_transfers.py:8 Migraci¾n 022 aplicada: Tabla bank_transfers eliminada (pagos PSD2 deprecados).
+INFO     migrations:migrations.py:58 Migraci¾n 022 aplicada con Úxito.
+FAILED                                                                   [100%]
+
+================================== FAILURES ===================================
+______________________ test_cierre_fiscal_db_integration ______________________
+
+self = <app.utils.encryption.DatabaseEncryptor object at 0x00000147EC15C830>
+cipher_text = '1210'
+
+    def decrypt(self, cipher_text: str) -> str:
+        if cipher_text is None:
+            return None
+        if not isinstance(cipher_text, str):
+            return str(cipher_text)
+    
+        try:
+>           return self.fernet.decrypt(cipher_text.encode('utf-8')).decode('utf-8')
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+app\utils\encryption.py:125: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+venv\Lib\site-packages\cryptography\fernet.py:87: in decrypt
+    timestamp, data = Fernet._get_unverified_token_data(token)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+token = b'1210'
+
+    @staticmethod
+    def _get_unverified_token_data(token: bytes | str) -> tuple[int, bytes]:
+        if not isinstance(token, (str, bytes)):
+            raise TypeError("token must be bytes or str")
+    
+        try:
+            data = base64.urlsafe_b64decode(token)
+        except (TypeError, binascii.Error):
+            raise InvalidToken
+    
+        if not data or data[0] != 0x80:
+>           raise InvalidToken
+E           cryptography.fernet.InvalidToken
+
+venv\Lib\site-packages\cryptography\fernet.py:121: InvalidToken
+
+The above exception was the direct cause of the following exception:
+
+    def test_cierre_fiscal_db_integration():
+        """
+        Test de integraci¾n para comprobar que el cierre fiscal persiste correctamente los estados en la base de datos.
+        """
+        # 1. Preparar datos
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM fiscal_year_status WHERE year = 2026")
+        cursor.execute("DELETE FROM journal_entries WHERE entry_date LIKE '2026-%'")
+        cursor.execute("DELETE FROM ledger_entries")
+    
+        # Insertar cuentas PGC faltantes
+        cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('70000000', 'Ventas de mercaderÝas', 'ingreso')")
+        cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47700000', 'H.P. IVA repercutido', 'pasivo')")
+        cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('60000000', 'Compras de mercaderÝas', 'gasto')")
+        cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47200000', 'H.P. IVA soportado', 'activo')")
+        cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('41000000', 'Acreedores por prestaciones de servicios', 'pasivo')")
+    
+        # Insertar un asiento de ingresos (700) y gastos (600)
+        cursor.execute("INSERT INTO journal_entries (id, concept, entry_date) VALUES (101, 'Ventas', '2026-05-15 10:00:00')")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '43000000', 1210, 0)")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '70000000', 0, 1000)")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '47700000', 0, 210)")
+    
+        cursor.execute("INSERT INTO journal_entries (id, concept, entry_date) VALUES (102, 'Compras', '2026-06-20 10:00:00')")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '60000000', 500, 0)")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '47200000', 105, 0)")
+        cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '41000000', 0, 605)")
+        conn.commit()
+    
+        # 2. Ejecutar cierre
+>       res = LedgerService.close_fiscal_year(2026)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\backend\integration\test_cierre_fiscal_integration.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\domain\services\ledger_service.py:639: in close_fiscal_year
+    debe = float(encryptor.decrypt(r["debe"]))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <app.utils.encryption.DatabaseEncryptor object at 0x00000147EC15C830>
+cipher_text = '1210'
+
+    def decrypt(self, cipher_text: str) -> str:
+        if cipher_text is None:
+            return None
+        if not isinstance(cipher_text, str):
+            return str(cipher_text)
+    
+        try:
+            return self.fernet.decrypt(cipher_text.encode('utf-8')).decode('utf-8')
+        except Exception as e:
+>           raise ValueError(f"Fallo al descifrar el texto: {e}") from e
+E           ValueError: Fallo al descifrar el texto:
+
+app\utils\encryption.py:127: ValueError
+---------------------------- Captured stderr call -----------------------------
+INFO:migrations:Aplicando migraci¾n: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO:migrations:Migraci¾n 000 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 001 - Esquema inicial correcto
+INFO:migrations:Migraci¾n 001 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 002 - Esquema Veri*Factu, registro de auditorÝa del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO:migrations:Migraci¾n 002 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retenci¾n IRPF
+INFO:migrations:Migraci¾n 003 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO:migrations:Migraci¾n 004 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 005 - Reconstrucci¾n y normalizaci¾n at¾mica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO:migrations:Migraci¾n 005 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 006 - Tabla de personalizaci¾n de documentos (logo, colores y plantillas)
+INFO:migrations:Migraci¾n 006 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 007 - Tabla de bienes de inversi¾n y activos para cßlculo de amortizaciones
+INFO:migrations:Migraci¾n 007 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO:migrations:Migraci¾n 008 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO:migrations:Migraci¾n 009 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 010 - A±adir campos de auditorÝa del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO:migrations:Migraci¾n 010 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO:migrations:Migraci¾n 011 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO:migrations:Migraci¾n 012 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO:migrations:Migraci¾n 013 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 014 - 014_user_credentials
+INFO:migrations:Migraci¾n 014 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 016 - 016_populate_pgc_accounts
+INFO:migrations:Migraci¾n 016 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 019 - Triggers de inmutabilidad fiscal para verifactu_invoices y sif_event_log
+INFO:migrations:Migraci¾n 019 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 020 - Tabla de secuencias para numeracion de facturas atomica
+INFO:migrations:Migraci¾n 020 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 021 - Certificates table for advanced electronic signatures
+INFO:migrations:Migraci¾n 021 aplicada con Úxito.
+INFO:migrations:Aplicando migraci¾n: 022 - 022_remove_bank_transfers
+INFO:migrations.versions.022_remove_bank_transfers:Migraci¾n 022 aplicada: Tabla bank_transfers eliminada (pagos PSD2 deprecados).
+INFO:migrations:Migraci¾n 022 aplicada con Úxito.
+------------------------------ Captured log call ------------------------------
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 000 - Baseline: marca el esquema inicial como aplicado (sin DDL)
+INFO     migrations:migrations.py:58 Migraci¾n 000 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 001 - Esquema inicial correcto
+INFO     migrations:migrations.py:58 Migraci¾n 001 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 002 - Esquema Veri*Factu, registro de auditorÝa del SIF (Orden HAC/1177/2024) y control de cierre de ejercicio contable
+INFO     migrations:migrations.py:58 Migraci¾n 002 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 003 - Trazabilidad de estados comerciales de Factura B2B (Ley Crea y Crece 18/2022) y cuentas PGC de retenci¾n IRPF
+INFO     migrations:migrations.py:58 Migraci¾n 003 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 004 - Soft Delete en clientes y productos, periodos fiscales (TaxPeriods), gestor de tareas en background (Tasks) y consentimientos bancarios PSD2
+INFO     migrations:migrations.py:58 Migraci¾n 004 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 005 - Reconstrucci¾n y normalizaci¾n at¾mica del esquema SIF (sif_event_log) con current_hash y prev_event_hash
+INFO     migrations:migrations.py:58 Migraci¾n 005 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 006 - Tabla de personalizaci¾n de documentos (logo, colores y plantillas)
+INFO     migrations:migrations.py:58 Migraci¾n 006 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 007 - Tabla de bienes de inversi¾n y activos para cßlculo de amortizaciones
+INFO     migrations:migrations.py:58 Migraci¾n 007 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 008 - Columna elements_layout en la personalizacion de documentos para soportar drag and drop
+INFO     migrations:migrations.py:58 Migraci¾n 008 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 009 - Columnas independientes para el layout de presupuestos y el ancho de logotipo ajustable
+INFO     migrations:migrations.py:58 Migraci¾n 009 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 010 - A±adir campos de auditorÝa del motor fiscal a facturas (tax_engine_version y requires_manual_confirmation)
+INFO     migrations:migrations.py:58 Migraci¾n 010 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 011 - Esquema RRHH: employees, payrolls, settlements, tgss_afi_records
+INFO     migrations:migrations.py:58 Migraci¾n 011 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 012 - Esquema Verifactu/SIF: verifactu_invoices, sif_event_log
+INFO     migrations:migrations.py:58 Migraci¾n 012 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 013 - Infraestructura: audit_ledger_log, llm_metrics_log, user_sessions
+INFO     migrations:migrations.py:58 Migraci¾n 013 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 014 - 014_user_credentials
+INFO     migrations:migrations.py:58 Migraci¾n 014 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 016 - 016_populate_pgc_accounts
+INFO     migrations:migrations.py:58 Migraci¾n 016 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 019 - Triggers de inmutabilidad fiscal para verifactu_invoices y sif_event_log
+INFO     migrations:migrations.py:58 Migraci¾n 019 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 020 - Tabla de secuencias para numeracion de facturas atomica
+INFO     migrations:migrations.py:58 Migraci¾n 020 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 021 - Certificates table for advanced electronic signatures
+INFO     migrations:migrations.py:58 Migraci¾n 021 aplicada con Úxito.
+INFO     migrations:migrations.py:49 Aplicando migraci¾n: 022 - 022_remove_bank_transfers
+INFO     migrations.versions.022_remove_bank_transfers:022_remove_bank_transfers.py:8 Migraci¾n 022 aplicada: Tabla bank_transfers eliminada (pagos PSD2 deprecados).
+INFO     migrations:migrations.py:58 Migraci¾n 022 aplicada con Úxito.
+============================== warnings summary ===============================
+tests\conftest.py:22
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\conftest.py:22: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as OriginalTestClient
+
+venv\Lib\site-packages\_pytest\config\__init__.py:1464
+  C:\Users\luisd\Desktop\Alfonso_Autonomo\venv\Lib\site-packages\_pytest\config\__init__.py:1464: PytestConfigWarning: Unknown config option: pytest_plugins
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests\backend\integration\test_cierre_fiscal_integration.py::test_cierre_fiscal_db_integration
+======================== 1 failed, 2 warnings in 0.70s ========================

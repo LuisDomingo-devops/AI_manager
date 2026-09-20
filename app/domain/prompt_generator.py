@@ -35,9 +35,12 @@ def get_client_context_str(client_id: str | None = None) -> str:
     if client_id:
         client_info = alfonso_bridge._client_info_dict.get(client_id)
         
-    if not client_info:
-        client_info = alfonso_bridge.client_info
-    
+    if not isinstance(client_info, dict):
+        client_info = getattr(alfonso_bridge, "client_info", None)
+        
+    if not isinstance(client_info, dict):
+        client_info = None
+        
     if not client_info:
         try:
             import json

@@ -4,15 +4,14 @@ from unittest.mock import AsyncMock, patch
 
 from app.domain.services.approval_service import ApprovalService
 
+@pytest.fixture(autouse=True)
+def mock_approval_service():
+    yield
+
 @pytest.fixture
 def approval_service():
-    from app.domain.services.approval_service import ApprovalService as RealApprovalService
-    import importlib
-    import app.domain.services.approval_service
-    importlib.reload(app.domain.services.approval_service)
-    
-    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new=RealApprovalService.request_approval):
-        yield RealApprovalService()
+    from app.domain.services.approval_service import ApprovalService
+    return ApprovalService()
 
 @pytest.mark.asyncio
 async def test_approval_flow_approved(approval_service):

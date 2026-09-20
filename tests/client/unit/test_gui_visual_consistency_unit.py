@@ -149,10 +149,13 @@ def test_ledger_dialog_mayor_and_diario_synchronization_unit(qapp):
     """Verifica que AlfonsoLedgerDialog puebla el Mayor con cuentas activas y permite navegación interactiva."""
     from client.gui.dialogs.widgets import AlfonsoLedgerDialog
     from app.adapters.memory.memory import _get_connection
+    from app.utils.encryption import encryptor
 
     with _get_connection() as conn:
         conn.execute("INSERT OR IGNORE INTO journal_entries (id, entry_date, concept) VALUES (9999, '2026-08-01', 'Test')")
-        conn.execute("INSERT OR IGNORE INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (9999, '70500000', '100.0', '0.0')")
+        enc_debe = encryptor.encrypt("100.0")
+        enc_haber = encryptor.encrypt("0.0")
+        conn.execute("INSERT OR IGNORE INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)", (9999, '70500000', enc_debe, enc_haber))
         conn.commit()
 
     ledger = AlfonsoLedgerDialog(embedded=True)

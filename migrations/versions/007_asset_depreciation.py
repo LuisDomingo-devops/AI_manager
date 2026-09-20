@@ -19,6 +19,19 @@ def upgrade(conn: sqlite3.Connection):
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    try:
+        conn.execute("ALTER TABLE assets ADD COLUMN depreciation_method TEXT NOT NULL DEFAULT 'lineal'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE assets ADD COLUMN category TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE assets ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))")
+    except sqlite3.OperationalError:
+        pass
+
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_assets_client 
         ON assets (client_id)

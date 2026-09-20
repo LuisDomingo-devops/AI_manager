@@ -2,12 +2,12 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.domain.services.collection_service import CollectionService
 
-@patch('app.domain.services.collection_service.InvoiceRepository')
 @patch('app.domain.services.collection_service._get_connection')
-def test_cobros_registro_unit(mock_get_connection, mock_repo):
+def test_cobros_registro_unit(mock_get_connection):
     """
     Test unitario para registrar un cobro y validar reglas de negocio (pagos parciales).
     """
+    mock_repo = MagicMock()
     # Configurar mock de factura
     mock_repo.find_invoice_by_id.return_value = {
         "id": "mock_id",
@@ -26,19 +26,19 @@ def test_cobros_registro_unit(mock_get_connection, mock_repo):
         {"paid": 20.0} # payments
     ]
     
-    res = CollectionService.register_payment("mock_id", 30.0, "efectivo", "2026-09-07", "Test")
+    res = CollectionService.register_payment("mock_id", 30.0, "efectivo", "2026-09-07", "Test", invoice_repository=mock_repo)
     
     assert res["status"] == "ok"
     assert res["outstanding_balance"] == 50.0
     # Verificamos que se insertó el pago pero NO se actualizó el estado a cobrada
     assert mock_cursor.execute.call_count >= 3 # check year, check paid, insert payment
 
-@patch('app.domain.services.collection_service.InvoiceRepository')
 @patch('app.domain.services.collection_service._get_connection')
-def test_cobros_estado_factura_unit(mock_get_connection, mock_repo):
+def test_cobros_estado_factura_unit(mock_get_connection):
     """
     Test unitario para comprobar el cambio de estado de la factura tras el cobro total.
     """
+    mock_repo = MagicMock()
     # Configurar mock de factura
     mock_repo.find_invoice_by_id.return_value = {
         "id": "mock_id",
@@ -57,7 +57,7 @@ def test_cobros_estado_factura_unit(mock_get_connection, mock_repo):
         {"paid": 0.0} # payments
     ]
     
-    res = CollectionService.register_payment("mock_id", 100.0, "transferencia", "2026-09-07", "Pago Total")
+    res = CollectionService.register_payment("mock_id", 100.0, "transferencia", "2026-09-07", "Pago Total", invoice_repository=mock_repo)
     
     assert res["status"] == "ok"
     assert res["outstanding_balance"] == 0.0

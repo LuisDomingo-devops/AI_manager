@@ -20,16 +20,21 @@ def test_cierre_fiscal_db_integration():
     cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('47200000', 'H.P. IVA soportado', 'activo')")
     cursor.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('41000000', 'Acreedores por prestaciones de servicios', 'pasivo')")
     
+    from app.utils.encryption import encryptor
+    
+    def enc(val):
+        return encryptor.encrypt(str(val))
+        
     # Insertar un asiento de ingresos (700) y gastos (600)
     cursor.execute("INSERT INTO journal_entries (id, concept, entry_date) VALUES (101, 'Ventas', '2026-05-15 10:00:00')")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '43000000', 1210, 0)")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '70000000', 0, 1000)")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '47700000', 0, 210)")
-    
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '43000000', '{enc(1210)}', '{enc(0)}')")
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '70000000', '{enc(0)}', '{enc(1000)}')")
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (101, '47700000', '{enc(0)}', '{enc(210)}')")
+
     cursor.execute("INSERT INTO journal_entries (id, concept, entry_date) VALUES (102, 'Compras', '2026-06-20 10:00:00')")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '60000000', 500, 0)")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '47200000', 105, 0)")
-    cursor.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '41000000', 0, 605)")
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '60000000', '{enc(500)}', '{enc(0)}')")
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '47200000', '{enc(105)}', '{enc(0)}')")
+    cursor.execute(f"INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (102, '41000000', '{enc(0)}', '{enc(605)}')")
     conn.commit()
     
     # 2. Ejecutar cierre
