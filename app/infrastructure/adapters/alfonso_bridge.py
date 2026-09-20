@@ -278,6 +278,10 @@ class AlfonsoBridge(BridgePort):
         finally:
             self.pending.pop(cmd_id, None)
 
+    async def send_event(self, event_name, data=None, client_id=None):
+        """Stub temporal para evitar errores de API al mandar eventos"""
+        pass
+
 
 bridge = AlfonsoBridge()
 

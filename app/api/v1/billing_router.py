@@ -26,7 +26,7 @@ from app.tools.server.billing_tools import (
 router = APIRouter(prefix="/billing", dependencies=[Depends(verify_api_key)])
 
 from app.domain.services.document_customization_service import DocumentCustomizationService
-from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+from app.infrastructure.database.document_customization_db import SqliteDocumentCustomizationAdapter
 from app.adapters.memory.memory import tenant_context
 
 customization_service = DocumentCustomizationService(SqliteDocumentCustomizationAdapter())
@@ -51,8 +51,8 @@ class InvoiceCreateRequest(BaseModel):
 class RectificativaCreateRequest(BaseModel):
     original_invoice_id: str
     rectificativa_type: str = "R1"
-    rectification_reason: str
-    base_imponible_rectificada: float
+    reason: str
+    amount: float
     iva_rate: float = 21.0
     irpf_rate: float = 0.0
     concept: str = "Factura Rectificativa"
@@ -128,8 +128,8 @@ async def create_rectificativa_endpoint(req: RectificativaCreateRequest):
     res = await create_rectificativa_invoice(
         original_invoice_id=req.original_invoice_id,
         rectificativa_type=req.rectificativa_type,
-        rectification_reason=req.rectification_reason,
-        base_imponible_rectificada=req.base_imponible_rectificada,
+        reason=req.reason,
+        amount=req.amount,
         iva_rate=req.iva_rate,
         irpf_rate=req.irpf_rate,
         concept=req.concept,

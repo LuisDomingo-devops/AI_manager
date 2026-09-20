@@ -11,7 +11,7 @@ Al arrancar la aplicación y antes de enviar payloads de chat o planificación a
 Cargando los archivos de texto planos de app/prompts/ y aplicando reemplazos dinámicos.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/llm_client.py (consume los prompts de sistema para pasarlos al LLM)
+- app.infrastructure.adapters.llm_client.py (consume los prompts de sistema para pasarlos al LLM)
 - app/main.py (precarga los prompts de chat y herramientas durante el lifespan)
 """
 
@@ -20,7 +20,7 @@ import os
 import platform
 from pathlib import Path
 
-from app.adapters.tool_registry import list_tools, get_callable_tool_function
+from app.infrastructure.adapters.tool_registry import list_tools, get_callable_tool_function
 
 
 def get_client_context_str(client_id: str | None = None) -> str:
@@ -28,7 +28,7 @@ def get_client_context_str(client_id: str | None = None) -> str:
     Obtiene la cadena formateada con el contexto dinámico del entorno cliente de Windows
     (RAM, resolución de pantalla, dispositivos de audio, y estructura de archivos del Escritorio).
     """
-    from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+    from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 
     # Intentar obtener info del cliente conectado al bridge o fallback a last_client_info.json
     client_info = None

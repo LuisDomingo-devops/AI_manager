@@ -24,7 +24,7 @@ La intención detrás de Alfonso no es ser un simple "chatbot". Es un **sistema 
 - Identificar la base de datos del usuario.
 - Generar el XML de la factura.
 - Calcular y encadenar el hash SHA-256 previo (requisito antifraude).
-- Firmar el documento electrónicamente (XAdES-BES).
+- Firmar el documento electrónicamente (XMLDSig enveloped).
 - Generar el código QR de Veri*Factu.
 
 ---
@@ -79,7 +79,7 @@ El sistema sigue los principios de la **Arquitectura Hexagonal (Puertos y Adapta
 
 #### D. Motor de Cumplimiento Legal y Veri*Factu
 - **Inmutabilidad y Antifraude:** Implementa el estándar técnico de la AEAT (Orden HAC/1177/2024). Cada factura genera una huella criptográfica exacta (ID, Fecha, Tipo, Cuotas) encadenada a la anterior, creando una cadena criptográfica irrompible (blockchain local).
-- **Firma Electrónica (XAdES-BES):** Integración de bibliotecas de bajo nivel para generar firmas XML avanzadas (XAdES-BES) que certifican la autenticidad del documento con un certificado X.509/FNMT, cumpliendo estrictamente con el formato oficial de la AEAT.
+- **Firma Electrónica (XMLDSig enveloped):** Integración de bibliotecas para generar firmas XMLDSig enveloped que certifican la autenticidad del documento con un certificado X.509/FNMT, cumpliendo estrictamente con el formato oficial de la AEAT.
 - **Declaraciones Dinámicas:** Generador en tiempo real de la "Declaración Responsable" en formato PDF requerido por la normativa de Sistemas Informáticos de Facturación (SIF).
 
 #### E. Motor de Memoria (`Memory Lite`)

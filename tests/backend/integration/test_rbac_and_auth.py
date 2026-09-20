@@ -4,7 +4,7 @@ import asyncio
 import sys
 from unittest.mock import AsyncMock, MagicMock
 from app.config import Settings
-from app.adapters.alfonso_bridge import AlfonsoBridge
+from app.infrastructure.adapters.alfonso_bridge import AlfonsoBridge
 from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.adapters.memory.memory import SessionMemory
 from app.adapters.memory.vector_memory import VectorMemory
@@ -104,7 +104,7 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
     memory_module._db_initialized = False
     
     # Simular rol de cliente en el bridge
-    from app.adapters.alfonso_bridge import bridge
+    from app.infrastructure.adapters.alfonso_bridge import bridge
     bridge._client_info_dict["guest_client"] = {"role": "guest"}
     bridge._client_info_dict["admin_client"] = {"role": "admin"}
     

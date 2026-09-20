@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.adapters.bank_providers import GoCardlessProvider
+from app.infrastructure.adapters.bank_providers import GoCardlessProvider
 
 def test_gocardless_auth_link_mock_fallback():
     provider = GoCardlessProvider()

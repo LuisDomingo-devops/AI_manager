@@ -12,7 +12,7 @@ Heredando de BaseSettings para realizar validación estricta de tipos y leer opc
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/main.py (consume los settings para inicializar FastAPI y los servicios)
-- app/adapters/llm_client.py (utiliza la URL de Ollama y el nombre del modelo)
+- app.infrastructure.adapters.llm_client.py (utiliza la URL de Ollama y el nombre del modelo)
 """
 
 import json

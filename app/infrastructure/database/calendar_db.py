@@ -26,7 +26,7 @@ IS_TESTING = "pytest" in sys.modules or os.getenv("TESTING") == "true"
 if IS_TESTING:
     DB_PATH = "file:calendar_mem?mode=memory&cache=shared"
 else:
-    DB_PATH = Path(__file__).resolve().parents[2] / "data" / "memory.db"
+    DB_PATH = Path(__file__).resolve().parents[3] / "data" / "memory.db"
 
 _db_initialized = False
 

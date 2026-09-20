@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QDoubleSpinBox, QButtonGroup, QProgressBar, QListView, QStyle, QGridLayout)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QEvent
 from PyQt6.QtGui import QColor, QFont, QPixmap, QDesktopServices, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
-from core.api_client import AlfonsoAPI
+from client.core.api_client import AlfonsoAPI
 from client.gui.dialogs.base import AlfonsoBaseDialog
 
 class AlfonsoInvoiceConfirmDialog(QDialog):

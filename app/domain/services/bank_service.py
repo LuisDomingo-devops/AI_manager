@@ -128,7 +128,7 @@ class BankService:
         """
         Descarga movimientos en tiempo real desde el proveedor de la cuenta.
         """
-        from app.adapters.bank_providers import BankProviderFactory
+        from app.infrastructure.adapters.bank_providers import BankProviderFactory
         with _get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, provider, credentials, last_sync_at FROM bank_connections WHERE id = ?", (connection_id,))

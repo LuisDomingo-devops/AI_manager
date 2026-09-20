@@ -1,0 +1,37 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\luisd\Desktop\Alfonso_Autonomo
+plugins: anyio-4.14.2, hypothesis-6.168.0, asyncio-1.4.0, mock-3.15.1
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 30 items / 1 error
+run-last-failure: rerun previous 30 failures (skipped 106 files)
+
+=================================== ERRORS ====================================
+___ ERROR collecting tests/client/unit/test_gui_visual_consistency_unit.py ____
+ImportError while importing test module 'C:\Users\luisd\Desktop\Alfonso_Autonomo\tests\client\unit\test_gui_visual_consistency_unit.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\client\unit\test_gui_visual_consistency_unit.py:24: in <module>
+    from client.gui.dialogs.specialized_views import (
+client\gui\dialogs\__init__.py:5: in <module>
+    from client.gui.dialogs.invoice import (
+client\gui\dialogs\invoice.py:19: in <module>
+    from core.api_client import AlfonsoAPI
+E   ModuleNotFoundError: No module named 'core'
+============================== warnings summary ===============================
+app\config.py:26
+  C:\Users\luisd\Desktop\Alfonso_Autonomo\app\config.py:26: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Settings(BaseSettings):
+
+tests\conftest.py:22
+  c:\Users\luisd\Desktop\Alfonso_Autonomo\tests\conftest.py:22: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as OriginalTestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/client/unit/test_gui_visual_consistency_unit.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+======================== 2 warnings, 1 error in 1.94s =========================

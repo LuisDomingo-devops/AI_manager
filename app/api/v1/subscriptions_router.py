@@ -105,36 +105,27 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
     body_bytes = await request.body()
     endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-    if endpoint_secret:
-        if not stripe_signature:
-            logger.warning("Intento de petición a Stripe Webhook sin cabecera stripe-signature")
-            raise HTTPException(status_code=400, detail="Cabecera stripe-signature ausente")
-        try:
-            import stripe
-            event = stripe.Webhook.construct_event(
-                payload=body_bytes,
-                sig_header=stripe_signature,
-                secret=endpoint_secret
-            )
-            # Extraer data del evento validado
-            event_type = event.get("type")
-            stripe_obj = event.get("data", {}).get("object", {})
-        except Exception as e:
-            logger.error("Firma de webhook Stripe inválida: %s", str(e))
-            raise HTTPException(status_code=400, detail=f"Firma de webhook inválida: {str(e)}")
-    else:
-        from app.config import settings
-        if settings.ENV == "production":
-            logger.error("STRIPE_WEBHOOK_SECRET no configurado en entorno de PRODUCCIÓN.")
-            raise HTTPException(status_code=500, detail="Configuración de webhook inválida en producción")
-        
-        logger.warning("STRIPE_WEBHOOK_SECRET no configurado. Entorno de desarrollo. Procesando webhook de Stripe SIN firma criptográfica (SOLO MODO PRUEBAS).")
-        try:
-            raw_data = json.loads(body_bytes.decode("utf-8"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Cuerpo de webhook inválido")
-        event_type = raw_data.get("type") or raw_data.get("event_type")
-        stripe_obj = raw_data.get("data", {}).get("object", raw_data)
+    if not endpoint_secret:
+        logger.error("STRIPE_WEBHOOK_SECRET no configurado.")
+        raise HTTPException(status_code=500, detail="Configuración de webhook inválida")
+
+    if not stripe_signature:
+        logger.warning("Intento de petición a Stripe Webhook sin cabecera stripe-signature")
+        raise HTTPException(status_code=400, detail="Cabecera stripe-signature ausente")
+    
+    try:
+        import stripe
+        event = stripe.Webhook.construct_event(
+            payload=body_bytes,
+            sig_header=stripe_signature,
+            secret=endpoint_secret
+        )
+        # Extraer data del evento validado
+        event_type = event.get("type")
+        stripe_obj = event.get("data", {}).get("object", {})
+    except Exception as e:
+        logger.error("Firma de webhook Stripe inválida: %s", str(e))
+        raise HTTPException(status_code=400, detail=f"Firma de webhook inválida: {str(e)}")
 
     logger.info("Recibido evento de webhook Stripe: %s", event_type)
 

@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.auth_deps import get_current_user
+from app.api.auth_deps import get_current_user, verify_setup_access
 from app.domain.services.auth_service import AuthService
 from app.domain.services.user_service import AppUser, UserService
 from app.utils.license_validator import check_license_status
@@ -59,7 +59,7 @@ from app.api.routes import verify_api_key
     status_code=status.HTTP_201_CREATED,
     summary="Crear el usuario inicial de la licencia",
     description="Crea el usuario único asociado a esta licencia. Solo puede llamarse una vez.",
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_api_key), Depends(verify_setup_access)],
 )
 async def setup_user(payload: SetupRequest):
     """

@@ -248,8 +248,8 @@ def parse_calendar_delete_directly(msg: str) -> dict | None:
     if "todo" in msg_clean or "todas" in msg_clean:
         month_match = re.search(r"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b", msg_clean)
         if month_match:
-            from app.adapters.calendar_db import list_events, delete_event
-            from app.adapters.alfonso_bridge import bridge
+            from app.infrastructure.database.calendar_db import list_events, delete_event
+            from app.infrastructure.adapters.alfonso_bridge import bridge
             import asyncio
             
             tgt_month_name = month_match.group(1)
@@ -331,7 +331,7 @@ def parse_calendar_delete_directly(msg: str) -> dict | None:
     date_str = f"{year}-{month:02d}-{day:02d}"
 
     try:
-        from app.adapters.calendar_db import list_events
+        from app.infrastructure.database.calendar_db import list_events
         events = list_events(start_date=date_str, end_date=date_str)
         if not events:
             return None
@@ -361,7 +361,7 @@ def parse_calendar_delete_directly(msg: str) -> dict | None:
         return None
 
 def parse_calendar_update_directly(msg: str) -> dict | None:
-    from app.adapters.calendar_db import list_events
+    from app.infrastructure.database.calendar_db import list_events
 
     msg_clean = msg.lower().strip()
     if not re.search(r"\b(cambia|cambiar|modifica|modificar|actualiza|actualizar|apunta|mueve|mover)\b", msg_clean):

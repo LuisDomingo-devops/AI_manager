@@ -174,7 +174,7 @@ class VerifactuService:
 
             from lxml import etree
             import signxml
-            from signxml.xades import XAdESSigner
+            from signxml import XMLSigner
 
             # Obtener claves y certificado para la firma XMLDSig por tenant
             private_key = cls.get_or_create_private_key()
@@ -185,7 +185,7 @@ class VerifactuService:
                 encryption_algorithm=serialization.NoEncryption()
             )
 
-            # Generar certificado X.509 temporal para que XAdES-BES pueda incluir el SigningCertificate
+            # Generar certificado X.509 temporal para la firma XMLDSig
             from cryptography import x509
             from cryptography.x509.oid import NameOID
             import datetime as dt
@@ -306,12 +306,15 @@ class VerifactuService:
                     app_logger.error(f"Error de validación contra el esquema XSD de Veri*Factu (Alta): {xml_err}")
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
-            # Firmar digitalmente el elemento XAdES-BES
-            signer = XAdESSigner(signature_algorithm="rsa-sha256")
+            # Firmar digitalmente el elemento (XMLDSig enveloped)
+            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
             signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
             
             xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
-            real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
+            
+            # Extraer el valor real de la firma (SignatureValue)
+            sig_val = signed_root.find(".//ds:SignatureValue", namespaces={'ds': 'http://www.w3.org/2000/09/xmldsig#'})
+            real_sig_base64 = sig_val.text.strip() if sig_val is not None else ""
 
             with _get_connection() as conn:
                 conn.execute("""
@@ -409,7 +412,7 @@ class VerifactuService:
 
             from lxml import etree
             import signxml
-            from signxml.xades import XAdESSigner
+            from signxml import XMLSigner
 
             # Obtener claves y firmar
             private_key = cls.get_or_create_private_key()
@@ -419,7 +422,7 @@ class VerifactuService:
                 encryption_algorithm=serialization.NoEncryption()
             )
             
-            # Generar certificado X.509 temporal para que XAdES-BES pueda incluir el SigningCertificate
+            # Generar certificado X.509 temporal para la firma XMLDSig
             from cryptography import x509
             from cryptography.x509.oid import NameOID
             import datetime as dt
@@ -498,12 +501,15 @@ class VerifactuService:
                     app_logger.error(f"Error de validación contra el esquema XSD de Veri*Factu (Anulación): {xml_err}")
                     raise ValueError(f"El XML de Veri*Factu generado no cumple el esquema XSD oficial: {xml_err}")
 
-            # Firmar
-            signer = XAdESSigner(signature_algorithm="rsa-sha256")
+            # Firmar (XMLDSig enveloped)
+            signer = XMLSigner(method=signxml.methods.enveloped, signature_algorithm="rsa-sha256")
             signed_root = signer.sign(registro_xml, key=pem_key_bytes, cert=cert_pem_bytes)
             
             xml_firmado_str = etree.tostring(signed_root, encoding="utf-8").decode("utf-8")
-            real_sig_base64 = base64.b64encode(xml_firmado_str.encode("utf-8")).decode("utf-8")
+            
+            # Extraer el valor real de la firma
+            sig_val = signed_root.find(".//ds:SignatureValue", namespaces={'ds': 'http://www.w3.org/2000/09/xmldsig#'})
+            real_sig_base64 = sig_val.text.strip() if sig_val is not None else ""
 
             # Registrar la anulación como nueva fila con sufijo local para evitar UNIQUE constraint de SQLite
             invoice_number_local = f"{invoice_number}_ANUL"
@@ -1129,8 +1135,8 @@ class VerifactuService:
                 "Ley 18/2022, de 28 de septiembre (Crea y Crece - Factura Electrónica B2B)"
             ],
             "expediente_evidencias_tecnicas": {
-                "encadenamiento_criptografico_sha256": "CONFORME (Anexo I y II Orden HAC/1177/2024)",
-                "registro_eventos_sif_log": "CONFORME (Art. 12 Orden HAC/1177/2024)",
+                "encadenamiento_criptografico_sha256": "CONFORME" if cls.verify_chain_integrity().get("status") == "valid" else "NO_CONFORME",
+                "registro_eventos_sif_log": "CONFORME" if cls.get_last_event_log_hash() is not None else "NO_EVALUADO",
                 "codigo_qr_cotejo_aeat": "CONFORME (Anexo III Orden HAC/1177/2024)",
                 "facturacion_rectificativa": "CONFORME (Series R-YYYY-XXX y tipos R1-R5)",
                 "aislamiento_multitenant_rsa": "CONFORME (Claves privadas y certificados por tenant)",

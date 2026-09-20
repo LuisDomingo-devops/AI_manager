@@ -47,7 +47,7 @@ def test_sign_pdf_software(signature_service, mock_p12_bytes):
         c.save()
         pdf_bytes = buf.getvalue()
         
-        signed_pdf = signature_service.sign_pdf("test-tenant", pdf_bytes, use_hardware=False)
+        signed_pdf = signature_service.sign_pdf("test-tenant", pdf_bytes)
         assert signed_pdf is not None
         assert len(signed_pdf) > len(pdf_bytes)
         assert b"adbe.pkcs7.detached" in signed_pdf

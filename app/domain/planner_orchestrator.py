@@ -7,7 +7,7 @@ Orquesta y ejecuta el ciclo de vida del planificador (fase de intención, planif
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/api/routes.py: Invoca este orquestador a través de /chat.
 - app/domain/agents/marcos/marcos_agent.py: Delega consultas de legislación española.
-- app/adapters/tool_registry.py: Busca y proporciona las herramientas a ejecutar.
+- app.infrastructure.adapters.tool_registry.py: Busca y proporciona las herramientas a ejecutar.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.domain.ports.memory_port import MemoryPort, VectorMemoryPort
 from app.domain.ports.bridge_port import BridgePort
 from app.domain.ports.calendar_port import CalendarPort
 # pyrefly: ignore [missing-import]
-from app.adapters.tool_registry import (
+from app.infrastructure.adapters.tool_registry import (
     get_tool,
     is_client_tool,
     get_client_action,
@@ -41,11 +41,11 @@ class LazyAdapterProxy:
 
 memory = LazyAdapterProxy("app.adapters.memory.memory", "memory")
 vector_memory = LazyAdapterProxy("app.adapters.memory.vector_memory", "vector_memory")
-bridge = LazyAdapterProxy("app.adapters.alfonso_bridge", "bridge")
+bridge = LazyAdapterProxy("app.infrastructure.adapters.alfonso_bridge", "bridge")
 
 def extract_json_robust(raw: str) -> dict | None:
     # pyrefly: ignore [missing-import]
-    from app.adapters.llm_client import extract_json_robust as concrete
+    from app.infrastructure.adapters.llm_client import extract_json_robust as concrete
     return concrete(raw)
 
 from app.utils.logger import (
@@ -211,15 +211,16 @@ class SpecializedAgentRouter:
         self.memory = memory
 
     async def route_if_applicable(self, user_message: str, session_id: str | None, client_id: str | None, logger) -> dict | None:
+        import re
         msg_lower = user_message.lower()
         
-        is_calculation_or_personal = any(kw in msg_lower for kw in [
+        is_calculation_or_personal = any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
             "cuanto", "cuánto", "saldo", "calcular", "calcula", "estimar", "estima", "llevo", 
             "mi iva", "mis ivas", "mi irpf", "mi contabilidad", "mis cuentas", "mi factura", "mis facturas",
             "cuanto llevo", "cuánto llevo"
         ])
 
-        is_marcos_query = ("marcos" in msg_lower or any(kw in msg_lower for kw in [
+        is_marcos_query = (re.search(r"\bmarcos\b", msg_lower) or any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
             "codigo civil", "código civil", "codigo penal", "código penal",
             "constitucion española", "constitucion espanola", "constitución española",
             "asesoria legal", "asesoría legal", "consulta juridica", "consulta jurídica",
@@ -227,11 +228,11 @@ class SpecializedAgentRouter:
             "hacienda", "aeat", "declaración de la renta", "declaracion de la renta",
             "deducción", "deduccion", "deducciones", "jurisprudencia", "sentencia", "fiscal"
         ])) and not is_calculation_or_personal
-        is_security_query = any(kw in msg_lower for kw in [
+        is_security_query = (any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
             "ciberseguridad", "cybersecurity", "seguridad", "security", "vulnerabilidad", 
             "vulnerabilities", "auditoría de seguridad", "auditoria de seguridad", "hack",
             "phishing", "malware", "firewall", "puerto", "risk", "riesgo", "alerta de seguridad"
-        ]) or ("cyberagent" in msg_lower or "agente de seguridad" in msg_lower or "securityagent" in msg_lower)
+        ]) or (re.search(r"\bcyberagent\b", msg_lower) or re.search(r"\bagente de seguridad\b", msg_lower) or re.search(r"\bsecurityagent\b", msg_lower))) and "seguridad social" not in msg_lower
 
         if is_marcos_query:
             logger.info("Consulta de tipo legal. Delegando a MarcosAgent.")
@@ -256,8 +257,8 @@ class SpecializedAgentRouter:
             }
 
         # ── ExcelAgent Routing ──────────────────────────────────────────
-        is_excel_query = "excel" in msg_lower or "hoja de cálculo" in msg_lower or "hoja de calculo" in msg_lower or "libro diario" in msg_lower or "balance de situación" in msg_lower or "balance de situacion" in msg_lower
-        if is_excel_query and ("exporta" in msg_lower or "genera" in msg_lower or "crea" in msg_lower or "excel" in msg_lower):
+        is_excel_query = re.search(r"\bexcel\b", msg_lower) or re.search(r"\bhoja de cálculo\b", msg_lower) or re.search(r"\bhoja de calculo\b", msg_lower) or re.search(r"\blibro diario\b", msg_lower) or re.search(r"\bbalance de situación\b", msg_lower) or re.search(r"\bbalance de situacion\b", msg_lower)
+        if is_excel_query and (re.search(r"\bexporta\b", msg_lower) or re.search(r"\bgenera\b", msg_lower) or re.search(r"\bcrea\b", msg_lower) or re.search(r"\bexcel\b", msg_lower)):
             logger.info("Consulta de hoja de cálculo. Delegando a ExcelAgent.")
             from app.domain.agents.excel.excel_agent import excel_agent
             response = await excel_agent.generate_response(user_message, client_id=client_id or "default")
@@ -310,15 +311,13 @@ class ToolExecutionEngine:
                 "result": result,
             }
         else:
-            import sys
-            is_testing = "pytest" in sys.modules
-            role = "admin" if is_testing else "guest"
+            role = "guest"
             if client_id:
                 client_meta = None
                 if self.bridge and hasattr(self.bridge, "_client_info_dict"):
                     client_meta = self.bridge._client_info_dict.get(client_id)
                 if not client_meta:
-                    from app.adapters.alfonso_bridge import bridge as default_bridge
+                    from app.infrastructure.adapters.alfonso_bridge import bridge as default_bridge
                     if hasattr(default_bridge, "_client_info_dict"):
                         client_meta = default_bridge._client_info_dict.get(client_id)
 
@@ -489,7 +488,7 @@ class PlannerOrchestrator:
     def llm(self):
         if self._llm is not None:
             return self._llm
-        from app.adapters.llm_client import GeminiClient
+        from app.infrastructure.adapters.llm_client import GeminiClient
         return GeminiClient()
 
     @property
@@ -510,14 +509,14 @@ class PlannerOrchestrator:
     def bridge(self):
         if self._bridge is not None:
             return self._bridge
-        from app.adapters.alfonso_bridge import bridge as default_bridge
+        from app.infrastructure.adapters.alfonso_bridge import bridge as default_bridge
         return default_bridge
 
     @property
     def calendar(self):
         if self._calendar is not None:
             return self._calendar
-        from app.adapters.calendar_db import SQLiteCalendarAdapter
+        from app.infrastructure.database.calendar_db import SQLiteCalendarAdapter
         return SQLiteCalendarAdapter()
 
     async def run(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
@@ -640,7 +639,7 @@ class PlannerOrchestrator:
                 continue
 
             # Si es una herramienta de interfaz del cliente (abrir/cerrar ventanas, etc.), la devolvemos inmediatamente para ejecución local de UI
-            from app.adapters.tool_registry import is_client_tool
+            from app.infrastructure.adapters.tool_registry import is_client_tool
             # Herramientas exclusivas de transición de interfaz (se interceptan para que la GUI PyQt actúe directamente)
             UI_TRANSITION_TOOLS = {
                 "calendar_open_ui", "calendar_close_ui",

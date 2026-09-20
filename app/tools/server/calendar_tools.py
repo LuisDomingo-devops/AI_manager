@@ -8,17 +8,17 @@ Expone las funciones CRUD de base de datos de calendario para que el LLM las inv
 Durante la ejecución del planificador para buscar, agendar o borrar eventos.
 
 ¿CÓMO LO HACE?
-Mediante llamadas directas a las funciones asíncronas y síncronas de app/adapters/calendar_db.py.
+Mediante llamadas directas a las funciones asíncronas y síncronas de app.infrastructure.database.calendar_db.py.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (registra estas herramientas)
-- app/adapters/calendar_db.py (contiene las operaciones SQLite CRUD reales)
+- app.infrastructure.adapters.tool_registry.py (registra estas herramientas)
+- app.infrastructure.database.calendar_db.py (contiene las operaciones SQLite CRUD reales)
 """
 
 from typing import Optional
-from app.adapters.calendar_db import create_event, list_events, delete_event, update_event
+from app.infrastructure.database.calendar_db import create_event, list_events, delete_event, update_event
 from app.adapters.memory.vector_memory import vector_memory
-from app.adapters.alfonso_bridge import bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge
 from app.domain.actions import Action
 from app.utils.logger import tool_logger
 
@@ -47,7 +47,7 @@ async def calendar_create_event(
             
         # Comprobar conflictos de horario de forma programática
         from datetime import datetime, timedelta
-        from app.adapters.calendar_db import list_events
+        from app.infrastructure.database.calendar_db import list_events
         
         def parse_dt(dt_str):
             if not dt_str:

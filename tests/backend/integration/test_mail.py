@@ -2,7 +2,7 @@ import pytest
 import os
 import sqlite3
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.adapters.mail_db import (
+from app.infrastructure.database.mail_db import (
     create_email,
     list_emails,
     get_email,
@@ -52,13 +52,13 @@ def setup_test_db():
     except Exception:
         pass
         
-    from app.adapters.mail_db import _init_mail_schema
+    from app.infrastructure.database.mail_db import _init_mail_schema
     _init_mail_schema(_test_conn)
     
     dummy = DummyConnection(_test_conn)
     
-    with patch("app.adapters.mail_db.get_connection", return_value=dummy), \
-         patch("app.adapters.gmail_sync.sync_from_gmail", new_callable=AsyncMock, return_value=0):
+    with patch("app.infrastructure.database.mail_db.get_connection", return_value=dummy), \
+         patch("app.infrastructure.adapters.gmail_sync.sync_from_gmail", new_callable=AsyncMock, return_value=0):
         yield
 
 def test_mail_db_operations():
@@ -120,7 +120,7 @@ async def test_mail_tools_and_mock_seeding():
     assert any(e["category"] == "legal" for e in emails)
 
     # Verificar que el email con la cita dental se sincronizó al calendario
-    from app.adapters.calendar_db import list_events
+    from app.infrastructure.database.calendar_db import list_events
     events = list_events(start_date="2026-07-10", end_date="2026-07-10")
     assert len(events) > 0
     assert any("dental" in ev["title"].lower() for ev in events)

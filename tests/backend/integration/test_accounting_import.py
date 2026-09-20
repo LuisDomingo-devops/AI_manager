@@ -15,6 +15,7 @@ def override_auth():
     app.dependency_overrides[get_current_user] = mock_get_current_user
     yield
     app.dependency_overrides.clear()
+@pytest.mark.skip(reason="A3 parser removed in Phase 5")
 def test_import_a3_success():
     headers = {}
     a3_content = b"0101012023        12345678X PROVEEDOR A3                          0000001000000000210"

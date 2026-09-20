@@ -12,14 +12,14 @@ async def start_background_mail_monitor(bridge_port=None):
     await asyncio.sleep(15)
     
     from app.tools.server.mail_tools import sync_emails_to_calendar
-    from app.adapters.mail_db import get_connection
+    from app.infrastructure.database.mail_db import get_connection
     try:
         from app.domain.agents.job.job_agent import job_agent
     except ImportError:
         job_agent = None
     
     if bridge_port is None:
-        from app.adapters.alfonso_bridge import bridge as bridge_port
+        from app.infrastructure.adapters.alfonso_bridge import bridge as bridge_port
         
     while True:
         try:

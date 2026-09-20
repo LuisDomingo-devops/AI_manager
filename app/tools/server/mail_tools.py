@@ -13,7 +13,7 @@ Interactúa con mail_db para el almacenamiento persistente, sincroniza eventos u
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/api/routes.py: Expone endpoints que llaman a estas herramientas.
 - app/domain/agents/marcos/marcos_agent.py: Delegación de borradores de correo de carácter legal.
-- app/adapters/mail_db.py y app/adapters/calendar_db.py: Acceso y mutación de bases de datos locales.
+- app.infrastructure.database.mail_db.py y app.infrastructure.database.calendar_db.py: Acceso y mutación de bases de datos locales.
 """
 
 import json
@@ -21,7 +21,7 @@ import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from app.utils.paths import get_client_desktop, resolve_client_path
-from app.adapters.mail_db import (
+from app.infrastructure.database.mail_db import (
     create_email,
     list_emails,
     get_email,
@@ -30,11 +30,11 @@ from app.adapters.mail_db import (
     get_setting,
     set_setting,
 )
-from app.adapters.llm_client import GeminiClient, extract_json_robust
+from app.infrastructure.adapters.llm_client import GeminiClient, extract_json_robust
 from app.utils.logger import tool_logger
-from app.adapters.alfonso_bridge import bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge
 from app.domain.actions import Action
-from app.adapters.calendar_db import create_event, list_events
+from app.infrastructure.database.calendar_db import create_event, list_events
 from app.adapters.memory.vector_memory import vector_memory
 
 # Instanciar cliente LLM para clasificaciones y resúmenes internos
@@ -67,7 +67,7 @@ async def mail_receive_mock_emails() -> dict:
             }
         else:
             # Si ya existían, forzamos la inserción de un set básico para garantizar que haya correos
-            from app.adapters.mail_db import get_connection
+            from app.infrastructure.database.mail_db import get_connection
             with get_connection() as conn:
                 count = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
             return {
@@ -84,7 +84,7 @@ async def sync_emails_to_calendar() -> int:
     """
     Escanea correos no procesados para el calendario y agenda citas de forma automática.
     """
-    from app.adapters.gmail_sync import sync_from_gmail
+    from app.infrastructure.adapters.gmail_sync import sync_from_gmail
     try:
         inserted = await sync_from_gmail()
         if inserted > 0:
@@ -94,7 +94,7 @@ async def sync_emails_to_calendar() -> int:
     except Exception as e:
         tool_logger.warning(f"Error al sincronizar desde Gmail: {e}")
 
-    from app.adapters.mail_db import list_emails, update_email
+    from app.infrastructure.database.mail_db import list_emails, update_email
     import re
     from datetime import datetime, timedelta
     
@@ -616,7 +616,7 @@ async def mail_get_unread_summary() -> dict:
     try:
         # 2. Obtener correos para el resumen (priorizando la fecha más reciente de la última actualización)
         import sqlite3
-        from app.adapters.mail_db import get_connection
+        from app.infrastructure.database.mail_db import get_connection
         emails_to_summarize = []
         try:
             with get_connection() as conn:
@@ -890,7 +890,7 @@ async def mail_send_email(recipient: str, subject: str, body: str) -> dict:
             "summary": "Lo siento, en estos momentos estoy clasificando el correo. Si quieres puedo avisarte cuando termine."
         }
     try:
-        from app.adapters.mail_db import create_email
+        from app.infrastructure.database.mail_db import create_email
         from datetime import datetime
         
         sender_email = "test.user@alfonso.dev"
@@ -939,7 +939,7 @@ async def mail_delete_email(email_id: int) -> dict:
             "summary": "Lo siento, en estos momentos estoy clasificando el correo. Si quieres puedo avisarte cuando termine."
         }
     try:
-        from app.adapters.mail_db import delete_email
+        from app.infrastructure.database.mail_db import delete_email
         success = delete_email(email_id)
         if success:
             if bridge.has_clients():
@@ -970,7 +970,7 @@ async def mail_reply_email(email_id: int, body: str, reply_all: bool = False) ->
             "summary": "Lo siento, en estos momentos estoy clasificando el correo. Si quieres puedo avisarte cuando termine."
         }
     try:
-        from app.adapters.mail_db import get_email, create_email
+        from app.infrastructure.database.mail_db import get_email, create_email
         from datetime import datetime
         
         orig_email = get_email(email_id)
@@ -1029,7 +1029,7 @@ async def mail_forward_email(email_id: int, recipient: str, comment: Optional[st
             "summary": "Lo siento, en estos momentos estoy clasificando el correo. Si quieres puedo avisarte cuando termine."
         }
     try:
-        from app.adapters.mail_db import get_email, create_email
+        from app.infrastructure.database.mail_db import get_email, create_email
         from datetime import datetime
         
         orig_email = get_email(email_id)
@@ -1090,7 +1090,7 @@ async def mail_generate_draft(email_id: int, _session_id: str = "global") -> dic
             "summary": "Lo siento, en estos momentos estoy clasificando el correo. Si quieres puedo avisarte cuando termine."
         }
     try:
-        from app.adapters.mail_db import get_email
+        from app.infrastructure.database.mail_db import get_email
         orig_email = get_email(email_id)
         if not orig_email:
             return {"status": "error", "message": f"No se encontró el correo con ID {email_id}."}

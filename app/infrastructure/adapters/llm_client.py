@@ -8,10 +8,10 @@ Gestiona la comunicación con el servidor Gemini local para generar texto, compl
 Siempre que el orquestador, router o agentes requieran capacidades cognitivas de inferencia del LLM.
 
 ¿CÓMO LO HACE?
-Formateando payloads HTTP compatibles con la API `/api/chat` de Gemini y llamándolos con app/adapters/http_client.py.
+Formateando payloads HTTP compatibles con la API `/api/chat` de Gemini y llamándolos con app.infrastructure.adapters.http_client.py.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/http_client.py (provee el cliente HTTP subyacente para las peticiones)
+- app.infrastructure.adapters.http_client.py (provee el cliente HTTP subyacente para las peticiones)
 - app/domain/planner_orchestrator.py (usa este cliente para planificar y responder en el chat)
 """
 
@@ -21,8 +21,8 @@ import re
 from datetime import datetime
 from pathlib import Path          
 from app.config import settings
-from app.adapters.http_client import client
-from app.adapters.tool_registry import get_tool
+from app.infrastructure.adapters.http_client import client
+from app.infrastructure.adapters.tool_registry import get_tool
 from app.domain.prompt_generator import generate_tool_prompt
 from app.utils.logger import attach_request_id, llm_logger, error_logger, app_logger
 # ---------------------------------------------------------------------
@@ -225,7 +225,7 @@ def extract_json_robust(raw: str) -> dict | None:
                 
                 # Intentar mapear al primer parámetro de la función del registry
                 try:
-                    from app.adapters.tool_registry import safe_get_tool, list_tools
+                    from app.infrastructure.adapters.tool_registry import safe_get_tool, list_tools
                     import inspect
                     if t_name in list_tools():
                         func = safe_get_tool(t_name)
@@ -497,7 +497,7 @@ class GeminiClient(LLMPort):
 
         if mode == "tool":
             try:
-                from app.adapters.tool_registry import get_tool_schemas
+                from app.infrastructure.adapters.tool_registry import get_tool_schemas
                 tool_schemas = get_tool_schemas()
                 if tool_schemas:
                     payload["tools"] = tool_schemas

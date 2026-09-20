@@ -1,5 +1,5 @@
 import pytest
-from app.domain.services.closing_service import ClosingService
+from app.domain.services.ledger_service import LedgerService
 from app.adapters.memory.memory import _get_connection
 
 def test_cierre_fiscal_db_integration():
@@ -33,7 +33,7 @@ def test_cierre_fiscal_db_integration():
     conn.commit()
     
     # 2. Ejecutar cierre
-    res = ClosingService.close_fiscal_year(2026)
+    res = LedgerService.close_fiscal_year(2026)
     print("CIERRE FISCAL RESULT:", res)
     assert res["status"] == "ok"
     assert res["resultado_ejercicio"] == 500.0 # Ingresos 1000 - Gastos 500

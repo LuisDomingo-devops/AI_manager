@@ -4,12 +4,9 @@ from datetime import datetime
 from app.adapters.memory.memory import _get_connection
 from app.utils.logger import tool_logger
 from app.utils.encryption import encryptor
-from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
-from app.domain.services.ledger_service import LedgerService
-
 class CollectionService:
     @staticmethod
-    def register_payment(invoice_id: str, amount: float, payment_method: str, date: str, notes: str = "") -> dict:
+    def register_payment(invoice_id: str, amount: float, payment_method: str, date: str, notes: str = "", invoice_repository=None) -> dict:
         """
         Registra un pago para una factura y actualiza su estado si está completamente cobrada.
         También genera el asiento contable del cobro.
@@ -17,7 +14,12 @@ class CollectionService:
         conn = _get_connection()
         try:
             # 1. Encontrar la factura
-            invoice_data = InvoiceRepository.find_invoice_by_id(invoice_id)
+            if invoice_repository is None:
+                # Fallback to avoid breaking existing callers until full DI is implemented
+                from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+                invoice_repository = InvoiceRepository
+
+            invoice_data = invoice_repository.find_invoice_by_id(invoice_id)
             if not invoice_data:
                 return {"status": "error", "message": f"Factura '{invoice_id}' no encontrada."}
 
@@ -98,11 +100,16 @@ class CollectionService:
             conn.close()
 
     @staticmethod
-    def get_outstanding_balance(invoice_id: str) -> dict:
+    def get_outstanding_balance(invoice_id: str, invoice_repository=None) -> dict:
         """
         Retorna el saldo pendiente de una factura.
         """
-        invoice_data = InvoiceRepository.find_invoice_by_id(invoice_id)
+        if invoice_repository is None:
+            # Fallback to avoid breaking existing callers until full DI is implemented
+            from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
+            invoice_repository = InvoiceRepository
+
+        invoice_data = invoice_repository.find_invoice_by_id(invoice_id)
         if not invoice_data:
             return {"status": "error", "message": f"Factura '{invoice_id}' no encontrada."}
 

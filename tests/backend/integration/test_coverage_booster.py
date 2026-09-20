@@ -23,11 +23,14 @@ def test_encryption_errors_and_invalid_inputs():
     assert encryptor.decrypt(None) is None
     
     # Decodificación de texto que no está en base64
-    assert encryptor.decrypt("fallback_no_base64_valido!") == "fallback_no_base64_valido!"
-    assert encryptor.decrypt("texto_plano_normal") == "texto_plano_normal"
+    with pytest.raises(ValueError):
+        encryptor.decrypt("fallback_no_base64_valido!")
+    with pytest.raises(ValueError):
+        encryptor.decrypt("texto_plano_normal")
     
     # Decodificación de base64 demasiado corto
-    assert encryptor.decrypt("fallback_aaaa") == "fallback_aaaa"
+    with pytest.raises(ValueError):
+        encryptor.decrypt("fallback_aaaa")
 
 def test_anonymizer_empty_and_edge_cases():
     """Prueba el anonimizador con valores vacíos o nulos."""

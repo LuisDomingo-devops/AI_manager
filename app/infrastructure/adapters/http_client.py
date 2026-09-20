@@ -11,7 +11,7 @@ Al realizar llamadas externas hacia la API de Ollama o cualquier servicio HTTP d
 Instanciando un objeto httpx.AsyncClient global y manejando timeouts para prevenir bloqueos.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/llm_client.py (utiliza este cliente para comunicarse con Ollama)
+- app.infrastructure.adapters.llm_client.py (utiliza este cliente para comunicarse con Ollama)
 """
 
 import httpx

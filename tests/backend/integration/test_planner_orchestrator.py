@@ -52,7 +52,7 @@ async def test_orchestrator_client_tool_flow(mock_llm, session_memory_fixture):
         mock_bridge = AsyncMock()
         mock_bridge.send_command.return_value = {"status": "success", "result": "operación exitosa"}
         
-        with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
+        with patch("app.infrastructure.adapters.alfonso_bridge.bridge", mock_bridge):
             orchestrator = PlannerOrchestrator()
             result = await orchestrator.run(
                 user_message="abre el calendario",

@@ -3,8 +3,7 @@ from typing import Optional
 import json
 
 from app.api.auth_deps import CurrentUser
-from app.domain.services.import_service.a3_parser import A3Parser
-from app.domain.services.import_service.contaplus_parser import ContaPlusParser
+
 from app.domain.services.import_service.generic_parser import GenericParser
 from app.domain.services.import_service.import_orchestrator import ImportOrchestrator
 
@@ -18,7 +17,7 @@ async def import_accounting_data(
     current_user: str = CurrentUser
 ):
     """
-    Imports historical accounting data from A3, ContaPlus, or Generic CSV.
+    Imports historical accounting data from Generic CSV.
     """
     content = await file.read()
     try:
@@ -32,11 +31,7 @@ async def import_accounting_data(
     source_type = source_type.upper()
     invoices = []
     
-    if source_type == "A3":
-        invoices = A3Parser.parse(text_content)
-    elif source_type == "CONTAPLUS":
-        invoices = ContaPlusParser.parse(text_content)
-    elif source_type == "GENERIC_CSV":
+    if source_type == "GENERIC_CSV":
         if not mapping_config:
             raise HTTPException(status_code=400, detail="mapping_config es obligatorio para GENERIC_CSV")
         try:

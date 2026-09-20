@@ -56,3 +56,10 @@ def get_current_user(
 
 # Alias conveniente para los routers
 CurrentUser = Depends(get_current_user)
+
+def verify_setup_access(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+) -> None:
+    """Si ya hay un usuario, requiere autenticación para poder llamar a setup."""
+    if UserService.user_exists():
+        get_current_user(credentials)

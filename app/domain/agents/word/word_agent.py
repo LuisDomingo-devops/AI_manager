@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from app.adapters.llm_client import GeminiClient
+from app.infrastructure.adapters.llm_client import GeminiClient
 from app.domain.services.ledger_service import LedgerService
 from app.utils.logger import orchestrator_logger
 from app.utils.paths import get_client_desktop

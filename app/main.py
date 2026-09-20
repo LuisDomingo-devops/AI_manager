@@ -13,8 +13,8 @@ Crea una instancia de FastAPI, registra el router principal unificado, configura
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/api/routes.py: Importa y registra el router principal consolidado.
 - app/domain/planner_orchestrator.py: Inicializa el planificador orquestador global.
-- app/adapters/llm_client.py: Inicializa y precalienta el cliente LLM de Ollama.
-- app/adapters/alfonso_bridge.py: Arranca/detiene la comunicación en tiempo real con el cliente.
+- app.infrastructure.adapters.llm_client.py: Inicializa y precalienta el cliente LLM de Ollama.
+- app.infrastructure.adapters.alfonso_bridge.py: Arranca/detiene la comunicación en tiempo real con el cliente.
 """
 
 import os
@@ -29,10 +29,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import router
-from app.adapters.llm_client import GeminiClient, get_system_prompt
-from app.adapters.metrics import increment_http_errors, increment_http_requests, record_http_latency
+from app.infrastructure.adapters.llm_client import GeminiClient, get_system_prompt
+from app.infrastructure.monitoring.metrics import increment_http_errors, increment_http_requests, record_http_latency
 from app.domain.planner_orchestrator import PlannerOrchestrator
-from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 from app.tools.client.browser_tools import _close as _close_playwright
 from app.utils.logger import LOG_DIR, app_logger, attach_request_id
 from app.infrastructure.security.license_features import ROUTE_FEATURE_MAP, check_feature_access

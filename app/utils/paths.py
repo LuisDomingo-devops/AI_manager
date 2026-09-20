@@ -20,7 +20,7 @@ def get_client_context(client_id: str | None = None) -> dict:
     o leyendo la caché de data/last_client_info.json.
     Retorna un diccionario con: system, username, home, cwd.
     """
-    from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+    from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 
     client_info = None
     if client_id:

@@ -22,7 +22,7 @@ from typing import Any, Callable, Type
 
 from app.config import settings
 from app.domain.actions import CLIENT_ALIASES
-from app.adapters.tool_base import ToolArgsModel, ValidatedArgs, coerce_and_validate
+from app.infrastructure.adapters.tool_base import ToolArgsModel, ValidatedArgs, coerce_and_validate
 from app.utils.logger import (
     attach_request_id,
     tool_registry_logger

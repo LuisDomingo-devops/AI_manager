@@ -853,6 +853,12 @@ class BankProviderFactory:
     @classmethod
     def get_provider(cls, provider_name: str) -> BaseBankProvider:
         name = provider_name.lower().strip()
+        
+        if name == "mock":
+            import os
+            if os.getenv("ENV", "development").lower() == "production":
+                raise NotImplementedError("Mock provider no permitido en entorno de producción.")
+                
         provider_class = cls._PROVIDERS.get(name)
         if not provider_class:
             # Si es un nombre de banco tradicional en minúsculas, usar Tink o GoCardless

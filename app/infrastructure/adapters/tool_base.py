@@ -11,7 +11,7 @@ Al registrar una nueva herramienta para asegurar que cuenta con descripción, pa
 Utilizando tipado de Python y metadatos de funciones para extraer un esquema JSON representativo.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (mantiene y valida la lista de herramientas registradas)
+- app.infrastructure.adapters.tool_registry.py (mantiene y valida la lista de herramientas registradas)
 - app/tools/ (todos los módulos de herramientas heredan o implementan este estándar)
 """
 

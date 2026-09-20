@@ -17,11 +17,11 @@ def sign_invoice_xades(xml_bytes: bytes, private_key_pem: bytes, cert_pem: bytes
     # Cargar certificado para validarlo (opcional, signxml usará los bytes directamente)
     cert = x509.load_pem_x509_certificate(cert_pem, default_backend())
     
-    from signxml.xades import XAdESSigner
+    from signxml import XMLSigner
     
     # Configuramos el XMLSigner
     # Para Factura Electrónica en España se usa habitualmente RSA-SHA256
-    signer = XAdESSigner(
+    signer = XMLSigner(
         method=methods.enveloped,
         signature_algorithm="rsa-sha256",
         digest_algorithm="sha256",

@@ -24,7 +24,7 @@ def test_get_client_context_fallback_and_mock():
     }
     mock_bridge._client_info_dict = {}
 
-    with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
+    with patch("app.infrastructure.adapters.alfonso_bridge.bridge", mock_bridge):
         ctx = get_client_context()
         assert ctx["system"] == "Windows"
         assert ctx["username"] == "testuser"
@@ -42,7 +42,7 @@ def test_get_client_desktop():
     }
     mock_bridge._client_info_dict = {}
 
-    with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
+    with patch("app.infrastructure.adapters.alfonso_bridge.bridge", mock_bridge):
         desktop = get_client_desktop()
         assert desktop == "/Users/macuser/Desktop"
 
@@ -58,7 +58,7 @@ def test_resolve_client_path_placeholders(mock_platform):
     }
     mock_bridge._client_info_dict = {}
 
-    with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
+    with patch("app.infrastructure.adapters.alfonso_bridge.bridge", mock_bridge):
         # Probar reemplazo de placeholders
         res = resolve_client_path("C:\\Users\\YOUR_USERNAME\\Desktop\\docs")
         assert res == "C:/Users/luisd/Desktop/docs"
@@ -79,7 +79,7 @@ def test_resolve_client_path_wsl_translation(mock_platform):
     }
     mock_bridge._client_info_dict = {}
 
-    with patch("app.adapters.alfonso_bridge.bridge", mock_bridge):
+    with patch("app.infrastructure.adapters.alfonso_bridge.bridge", mock_bridge):
         # Simulamos que existe la carpeta en WSL para forzar traducción
         with patch("os.path.exists", return_value=True):
             res = resolve_client_path("C:/Users/luisd/Desktop/file.txt")

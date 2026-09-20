@@ -7,7 +7,7 @@ import imaplib
 import email
 import asyncio
 from email.header import decode_header
-from app.adapters.mail_db import create_email, get_connection
+from app.infrastructure.database.mail_db import create_email, get_connection
 
 def clean_header(header_value) -> str:
     if not header_value:

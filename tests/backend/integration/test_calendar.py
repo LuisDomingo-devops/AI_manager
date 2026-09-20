@@ -1,7 +1,7 @@
 import pytest
 import os
 from unittest.mock import AsyncMock, patch
-from app.adapters.calendar_db import create_event, list_events, delete_event, get_event, update_event
+from app.infrastructure.database.calendar_db import create_event, list_events, delete_event, get_event, update_event
 from app.tools.server.calendar_tools import calendar_create_event, calendar_list_events, calendar_delete_event, calendar_open_ui
 
 @pytest.fixture(autouse=True)
@@ -9,7 +9,7 @@ def setup_test_db():
     # Asegurar modo test
     os.environ["TESTING"] = "true"
     # Borrar eventos previos en DB de test antes de cada test
-    from app.adapters.calendar_db import get_connection
+    from app.infrastructure.database.calendar_db import get_connection
     with get_connection() as conn:
         conn.execute("DELETE FROM calendar_events")
         conn.commit()

@@ -11,7 +11,7 @@ Cuando el orquestador ejecuta tareas de investigación en la web en nombre del u
 Inicializando una sesión interactiva en segundo plano con Playwright y exponiendo llamadas asíncronas.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (registra estas herramientas)
+- app.infrastructure.adapters.tool_registry.py (registra estas herramientas)
 - app/api/routes.py (expone endpoints directos de control de navegador)
 """
 
@@ -288,7 +288,7 @@ async def browser_search(query: str, max_text_chars: int = 3000, client_id: str 
 
 async def browser_close(client_id: str | None = None):
     """Cierra el navegador. Si hay un cliente conectado, delega el cierre cerrando los navegadores comunes (chrome, firefox, msedge)."""
-    from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+    from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
     if alfonso_bridge.has_clients():
         from app.tools.client.system_tools import close_application
         tool_logger.info("Delegando browser_close al cliente")

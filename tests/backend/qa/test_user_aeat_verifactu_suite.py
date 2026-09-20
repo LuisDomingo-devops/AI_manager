@@ -19,7 +19,7 @@ from app.tools.server.aeat_automation_tools import (
     generate_modelo_347_summary
 )
 from app.domain.planner_orchestrator import PlannerOrchestrator
-from app.adapters.mail_db import create_email
+from app.infrastructure.database.mail_db import create_email
 
 # 1. Configuración de rutas de certificados de prueba
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -42,7 +42,7 @@ def setup_test_environment(tmp_path, monkeypatch):
     # Inicializar base de datos
     with _get_connection() as conn:
         from app.adapters.memory.memory import _init_db_schema
-        from app.adapters.mail_db import _init_mail_schema
+        from app.infrastructure.database.mail_db import _init_mail_schema
         _init_db_schema(conn)
         _init_mail_schema(conn)
         

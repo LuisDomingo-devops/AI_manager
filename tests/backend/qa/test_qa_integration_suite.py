@@ -8,7 +8,7 @@ from app.domain.services.tax_parser_service import TaxParserService
 from app.domain.services.verifactu_service import VerifactuService
 from app.adapters.memory.memory import _get_connection, memory
 # pyre-ignore [Pyre-ignore]
-from app.adapters.mail_db import create_email, list_emails  
+from app.infrastructure.database.mail_db import create_email, list_emails  
 
 @pytest.fixture(autouse=True)
 def clean_system_state(tmp_path, monkeypatch):
@@ -47,9 +47,9 @@ def clean_system_state(tmp_path, monkeypatch):
         # Recrear todas las tablas
         from app.adapters.memory.memory import _init_db_schema
         # pyre-ignore [Pyre-ignore] 
-        from app.adapters.mail_db import _init_mail_schema  
+        from app.infrastructure.database.mail_db import _init_mail_schema  
         # pyrefly: ignore [missing-import]
-        from app.adapters.calendar_db import _init_calendar_schema
+        from app.infrastructure.database.calendar_db import _init_calendar_schema
         from app.domain.services.verifactu_service import VerifactuService
         
         _init_db_schema(conn)
@@ -220,7 +220,7 @@ def test_integration_mail_database_encryption_and_retrieval():
     
     # Comprobar cifrado en disco
     # pyrefly: ignore [missing-import]
-    from app.adapters.mail_db import get_connection as get_mail_connection
+    from app.infrastructure.database.mail_db import get_connection as get_mail_connection
     with get_mail_connection() as conn:
         raw_mail = conn.execute("SELECT sender, body FROM emails WHERE id = ?", (mail_id,)).fetchone()
     assert raw_mail["sender"] != "Hacienda Pública <notificaciones@aeat.es>"

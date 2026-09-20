@@ -131,7 +131,7 @@ def upgrade(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS invoice_items (
             id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id             INTEGER NOT NULL,
+            invoice_id TEXT NOT NULL,
             product_id             INTEGER,
             description_override   TEXT NOT NULL,
             quantity               INTEGER NOT NULL,
@@ -350,4 +350,277 @@ def upgrade(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_messages_session
         ON messages (session_id, client_id, id)
+    """)
+
+
+    # From 015_qa_schema_fixes.py
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_metadata (
+            session_id TEXT PRIMARY KEY,
+            title TEXT,
+            discipline TEXT,
+            project_name TEXT,
+            is_persistent INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_diary (
+            date TEXT PRIMARY KEY,
+            summary TEXT,
+            messages TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier TEXT NOT NULL DEFAULT 'basic',
+            billing_cycle_start TEXT,
+            extra_transfer_fee REAL NOT NULL DEFAULT 0.0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            client_id TEXT NOT NULL DEFAULT 'default',
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            payment_id TEXT NOT NULL,
+            invoice_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            amount REAL NOT NULL,
+            payment_method TEXT,
+            notes TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transfer_date TEXT NOT NULL,
+            recipient_name TEXT NOT NULL,
+            recipient_iban TEXT NOT NULL,
+            amount REAL NOT NULL,
+            concept TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            extra_charge REAL NOT NULL DEFAULT 0.0,
+            connection_id TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            issuer_name TEXT NOT NULL,
+            issuer_nif TEXT NOT NULL,
+            receiver_name TEXT NOT NULL,
+            receiver_nif TEXT NOT NULL,
+            base_imponible REAL NOT NULL,
+            iva_rate REAL NOT NULL,
+            iva_amount REAL NOT NULL,
+            irpf_rate REAL NOT NULL DEFAULT 0.0,
+            irpf_amount REAL NOT NULL DEFAULT 0.0,
+            total_amount REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'borrador',
+            quarter INTEGER NOT NULL,
+            year INTEGER NOT NULL,
+            category TEXT NOT NULL DEFAULT 'ingreso',
+            pdf_path TEXT,
+            xml_path TEXT,
+            is_recurrent INTEGER NOT NULL DEFAULT 0,
+            recurrence_pattern TEXT,
+            blind_index TEXT,
+            verifactu_status TEXT,
+            hash TEXT,
+            tax_engine_version TEXT,
+            requires_manual_confirmation INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS emails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT,
+            sender TEXT,
+            recipient TEXT,
+            body TEXT,
+            date TEXT,
+            received_at TEXT,
+            category TEXT,
+            status TEXT NOT NULL DEFAULT 'received',
+            attachments TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS calendar_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            date TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            description TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            nif TEXT,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            iban TEXT,
+            contact_type TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    # From 017_missing_core_tables.py
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id TEXT NOT NULL,
+            product_id INTEGER,
+            description_override TEXT,
+            quantity REAL NOT NULL DEFAULT 1.0,
+            unit_price REAL NOT NULL DEFAULT 0.0,
+            subtotal REAL NOT NULL DEFAULT 0.0,
+            FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            payment_id TEXT PRIMARY KEY,
+            invoice_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            amount REAL NOT NULL,
+            payment_method TEXT,
+            notes TEXT,
+            FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transfer_date TEXT NOT NULL,
+            recipient_name TEXT NOT NULL,
+            recipient_iban TEXT NOT NULL,
+            amount REAL NOT NULL,
+            concept TEXT,
+            status TEXT DEFAULT 'initiated',
+            extra_charge REAL DEFAULT 0.0,
+            connection_id INTEGER
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier TEXT NOT NULL DEFAULT 'free',
+            billing_cycle_start TEXT,
+            extra_transfer_fee REAL DEFAULT 0.0
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            nif TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            iban TEXT,
+            contact_type TEXT,
+            is_active INTEGER DEFAULT 1
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            client_name TEXT,
+            client_nif TEXT,
+            budget REAL,
+            status TEXT,
+            description TEXT
+        )
+    """)
+    # From 018_fix_test_schemas.py
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN unit_price REAL NOT NULL DEFAULT 0.0")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN tax_rate REAL NOT NULL DEFAULT 21.0")
+    except sqlite3.OperationalError:
+        pass
+        
+    # 2. clients table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            nif        TEXT NOT NULL,
+            name       TEXT NOT NULL,
+            email      TEXT,
+            phone      TEXT,
+            address    TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            client_id TEXT NOT NULL DEFAULT 'default'
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS facts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            fact TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            client_id TEXT NOT NULL DEFAULT 'default'
+        )
     """)

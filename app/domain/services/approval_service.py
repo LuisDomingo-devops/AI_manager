@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from typing import Dict, Any
 from app.utils.logger import app_logger
-from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 
 class ApprovalService:
     def __init__(self):

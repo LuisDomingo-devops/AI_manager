@@ -11,7 +11,7 @@ Durante la ejecución de planes de Alfonso para recordar u almacenar hechos de f
 Llamando a las funciones expuestas por `app/adapters/memory/vector_memory.py`.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (registra estas herramientas)
+- app.infrastructure.adapters.tool_registry.py (registra estas herramientas)
 - app/adapters/memory/vector_memory.py (contiene el motor de búsqueda ChromaDB)
 """
 

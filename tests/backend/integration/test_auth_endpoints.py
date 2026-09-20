@@ -50,13 +50,18 @@ def test_setup_crea_usuario(client, api_headers):
 
 
 def test_setup_falla_si_usuario_ya_existe(client, api_headers):
-    """Segundo POST /auth/setup devuelve 409 Conflict."""
+    """Segundo POST /auth/setup autenticado devuelve 409 Conflict."""
     client.post("/api/v1/auth/setup", json={
         "username": "testuser", "password": "securepass"
     })
+    login_resp = client.post("/api/v1/auth/login", json={
+        "username": "testuser", "password": "securepass"
+    })
+    access_token = login_resp.json()["access_token"]
+    
     resp = client.post("/api/v1/auth/setup", json={
         "username": "otro", "password": "otrapass123"
-    })
+    }, headers={"Authorization": f"Bearer {access_token}"})
     assert resp.status_code == 409
 
 

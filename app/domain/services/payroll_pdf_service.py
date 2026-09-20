@@ -13,7 +13,7 @@ import io
 import base64
 from reportlab.lib.utils import ImageReader
 from app.domain.services.document_customization_service import DocumentCustomizationService
-from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+from app.infrastructure.database.document_customization_db import SqliteDocumentCustomizationAdapter
 
 DOCS_DIR = Path(__file__).resolve().parents[3] / "data" / "documentos_laborales"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)

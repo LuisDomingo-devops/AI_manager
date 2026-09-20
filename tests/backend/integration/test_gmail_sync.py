@@ -2,8 +2,8 @@ import pytest
 import os
 import sqlite3
 from unittest.mock import MagicMock, patch
-from app.adapters import gmail_sync
-from app.adapters import mail_db
+from app.infrastructure.adapters import gmail_sync
+from app.infrastructure.database import mail_db
 
 class DummyConnection:
     def __init__(self, conn):

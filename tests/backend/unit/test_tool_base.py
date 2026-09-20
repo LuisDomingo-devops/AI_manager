@@ -13,8 +13,8 @@ import asyncio
 
 import pytest
 
-from app.adapters import tool_registry
-from app.adapters.tool_base import coerce_and_validate
+from app.infrastructure.adapters import tool_registry
+from app.infrastructure.adapters.tool_base import coerce_and_validate
 from app.tools.server.filesystem_tools import CreateFileArgs, ARGS_SCHEMAS
 
 

@@ -14,13 +14,13 @@ Realiza búsquedas semánticas en la base de datos ChromaDB mediante vector_memo
 - app/domain/planner_orchestrator.py: Delega consultas legales a este agente.
 - app/tools/mail_tools.py: Llama a este agente para generar borradores de correo inteligente si se detecta carácter legal.
 - app/adapters/memory/vector_memory.py: Proporciona la funcionalidad de búsqueda semántica en la legislación.
-- app/adapters/llm_client.py: Invoca el cliente LLM para generar el dictamen o borrador legal.
+- app.infrastructure.adapters.llm_client.py: Invoca el cliente LLM para generar el dictamen o borrador legal.
 """
 
 import os
 from pathlib import Path
 from app.adapters.memory.vector_memory import vector_memory
-from app.adapters.llm_client import GeminiClient
+from app.infrastructure.adapters.llm_client import GeminiClient
 from app.utils.logger import orchestrator_logger
 
 class MarcosAgent:

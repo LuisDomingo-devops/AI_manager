@@ -11,7 +11,7 @@ Cuando el planificador requiere explorar archivos locales, crear scripts o modif
 Encapsulando llamadas estándar de Python como `os`, `shutil` y `pathlib`.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (registra estas herramientas)
+- app.infrastructure.adapters.tool_registry.py (registra estas herramientas)
 """
 
 from pathlib import Path
@@ -20,7 +20,7 @@ import re
 from app.utils.logger import tool_logger, error_logger
 from app.utils.paths import resolve_client_path, get_client_context
 from app.domain.actions import Action
-from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 
 async def _delegate(action: str, args: dict) -> dict | None:
     if alfonso_bridge.has_clients():
@@ -390,7 +390,7 @@ TOOLS = {
 # qwen2.5:1.5b ha mandado realmente; campos no listados aquí simplemente
 # se ignoran en modo permisivo en vez de romper la llamada.
 
-from app.adapters.tool_base import ToolArgsModel  # noqa: E402  (al final a propósito)
+from app.infrastructure.adapters.tool_base import ToolArgsModel  # noqa: E402  (al final a propósito)
 
 _PATH_ALIASES = {
     "file_path": "path",

@@ -62,7 +62,4 @@ def test_sign_invoice_xades():
     
     assert len(signature_nodes) == 1, "El XML firmado debe contener exactamente un nodo <Signature>"
     
-    # También deberíamos verificar que contiene elementos XAdES específicos si es posible
-    xades_namespaces = {'xades': 'http://uri.etsi.org/01903/v1.3.2#'}
-    qualifying_props = root.xpath('//xades:QualifyingProperties', namespaces=xades_namespaces)
-    # Por ahora sólo validamos que signxml ha funcionado y añadido la firma básica o xades
+    # Por ahora sólo validamos que signxml ha funcionado y añadido la firma XMLDSig

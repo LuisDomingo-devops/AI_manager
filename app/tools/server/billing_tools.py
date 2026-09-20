@@ -21,7 +21,7 @@ import io
 import base64
 from reportlab.lib.utils import ImageReader
 from app.domain.services.document_customization_service import DocumentCustomizationService
-from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+from app.infrastructure.database.document_customization_db import SqliteDocumentCustomizationAdapter
 
 def _get_font_name(family: str, style: str = "Regular") -> str:
     """Resuelve el nombre de la tipografía estándar según ReportLab."""
@@ -514,17 +514,7 @@ async def process_inventory_document(text: str, document_type: str) -> dict:
         if not approved:
             return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
         
-        # En una implementación real, aquí llamaríamos al LLM (via llm_client) pasándole el texto del documento
-        # y el catálogo actual (get_products) con un prompt estricto de desambiguación.
-        # Como esto es una tool de demostración para el IDE de Alfonso, simulamos el comportamiento del LLM.
-        
-        # Simulamos el análisis del LLM y si hay dudas:
-        if "Rodamiento" in text and "Marca X" in text:
-            return {
-                "status": "requires_confirmation",
-                "message": "He encontrado 100 uds de 'Rodamiento Marca X'. En tu catálogo tienes 'Rodamiento FAG 608ZZ'. ¿Quieres que cree un producto nuevo para la marca SKF/Marca X o lo sumo al existente?"
-            }
-            
+        # Si el LLM estuviera seguro, devolvería la confirmación directamente en la siguiente iteración.
         # Si el LLM estuviera seguro, devolvería la confirmación directamente en la siguiente iteración.
         return {
             "status": "requires_confirmation",
@@ -814,9 +804,8 @@ async def create_quote(
             cursor.execute("""
                 INSERT INTO quotes (
                     quote_id, date, client_name, client_nif, base_imponible, iva_rate, iva_amount,
-                    irpf_rate, irpf_amount, total_amount, concept, file_path, status,
-                    quote_number, quote_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    irpf_rate, irpf_amount, total_amount, concept, file_path, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 encryptor.encrypt(quote_id),
                 encryptor.encrypt(date_str),
@@ -830,9 +819,7 @@ async def create_quote(
                 encryptor.encrypt(str(total_amount)),
                 encryptor.encrypt(concept),
                 encryptor.encrypt(str(pdf_path)),
-                status,
-                quote_id,  # Para cumplir quote_number NOT NULL
-                date_str   # Para cumplir quote_date NOT NULL
+                status
             ))
             db_id = cursor.lastrowid
             
@@ -1937,17 +1924,20 @@ async def send_payment_reminder_email(invoice_id: str) -> dict:
         if pending <= 0.0:
             return {"status": "ok", "message": f"La factura '{invoice_id}' ya está completamente pagada. No se requiere recordatorio."}
 
-        client_email = "cliente@correo.com"
+        client_email = None
         client_name = summary["client_name"]
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT email FROM clients WHERE name = ?", (client_name,))
+            cursor.execute("SELECT email FROM contacts WHERE name = ?", (client_name,))
             row = cursor.fetchone()
-            if row:
+            if row and row["email"]:
                 client_email = row["email"]
         finally:
             conn.close()
+
+        if not client_email:
+            return {"status": "error", "message": f"No se encontró email para el contacto '{client_name}'."}
 
         emisor_name = "LUIS DOMINGO"
         try:

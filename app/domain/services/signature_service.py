@@ -51,19 +51,7 @@ class SignatureService:
             logger.error(f"Error parsing or storing .p12 certificate: {e}")
             raise ValueError(f"Certificado no válido o contraseña incorrecta: {e}")
 
-    def store_hardware_reference(self, tenant_id: str, subject_name: str) -> str:
-        """
-        Guarda una referencia a que el usuario usará DNIe por hardware.
-        """
-        return self.cert_repo.save(
-            tenant_id=tenant_id,
-            cert_type='HARDWARE_REF',
-            encrypted_p12=None,
-            encrypted_password=None,
-            subject_name=subject_name,
-            valid_from="N/A",
-            valid_to="N/A"
-        )
+
 
     def _sign_pdf_software(self, tenant_id: str, pdf_bytes: bytes) -> bytes:
         """
@@ -109,17 +97,7 @@ class SignatureService:
         
         return out_stream.getvalue()
 
-    def _sign_pdf_hardware(self, pdf_bytes: bytes, pin: str) -> bytes:
-        """
-        Firma un PDF usando DNIe hardware via PyKCS11.
-        """
-        # This requires PyKCS11 and the DNIe library loaded.
-        # Implemented as a stub for actual deployment environments where libpkcs11-dnie.so is available.
-        raise NotImplementedError("Hardware DNIe signature requires native DNIe libraries loaded.")
 
-    def sign_pdf(self, tenant_id: str, pdf_bytes: bytes, use_hardware: bool = False, pin: Optional[str] = None) -> bytes:
-        if use_hardware:
-            if not pin:
-                raise ValueError("PIN is required for hardware signature.")
-            return self._sign_pdf_hardware(pdf_bytes, pin)
+
+    def sign_pdf(self, tenant_id: str, pdf_bytes: bytes) -> bytes:
         return self._sign_pdf_software(tenant_id, pdf_bytes)

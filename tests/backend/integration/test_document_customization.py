@@ -4,7 +4,7 @@ import os
 from fastapi.testclient import TestClient
 from app.main import app
 from app.domain.services.document_customization_service import DocumentCustomizationService
-from app.adapters.document_customization import SqliteDocumentCustomizationAdapter
+from app.infrastructure.database.document_customization_db import SqliteDocumentCustomizationAdapter
 from app.adapters.memory.memory import _get_connection, tenant_context
 from app.tools.server.billing_tools import generate_invoice_pdf, create_quote, get_quotes
 

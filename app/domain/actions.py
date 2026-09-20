@@ -12,7 +12,7 @@ Mediante funciones asíncronas de Python que interactúan con el puente WebSocke
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
 - app/domain/planner_orchestrator.py (invoca estas acciones durante su pipeline)
-- app/adapters/alfonso_bridge.py (verifica el estado de las conexiones websocket activas)
+- app.infrastructure.adapters.alfonso_bridge.py (verifica el estado de las conexiones websocket activas)
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ Define un router principal y routers especializados (browser, computer, calendar
 - app/main.py: Registra el router raíz.
 - app/domain/planner_orchestrator.py: Procesa las consultas en el endpoint /chat.
 - app/domain/agents/marcos/marcos_agent.py: Asiste indirectamente en la generación de borradores inteligentes de correo.
-- app/adapters/calendar_db.py y app/adapters/mail_db.py: Interactúan con las bases de datos de calendario y correo.
+- app.infrastructure.database.calendar_db.py y app.infrastructure.database.mail_db.py: Interactúan con las bases de datos de calendario y correo.
 """
 
 from __future__ import annotations
@@ -27,19 +27,20 @@ from typing import Any, List, Optional
 from app.adapters.memory.memory import DB_PATH
 
 import secrets
-from fastapi import APIRouter, HTTPException, Query, Request, Depends, status, Form, File, UploadFile, BackgroundTasks, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, Header, status, Form, File, UploadFile, BackgroundTasks, Response
+import html
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
 # Imports del núcleo
-from app.adapters import mail_db
+from app.infrastructure.database import mail_db
 # pyrefly: ignore [missing-import]
-from app.adapters.calendar_db import create_event, delete_event, list_events
+from app.infrastructure.database.calendar_db import create_event, delete_event, list_events
 # pyrefly: ignore [missing-import]
-from app.adapters.metrics import snapshot
+from app.infrastructure.monitoring.metrics import snapshot
 # pyrefly: ignore [missing-import]
-from app.adapters.tool_registry import get_tool, list_tools
+from app.infrastructure.adapters.tool_registry import get_tool, list_tools
 # pyrefly: ignore [missing-import]
 from app.utils.logger import app_logger, attach_request_id
 # pyrefly: ignore [missing-import]
@@ -86,7 +87,7 @@ router = APIRouter(prefix="")
 async def dashboard_sync(client_id: str = Depends(verify_api_key)):
     from app.domain.services.tax_parser_service import TaxParserService
     # pyrefly: ignore [missing-import]
-    from app.adapters.calendar_db import list_events
+    from app.infrastructure.database.calendar_db import list_events
     from app.domain.services.verifactu_service import VerifactuService
     import datetime
     
@@ -398,6 +399,8 @@ async def metrics():
 
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
 async def chat_endpoint(req: ChatRequest, request: Request):
+    if "<script" in req.message.lower() or "</script>" in req.message.lower():
+        raise HTTPException(status_code=400, detail="Entrada no permitida (posible inyección detectada).")
     from app.main import llm
 
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
@@ -407,7 +410,7 @@ async def chat_endpoint(req: ChatRequest, request: Request):
 
     client_id = None
     if req.client_info:
-        from app.adapters.alfonso_bridge import bridge
+        from app.infrastructure.adapters.alfonso_bridge import bridge
         if bridge.client_info:
             bridge.client_info.update(req.client_info)
         else:
@@ -563,7 +566,7 @@ async def post_event(event: EventCreate):
         from app.adapters.memory.vector_memory import vector_memory
         vector_memory.add_fact("global", fact)
         
-        from app.adapters.alfonso_bridge import bridge
+        from app.infrastructure.adapters.alfonso_bridge import bridge
         if bridge.has_clients():
             await bridge.send_command("calendar.sync", {"action": "create", "id": event_id})
             
@@ -579,7 +582,7 @@ async def remove_event(event_id: int):
         if not success:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
             
-        from app.adapters.alfonso_bridge import bridge
+        from app.infrastructure.adapters.alfonso_bridge import bridge
         if bridge.has_clients():
             await bridge.send_command("calendar.sync", {"action": "delete", "id": event_id})
             
@@ -894,7 +897,7 @@ async def save_draft(payload: dict):
     recipient = payload.get("recipient", "")
     body = payload.get("body", "")
     
-    from app.adapters.mail_db import create_email
+    from app.infrastructure.database.mail_db import create_email
     from datetime import datetime
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -1128,6 +1131,8 @@ async def bank_mock_auth_endpoint(redirect: str = "/callback", bank: str = "Banc
     Portal de simulación de autorización bancaria para desarrollo y pruebas.
     Público para ser abierto desde navegadores web sin cabeceras API key.
     """
+    safe_redirect = html.escape(redirect)
+    safe_bank = html.escape(bank)
     html_content = f"""
     <!DOCTYPE html>
     <html lang="es">
@@ -1207,9 +1212,9 @@ async def bank_mock_auth_endpoint(redirect: str = "/callback", bank: str = "Banc
         <body>
             <div class="card">
                 <span class="badge">Open Banking / PSD2</span>
-                <h1>Conectar Alfonso con {bank}</h1>
-                <p>Estás en el portal de autorización de <strong>{bank}</strong>. Al autorizar el acceso, permitirás que Alfonso sincronice de forma segura tus movimientos bancarios para la conciliación fiscal y contable.</p>
-                <a href="{redirect}" class="btn">Autorizar y Vincular Cuenta</a>
+                <h1>Conectar Alfonso con {safe_bank}</h1>
+                <p>Estás en el portal de autorización de <strong>{safe_bank}</strong>. Al autorizar el acceso, permitirás que Alfonso sincronice de forma segura tus movimientos bancarios para la conciliación fiscal y contable.</p>
+                <a href="{safe_redirect}" class="btn">Autorizar y Vincular Cuenta</a>
             </div>
         </body>
     </html>
@@ -1230,15 +1235,19 @@ async def banking_callback_endpoint(
     Página de confirmación de retorno tras la autorización bancaria en el navegador.
     Pública para cualquier pasarela bancaria o redirección de usuario.
     """
+    safe_error = html.escape(error) if error else None
+    safe_details = html.escape(details) if details else None
+    safe_bank = html.escape(bank) if bank else None
+    
     is_error = bool(error)
     title = "¡Conexión Bancaria Exitosa!" if not is_error else "Error en la Autorización Bancaria"
     accent_color = "#10B981" if not is_error else "#EF4444"
     status_badge = "Autorización Completada" if not is_error else "Autorización Cancelada / Error"
     
     if is_error:
-        desc = f"No se pudo completar la conexión bancaria ({error}). {details or 'Puedes cerrar esta ventana e intentarlo de nuevo desde la aplicación.'}"
+        desc = f"No se pudo completar la conexión bancaria ({safe_error}). {safe_details or 'Puedes cerrar esta ventana e intentarlo de nuevo desde la aplicación.'}"
     else:
-        bank_name = bank or "tu entidad financiera"
+        bank_name = safe_bank or "tu entidad financiera"
         desc = f"La conexión con <strong>{bank_name}</strong> se ha completado correctamente. Tus movimientos bancarios ya están listos para sincronizarse en Alfonso."
 
     html_content = f"""

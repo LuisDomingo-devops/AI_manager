@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Sequence, Optional
 
 from app.domain.actions import Action
-from app.adapters.alfonso_bridge import bridge as alfonso_bridge
+from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 from app.utils.logger import tool_logger, error_logger
 
 # ---------------------------------------------------------------------------

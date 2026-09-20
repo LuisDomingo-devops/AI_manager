@@ -4,7 +4,7 @@ import pathlib
 import tempfile
 import py_compile
 from app.tools.server.filesystem_tools import replace_file_content
-from app.adapters.llm_client import extract_json_robust
+from app.infrastructure.adapters.llm_client import extract_json_robust
 from app.domain.planner_orchestrator import PlannerOrchestrator
 
 # 1. Test replace_file_content tool
@@ -74,7 +74,7 @@ async def test_orchestrator_self_correction_loop(session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch("app.adapters.tool_registry.is_client_tool", return_value=False), \
+         patch("app.infrastructure.adapters.tool_registry.is_client_tool", return_value=False), \
          patch("app.domain.planner_orchestrator.is_client_tool", return_value=False):
              
         # Mock create_file to behave normally

@@ -19,7 +19,7 @@ import asyncio
 from pathlib import Path
 from typing import List, Dict, Set, Optional
 
-from app.adapters.llm_client import GeminiClient
+from app.infrastructure.adapters.llm_client import GeminiClient
 from app.utils.logger import build_logger, orchestrator_logger
 
 # Logger exclusivo de seguridad

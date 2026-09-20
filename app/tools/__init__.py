@@ -11,5 +11,5 @@ Al arrancar el servidor web para registrar todas las funciones ejecutables.
 Realizando importaciones absolutas de todos los módulos de herramientas en el paquete.
 
 ¿CON QUÉ OTROS SCRIPTS ESTÁ RELACIONADO?
-- app/adapters/tool_registry.py (almacena el registro global de estas herramientas)
+- app.infrastructure.adapters.tool_registry.py (almacena el registro global de estas herramientas)
 """

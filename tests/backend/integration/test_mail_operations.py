@@ -3,7 +3,7 @@ import sqlite3
 import os
 from fastapi.testclient import TestClient
 from app.main import app
-from app.adapters import mail_db
+from app.infrastructure.database import mail_db
 from app.tools.server.mail_tools import (
     mail_send_email,
     mail_delete_email,
