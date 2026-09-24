@@ -336,9 +336,10 @@ def test_central_stack_tables_integration(qapp, mock_dashboard_config):
 def test_ledger_navigation_and_mayor_population_integration(qapp, mock_dashboard_config):
     """Verifica la integración completa del Libro Diario y Mayor desde el Dashboard."""
     # Asegurar base de datos inicializada y con asientos contables de prueba en 'default'
-    from app.adapters.memory.memory import _get_connection, _init_db_schema
+    from app.adapters.memory.memory import _get_connection, _init_db_schema, tenant_context
     from app.domain.services.ledger_service import LedgerService
     
+    tenant_context.set("default")
     with _get_connection("default") as conn:
         _init_db_schema(conn)
         conn.execute("INSERT OR IGNORE INTO pgc_accounts (code, name, type) VALUES ('57200001', 'Bancos', 'activo')")

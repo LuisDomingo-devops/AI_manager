@@ -13,6 +13,14 @@ from app.utils.logger import app_logger
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
+class IssuerIdentityError(Exception):
+    """Excepción lanzada cuando no se puede recuperar la identidad fiscal válida requerida para VeriFactu."""
+    pass
+
+class SIFAuditWriteError(Exception):
+    """Excepción lanzada cuando falla la escritura obligatoria de un evento de auditoría SIF."""
+    pass
+
 class VerifactuService:
     _lock = threading.Lock()
     """
@@ -141,16 +149,18 @@ class VerifactuService:
 
             # Obtener datos reales del obligado tributario del perfil fiscal de usuario si existen
             from app.utils.encryption import encryptor
-            issuer_name = "Alfonso SIF User"
-            with _get_connection() as conn:
-                cursor = conn.cursor()
-                try:
+            try:
+                with _get_connection() as conn:
+                    cursor = conn.cursor()
                     cursor.execute("SELECT razon_social FROM user_profile LIMIT 1")
                     profile_row = cursor.fetchone()
-                    if profile_row and profile_row["razon_social"]:
-                        issuer_name = encryptor.decrypt(profile_row["razon_social"])
-                except Exception:
-                    pass
+                    if not profile_row or not profile_row["razon_social"]:
+                        raise IssuerIdentityError("Identidad fiscal (razón social) no encontrada o vacía en el perfil.")
+                    issuer_name = encryptor.decrypt(profile_row["razon_social"])
+            except IssuerIdentityError:
+                raise
+            except Exception as e:
+                raise IssuerIdentityError(f"Fallo al recuperar la identidad fiscal de la base de datos: {e}") from e
 
             # Estructura del XML oficial de Verifactu (Orden HAC/1177/2024)
             registro_xml = etree.Element("RegFactuSistemaFacturacion")
@@ -832,8 +842,8 @@ class VerifactuService:
                         event_type="INTEGRITY_TAMPERING_DETECTED",
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    raise SIFAuditWriteError("Fallo crítico al registrar evento de auditoría SIF.") from e
                 return {
                     "status": "corrupted",
                     "corrupted_invoice_number": row["invoice_number"],
@@ -848,8 +858,8 @@ class VerifactuService:
                         event_type="INTEGRITY_TAMPERING_DETECTED",
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    raise SIFAuditWriteError("Fallo crítico al registrar evento de auditoría SIF.") from e
                 return {
                     "status": "tampered",
                     "corrupted_invoice_number": row["invoice_number"],

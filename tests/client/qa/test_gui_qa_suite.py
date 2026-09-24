@@ -46,24 +46,43 @@ def qapp():
     return app
 
 
-@pytest.fixture(autouse=True)
-def mock_api_calls():
-    """Mockea las llamadas HTTP de requests para que los tests de QA sean instantáneos."""
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"status": "ok", "aggregates": [], "conversations": [], "items": []}
-    mock_resp.raise_for_status = MagicMock()
-    with patch("requests.Session.get", return_value=mock_resp), \
-         patch("requests.Session.post", return_value=mock_resp), \
-         patch("requests.get", return_value=mock_resp), \
-         patch("requests.post", return_value=mock_resp):
-        yield
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
 
+class DummyAPIHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok", "aggregates": [], "conversations": [], "items": []}).encode())
+    
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok", "aggregates": [], "conversations": [], "items": []}).encode())
+    
+    def log_message(self, format, *args):
+        pass
+
+@pytest.fixture(scope="session")
+def local_test_server():
+    """Servidor HTTP local controlado para los tests de QA, sustituyendo el mega-mock."""
+    server = HTTPServer(('127.0.0.1', 0), DummyAPIHandler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.daemon = True
+    thread.start()
+    yield server
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=1)
 
 @pytest.fixture
-def mock_dashboard_config():
+def mock_dashboard_config(local_test_server):
+    port = local_test_server.server_port
     return {
-        "url": "http://127.0.0.1:8000",
+        "url": f"http://127.0.0.1:{port}",
         "api_key": "test_key",
         "keyword": "alfonso",
         "device": None,

@@ -67,3 +67,80 @@ def test_send_to_aeat_sif_dynamic_endpoint_resolution_for_test_cert():
             assert mock_post.called
             url_called = mock_post.call_args[0][0]
             assert "prewww10.aeat.es" in url_called
+
+def test_missing_issuer_identity_aborts_emission():
+    """Verifica que si no hay identidad fiscal, se lanza IssuerIdentityError, no hay XML ni petición de red."""
+    from app.domain.services.verifactu_service import IssuerIdentityError, VerifactuService
+    from app.adapters.memory.memory import _get_connection
+
+    # 1. Aseguramos que la tabla user_profile está vacía o sin razon_social
+    with _get_connection() as conn:
+        conn.execute("DELETE FROM user_profile")
+        conn.commit()
+
+    invoice_data = {
+        "invoice_number": "FAC-ERR-001",
+        "date_of_issue": "2026-09-23",
+        "issuer_nif": "12345678Z",
+        "receiver_nif": "87654321A",
+        "base_imponible": 100.0,
+        "iva_amount": 21.0,
+        "total_amount": 121.0
+    }
+
+    # 2. Verificamos que se lanza IssuerIdentityError
+    with pytest.raises(IssuerIdentityError) as exc_info:
+        # Patch send_to_aeat_sif to ensure it's not called
+        with patch.object(VerifactuService, "send_to_aeat_sif") as mock_send:
+            VerifactuService.register_invoice(invoice_data)
+            
+    assert "no encontrada" in str(exc_info.value) or "Fallo al recuperar" in str(exc_info.value)
+    
+    # 3. Aseguramos que no se intentó llamar a red
+    assert mock_send.call_count == 0
+    
+    # 4. Aseguramos que el estado de la factura no se ha modificado en la BD
+    with _get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM verifactu_invoices WHERE invoice_number = 'FAC-ERR-001'").fetchone()[0]
+        assert count == 0
+
+        assert count == 0
+
+def test_sif_audit_write_error_prevents_silent_failure():
+    """Verifica que si falla la escritura del log SIF al detectar tampering, no se silencia el error (EXC-02)."""
+    from app.domain.services.verifactu_service import SIFAuditWriteError, VerifactuService
+    from app.adapters.memory.memory import _get_connection
+
+    # Preparamos una factura para registrarla normalmente
+    invoice_data = {
+        "invoice_number": "FAC-ERR-002",
+        "date_of_issue": "2026-09-23",
+        "issuer_nif": "12345678Z",
+        "receiver_nif": "87654321A",
+        "base_imponible": 100.0,
+        "iva_amount": 21.0,
+        "total_amount": 121.0
+    }
+    
+    # Aseguramos que haya un perfil válido para no disparar EXC-01
+    with _get_connection() as conn:
+        from app.utils.encryption import encryptor
+        conn.execute("DELETE FROM user_profile")
+        enc_name = encryptor.encrypt("Alfonso SIF User")
+        conn.execute("INSERT INTO user_profile (razon_social, user_type, nif) VALUES (?, ?, ?)", (enc_name, 'COMPANY', '12345678Z'))
+        conn.commit()
+
+    VerifactuService.register_invoice(invoice_data)
+
+    # Corrompemos la factura para que verifactu detecte el tampering
+    with _get_connection() as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_update_verifactu")
+        conn.execute("UPDATE verifactu_invoices SET total_amount = 999.0 WHERE invoice_number = 'FAC-ERR-002'")
+        conn.commit()
+
+    # Parcheamos log_sif_event para simular que falla la base de datos (e.g. timeout, disco lleno)
+    with patch.object(VerifactuService, "log_sif_event", side_effect=Exception("DB Error Fake")):
+        with pytest.raises(SIFAuditWriteError) as exc_info:
+            VerifactuService.verify_chain_integrity()
+    
+    assert "Fallo crítico al registrar evento de auditoría SIF" in str(exc_info.value)

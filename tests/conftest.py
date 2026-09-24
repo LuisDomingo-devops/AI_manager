@@ -166,3 +166,35 @@ def mock_certificate_and_key_for_tests(request):
         
     with patch("app.utils.signature.get_certificate_and_key", return_value=(cert_bytes, key_bytes)):
         yield
+
+def pytest_runtest_call(item):
+    """
+    Se ejecuta después de que los fixtures locales (como clean_db) han inicializado
+    y redirigido las bases de datos de test, asegurando que la identidad fiscal
+    se inyecte en la DB correcta.
+    """
+    if "backend/integration" not in item.nodeid and "backend/qa" not in item.nodeid:
+        return
+        
+    try:
+        from app.adapters.memory.memory import _get_connection, tenant_context
+        from app.utils.encryption import encryptor
+
+        contexts_to_inject = {tenant_context.get(), "default"}
+        
+        for ctx in contexts_to_inject:
+            prev = tenant_context.get()
+            try:
+                tenant_context.set(ctx)
+                with _get_connection() as conn:
+                    enc_razon = encryptor.encrypt("Empresa Test")
+                    conn.execute(
+                        "INSERT OR IGNORE INTO user_profile (id, user_type, nif, razon_social) "
+                        "VALUES (1, 'AUTONOMO', 'B12345674', ?)",
+                        (enc_razon,)
+                    )
+                    conn.commit()
+            finally:
+                tenant_context.set(prev)
+    except Exception:
+        pass
