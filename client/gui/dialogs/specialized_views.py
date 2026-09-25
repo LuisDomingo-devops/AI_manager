@@ -560,7 +560,7 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
             
             if main_app and hasattr(main_app, 'api_client'):
                 api = main_app.api_client
-                response = api.get("/compliance/audit/logs?limit=100")
+                response = api.get("/api/v1/compliance/audit/logs?limit=100")
                 logs = response.get("items", [])
                 self.tbl_hashes.setRowCount(len(logs))
                 for row, log in enumerate(logs):
@@ -587,7 +587,7 @@ class AlfonsoVerifactuAuditWidget(AlfonsoBaseDialog):
             
             if main_app and hasattr(main_app, 'api_client'):
                 api = main_app.api_client
-                response = api.get("/compliance/verify-chain")
+                response = api.get("/api/v1/compliance/verify-chain")
                 status = response.get("status")
                 message = response.get("message")
                 if status == "valid":

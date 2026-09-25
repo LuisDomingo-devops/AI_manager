@@ -198,7 +198,7 @@ def test_specialized_invoice_emitter_widget_integration(qapp):
 
 
 def test_specialized_payroll_and_audit_widgets_integration(qapp):
-    """Verifica la carga de registros en los widgets de nóminas y auditoría Veri*Factu."""
+    """Verifica la carga de registros en los widgets de nóminas y auditoría Veri*Factu y las URLs de la API."""
     payroll_widget = AlfonsoPayrollWidget(embedded=True)
     payroll_widget.show()
     assert payroll_widget.tbl_employees.columnCount() == 6
@@ -208,14 +208,25 @@ def test_specialized_payroll_and_audit_widgets_integration(qapp):
             super().__init__()
             self.api_client = MagicMock()
             self.api_client.get.return_value = {
-                "items": [{"event_type": "API_TEST", "created_at": "2026", "description": "mocked", "current_hash": "hash123"}]
+                "items": [{"event_type": "API_TEST", "created_at": "2026", "description": "mocked", "current_hash": "hash123"}],
+                "status": "valid",
+                "message": "Cadena verificada"
             }
 
     mock_app = MockApp()
     audit_widget = AlfonsoVerifactuAuditWidget(parent=mock_app, embedded=True)
     audit_widget.show()
+    
+    # Verify load_audit_data URL
+    mock_app.api_client.get.assert_called_with("/api/v1/compliance/audit/logs?limit=100")
+    
     assert audit_widget.tbl_hashes.columnCount() == 5
     assert audit_widget.tbl_hashes.rowCount() >= 1
+
+    # Verify verify_chain URL
+    mock_app.api_client.get.reset_mock()
+    audit_widget.verify_chain()
+    mock_app.api_client.get.assert_called_once_with("/api/v1/compliance/verify-chain")
 
 
 def test_specialized_auxiliary_widgets_integration(qapp):
