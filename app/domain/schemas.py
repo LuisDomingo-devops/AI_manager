@@ -177,3 +177,11 @@ class ProtocolError(Exception):
         self.message = message
         self.raw_output = raw_output
         super().__init__(self.message)
+
+class DomainErrorContract(BaseModel):
+    status: Literal["needs_user_validation", "fatal_error", "system_error"] = Field(..., description="Estado del error")
+    affected_fields: list[str] = Field(default_factory=list, description="Lista de campos que fallaron validación")
+    extracted_values: Dict[str, Any] = Field(default_factory=dict, description="Valores extraídos exitosamente")
+    missing_values: Dict[str, Any] = Field(default_factory=dict, description="Valores faltantes o inválidos")
+    reason_code: str = Field(..., description="Código de error estandarizado")
+    technical_details: Optional[str] = Field(None, description="Stack trace interno. NO ENVIAR AL LLM.")

@@ -694,7 +694,7 @@ class PlannerOrchestrator:
             return routed
 
         # 3.5. Enrutamiento unificado nativo mediante el function-calling del LLM (heurístico regex retirado para producción)
-        from app.domain.schemas import ProtocolError, IntentType
+        from app.domain.schemas import ProtocolError, IntentType, DomainErrorContract
         from app.infrastructure.adapters.llm_client import extract_json_robust
 
         # 4. Bucle ReAct multi-turno para ejecución secuencial de herramientas
@@ -801,6 +801,21 @@ class PlannerOrchestrator:
                 tool_name, args, session_id, client_id, request_id, logger, error
             )
 
+            # (FR-003, FR-005) Si la herramienta devuelve un DomainErrorContract,
+            # pausamos el workflow y devolvemos una respuesta conversacional limpia.
+            tool_result_raw = exec_res.get("result")
+            if isinstance(tool_result_raw, DomainErrorContract):
+                logger.info(
+                    "DomainErrorContract recibido de la herramienta '%s'. Pausando el workflow.",
+                    tool_name,
+                )
+                return await self.manejar_domain_error_contract(
+                    contrato=tool_result_raw,
+                    session_id=session_id,
+                    client_id=client_id,
+                )
+
+
             status = exec_res.get("status")
             result = exec_res.get("result")
 
@@ -852,6 +867,62 @@ class PlannerOrchestrator:
         return {
             "type": "chat",
             "response": chat_response,
+        }
+
+    def transformar_contrato_a_respuesta(self, contrato: "DomainErrorContract") -> str:
+        """
+        (FR-003) Transforma un DomainErrorContract en una pregunta conversacional
+        dirigida EXCLUSIVAMENTE a los campos afectados.
+        Los technical_details NUNCA se incluyen en la respuesta al usuario.
+        """
+        from app.domain.services.error_manager import ErrorManager
+        payload_llm = ErrorManager.serializar_para_llm(contrato)
+
+        campos = payload_llm.get("affected_fields", [])
+        if campos:
+            campos_str = ", ".join(campos)
+            return (
+                f"No he podido procesar correctamente el/los campo(s): {campos_str}. "
+                f"¿Puedes confirmarme el valor correcto?"
+            )
+        return (
+            "Ha ocurrido un problema al procesar tu solicitud. "
+            "¿Puedes proporcionarme más detalles o confirmar los datos?"
+        )
+
+    async def manejar_domain_error_contract(
+        self,
+        contrato: "DomainErrorContract",
+        session_id: str | None,
+        client_id: str | None,
+    ) -> dict:
+        """
+        (FR-003, FR-005) Convierte un DomainErrorContract en una respuesta
+        conversacional limpia y pausa el workflow.
+        Los technical_details se registran en logs y NUNCA llegan al usuario.
+        """
+        from app.utils.logger import error_logger
+        from app.domain.services.error_manager import ErrorManager
+
+        # (FR-004) Registrar los detalles técnicos internamente
+        if contrato.technical_details:
+            error_logger.error(
+                "[DomainErrorContract] %s | campos: %s | detalle: %s",
+                contrato.reason_code,
+                contrato.affected_fields,
+                contrato.technical_details,
+            )
+
+        # (FR-003) Generar respuesta conversacional solo sobre los campos afectados
+        respuesta_usuario = self.transformar_contrato_a_respuesta(contrato)
+
+        if session_id:
+            self.memory.add_message(session_id, "assistant", respuesta_usuario, client_id=client_id)
+
+        return {
+            "type": "chat",
+            "response": respuesta_usuario,
+            "workflow_paused": True,   # (FR-005) Señal de pausa para el ciclo de workflow
         }
 
     async def run_stream(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
