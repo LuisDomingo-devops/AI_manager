@@ -46,12 +46,12 @@ def test_extract_json_robust_with_think():
     <think>
     Thinking... Let's use read_file tool.
     </think>
-    {"tool": "read_file", "args": {"path": "test.txt"}}
+    {"type": "tool_call", "tool_name": "read_file", "tool_args": {"path": "test.txt"}}
     """
     res = extract_json_robust(raw_with_think)
     assert res is not None
-    assert res["tool"] == "read_file"
-    assert res["args"]["path"] == "test.txt"
+    assert res.tool_name == "read_file"
+    assert res.tool_args["path"] == "test.txt"
 
 # 3. Test self-correction loop in PlannerOrchestrator
 @pytest.mark.asyncio
@@ -67,9 +67,9 @@ async def test_orchestrator_self_correction_loop(session_memory_fixture):
     # Attempt 2: LLM gets the error in memory and returns corrected tool
     # Attempt 3: Conversational finish
     mock_llm.generate.side_effect = [
-        '{"tool": "create_file", "args": {"path": "sandbox_temp.py", "content": "def foo() return 42"}}', # syntax error (missing colon)
-        '{"tool": "create_file", "args": {"path": "sandbox_temp.py", "content": "def foo():\\n    return 42"}}',  # correct syntax
-        'Archivo creado con éxito.'
+        '{"type": "tool_call", "tool_name": "create_file", "tool_args": {"path": "sandbox_temp.py", "content": "def foo() return 42"}}', # syntax error (missing colon)
+        '{"type": "tool_call", "tool_name": "create_file", "tool_args": {"path": "sandbox_temp.py", "content": "def foo():\\n    return 42"}}',  # correct syntax
+        '{"type": "message", "message": "Archivo creado con éxito."}'
     ]
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \

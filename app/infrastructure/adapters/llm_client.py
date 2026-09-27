@@ -88,7 +88,19 @@ def get_system_prompt(mode: str, client_id: str | None = None) -> str:
     else:
         chat_template = load_prompt(settings.CHAT_PROMPT_PATH)
         tool_template = generate_tool_prompt(client_id)
-        template = chat_template + "\n\n" + tool_template
+        
+        protocol_instruction = """
+DEBES DEVOLVER EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO QUE CUMPLA CON ESTE ESQUEMA:
+{
+  "type": "message" | "tool_call" | "clarification" | "confirmation_required" | "error",
+  "message": "...", // opcional, texto de tu respuesta, pregunta o aclaración
+  "tool_name": "...", // requerido si type=tool_call
+  "tool_args": {...}, // requerido si type=tool_call
+  "error_code": "..." // opcional si type=error
+}
+NO DEBES INCLUIR NINGÚN TEXTO FUERA DEL JSON.
+"""
+        template = chat_template + "\n\n" + tool_template + "\n\n" + protocol_instruction
     return template.replace("{current_date}", _get_current_date_str())
 # ---------------------------------------------------------------------
 # VALIDACIÓN TOOL
@@ -121,12 +133,12 @@ def validate_tool_call(tool_call: dict) -> dict:
 import json
 import re
 
-def extract_json_robust(raw: str) -> dict | None:
-    ''' Extrae un bloque JSON de una cadena de texto, manejando 
-    varios formatos y casos especiales.
-    Devuelve un diccionario con la herramienta y sus argumentos,'''
+def extract_json_robust(raw: str):
+    ''' Extrae y valida la respuesta del LLM según el protocolo estructurado. '''
+    from app.domain.schemas import LLMDecisionEnvelope, ProtocolError
+    
     if not raw:
-        return None
+        raise ProtocolError("Empty response from LLM", "")
 
     raw = raw.strip()
 
@@ -134,137 +146,21 @@ def extract_json_robust(raw: str) -> dict | None:
     think_match = re.search(r"<think>(.*?)</think>", raw, re.DOTALL | re.IGNORECASE)
     if think_match:
         thinking_text = think_match.group(1).strip()
-        llm_logger.info("DeepSeek-R1 Thought (CoT): %s", thinking_text)
+        llm_logger.info("Thought (CoT): %s", thinking_text)
 
-    # 0. FIX CRÍTICO: JSON directo (ESTO TE FALTABA)
-    try:
-        return json.loads(raw)
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción interceptada:", exc_info=True)
-
-    # 0.1. Fix robusto para "no_op" con comillas sin escapar en el mensaje
-    if "no_op" in raw and "message" in raw:
-        try:
-            m_msg = re.search(r'"message"\s*:\s*"(.*)"\s*\}\s*\}\s*$', raw, re.DOTALL)
-            if not m_msg:
-                m_msg = re.search(r'"message"\s*:\s*"(.*)"\s*\}\s*$', raw, re.DOTALL)
-            if m_msg:
-                return {
-                    "tool": "no_op",
-                    "args": {
-                        "message": m_msg.group(1).strip()
-                    }
-                }
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
-
-    # 0.5. Si hay múltiples líneas (ej. múltiples herramientas generadas), probar línea por línea
-    if "\n" in raw:
-        for line in raw.split("\n"):
-            line = line.strip()
-            if line.startswith("{") and line.endswith("}"):
-                try:
-                    data = json.loads(line)
-                    if isinstance(data, dict) and "tool" in data:
-                        return data
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
-
-    # 1. JSON block (fallback regex)
-    m = _JSON_BLOCK.search(raw)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # 2. remove think blocks
     clean = _THINK_BLOCK.sub("", raw).strip()
+    
+    m = _JSON_BLOCK.search(clean)
+    if m:
+        clean = m.group(1)
 
     try:
-        return json.loads(clean)
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción interceptada:", exc_info=True)
-
-    # 3. tool: {json}
-    m = _TOOL_SPLIT_COLON.match(clean)
-    if m:
-        try:
-            return {
-                "tool": m.group(1).lower(),
-                "args": json.loads(m.group(2))
-            }
-        except json.JSONDecodeError:
-            pass
-
-    # 4. inline tool
-    m = _TOOL_INLINE.match(clean)
-    if m:
-        try:
-            return {
-                "tool": m.group(1).lower(),
-                "args": json.loads(m.group(2))
-            }
-        except json.JSONDecodeError:
-            pass
-
-    # 5. Fallback para formatos planos sin JSON: "tool_name: value" o "tool_name value"
-    for regex in [_TOOL_PLAIN_COLON, _TOOL_PLAIN_SPACE]:
-        m = regex.match(clean)
-        if m:
-            t_name = m.group(1).lower().strip()
-            val = m.group(2).strip()
-            if not val.startswith("{"):
-                # Quitar comillas si las hay
-                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                    val = val[1:-1].strip()
-                
-                # Intentar mapear al primer parámetro de la función del registry
-                try:
-                    from app.infrastructure.adapters.tool_registry import safe_get_tool, list_tools
-                    import inspect
-                    if t_name in list_tools():
-                        func = safe_get_tool(t_name)
-                        if func:
-                            sig = inspect.signature(func)
-                            params = [p for p in sig.parameters.keys() if p not in ("self", "session_id")]
-                            if params:
-                                return {
-                                    "tool": t_name,
-                                    "args": {params[0]: val}
-                                }
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
-
-                # Mapeo manual alternativo para herramientas comunes
-                CLIENT_ARGS_MAPPING = {
-                    "open_url": "url",
-                    "open_application": "command",
-                    "open_app": "command",
-                    "close_application": "command",
-                    "close_app": "command",
-                    "create_file": "path",
-                    "delete_file": "path",
-                    "read_file": "path",
-                    "list_directory": "path",
-                    "create_directory": "path",
-                    "delete_directory": "path",
-                    "keyboard_type": "text",
-                    "keyboard_press": "key",
-                    "press_key": "key",
-                }
-                if t_name in CLIENT_ARGS_MAPPING:
-                    return {
-                        "tool": t_name,
-                        "args": {CLIENT_ARGS_MAPPING[t_name]: val}
-                    }
-
-    return None
+        data = json.loads(clean)
+        return LLMDecisionEnvelope(**data)
+    except json.JSONDecodeError as e:
+        raise ProtocolError(f"Failed to parse or validate JSON: {str(e)}", raw)
+    except Exception as e:
+        raise ProtocolError(f"Failed to parse or validate JSON: {str(e)}", raw)
 
 # ---------------------------------------------------------------------
 # CLIENTE

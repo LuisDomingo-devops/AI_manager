@@ -41,3 +41,5 @@ graphify-out/
 node_modules/
 packages/
 graphify-out-prod/
+specs/
+specify_files/

@@ -552,6 +552,38 @@ class PlannerOrchestrator:
                 
         return res
 
+    async def _classify_intent(self, user_message: str, llm, request_id: str | None, client_id: str | None) -> str:
+        prompt = (
+            "Eres un clasificador de intenciones estricto. "
+            "Debes clasificar el siguiente mensaje del usuario en UNA de las siguientes categorías:\n"
+            "- 'conversational': saludos simples, preguntas cómo estás, charlas sociales (ej. 'hola', 'buenos días', 'no saludas?').\n"
+            "- 'rejection': una negativa clara, un rechazo a una acción o cancelación pura (ej. 'no', 'cancela eso', 'no lo hagas'). ATENCIÓN: Si el 'no' va acompañado de una instrucción (ej. 'no, procesa la factura 3'), es operational.\n"
+            "- 'operational': órdenes de trabajo, operaciones, preguntas sobre datos, peticiones de subir archivos, o cualquier otra orden implícita o explícita (ej. 'procesa facturas', 'qué hora es', 'abre el calendario', 'tiempo en bilbao').\n"
+            "- 'confirmation': confirmaciones explícitas de seguir adelante (ej. 'sí', 'dale', 'continúa').\n"
+            "- 'clarification': cuando el usuario aclara una duda anterior.\n\n"
+            "PRIORIDAD: Si el mensaje contiene mezcla de conversación y operativa, prioriza SIEMPRE 'operational'. "
+            "Responde ÚNICAMENTE con un JSON válido con esta estructura: {\"type\": \"message\", \"message\": \"<categoria>\"}\n\n"
+            f"Mensaje del usuario: \"{user_message}\""
+        )
+        try:
+            raw = await llm.generate(
+                prompt,
+                mode="chat",
+                request_id=request_id,
+                client_id=client_id,
+            )
+            from app.infrastructure.adapters.llm_client import extract_json_robust
+            envelope = extract_json_robust(raw)
+            if envelope and envelope.message:
+                intent = envelope.message.lower()
+                if intent in ("conversational", "rejection", "operational", "confirmation", "clarification"):
+                    return intent
+            return "operational" # safe fallback
+        except Exception as e:
+            from app.utils.logger import error_logger
+            error_logger.warning("Fallo al clasificar la intención, usando fallback 'operational': %s", e)
+            return "operational"
+
     async def _run_internal(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
         llm = llm or self.llm
         logger = attach_request_id(orchestrator_logger, request_id)
@@ -584,17 +616,38 @@ class PlannerOrchestrator:
             user_message, session_id, client_id
         )
 
+        # 2.5 Interaction Intent Gate
+        intent = await self._classify_intent(user_message, llm, request_id, client_id)
+        if intent in ("conversational", "rejection"):
+            logger.info("Intent Gate: Clasificado como %s. Early return activado.", intent)
+            chat_res = await llm.generate(
+                user_message,
+                mode="chat",
+                request_id=request_id,
+                memory=memory_text,
+                client_id=client_id,
+            )
+            if session_id:
+                self.memory.add_message(session_id, "assistant", chat_res, client_id=client_id)
+            return {
+                "type": "chat",
+                "response": chat_res,
+            }
+
         # 3. Enrutamiento directo a agentes
+
         routed = await self.agent_router.route_if_applicable(user_message, session_id, client_id, logger)
         if routed:
             return routed
 
         # 3.5. Enrutamiento unificado nativo mediante el function-calling del LLM (heurístico regex retirado para producción)
-        raw = None
+        from app.domain.schemas import ProtocolError, IntentType
+        from app.infrastructure.adapters.llm_client import extract_json_robust
 
         # 4. Bucle ReAct multi-turno para ejecución secuencial de herramientas
         max_turns = 5
         current_turn = 1
+        raw = ""
 
         while current_turn <= max_turns:
             logger.info("--- TURNO DE ORQUESTACIÓN %d ---", current_turn)
@@ -610,15 +663,19 @@ class PlannerOrchestrator:
                 )
                 logger.info("Raw LLM output (Turno %d): %s", current_turn, repr(raw))
 
-            data = extract_json_robust(raw)
+            try:
+                envelope = extract_json_robust(raw)
+            except ProtocolError as e:
+                logger.error("Error de protocolo del LLM: %s", e)
+                error_msg = "Lo siento, ha habido un problema de comunicación interna (ProtocolError). Por favor, repite la instrucción."
+                if session_id:
+                    self.memory.add_message(session_id, "assistant", error_msg, client_id=client_id)
+                return {"type": "chat", "response": error_msg}
 
-            # Si no se detectó JSON estructurado de tool, o es no_op / respuesta conversacional, terminamos y devolvemos como chat
-            if not data or "tool" not in data or data.get("tool") == "no_op":
+            if envelope.type == IntentType.message:
                 logger.info("Respuesta clasificada como conversacional o fin de ciclo de herramientas.")
-                response_str = raw
-                if data and data.get("tool") == "no_op":
-                    response_str = data.get("message") or data.get("args", {}).get("message") or raw
-
+                response_str = envelope.message or raw
+                
                 # Fallback para evitar respuestas JSON vacías o crudas de error
                 if response_str.strip() in ("{}", "", '"{}"', "None"):
                     response_str = "Disculpa, he tenido un problema al procesar tu solicitud. ¿Podrías repetirme la consulta o indicarme en qué puedo ayudarte?"
@@ -629,11 +686,26 @@ class PlannerOrchestrator:
                     "type": "chat",
                     "response": response_str,
                 }
+                
+            elif envelope.type in (IntentType.clarification, IntentType.confirmation_required):
+                logger.info("El modelo requiere clarificación o confirmación.")
+                response_str = envelope.message or "Necesito más información para continuar."
+                if session_id:
+                    self.memory.add_message(session_id, "assistant", response_str, client_id=client_id)
+                return {
+                    "type": "chat",
+                    "response": response_str,
+                }
 
-            tool_name, args = _extract_tool_and_args(data)
-
-            if not tool_name:
-                logger.warning("No se pudo extraer el nombre de la herramienta del JSON.")
+            if envelope.type == IntentType.tool_call:
+                tool_name = envelope.tool_name
+                args = envelope.tool_args or {}
+                if not tool_name:
+                    logger.warning("No se pudo extraer el nombre de la herramienta del envelope.")
+                    raw = None
+                    current_turn += 1
+                    continue
+            else:
                 raw = None
                 current_turn += 1
                 continue

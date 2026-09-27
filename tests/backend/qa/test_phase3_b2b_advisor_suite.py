@@ -270,8 +270,9 @@ async def test_advisor_role_rbac_isolation(monkeypatch):
 
     # 1. Herramienta permitida para advisor (export_advisor_pack_tool)
     mock_llm.generate.side_effect = [
-        '{"tool": "export_advisor_pack_tool", "args": {"year": 2026}}',
-        'Informe consolidado para el asesor.'
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "export_advisor_pack_tool", "tool_args": {"year": 2026}}',
+        '{"type": "message", "message": "Informe consolidado para el asesor."}'
     ]
     res_allowed = await orchestrator.run("exportar pack", llm=mock_llm, client_id="advisor_client", session_id="test_sess_adv")
     assert res_allowed["type"] == "chat"
@@ -280,8 +281,9 @@ async def test_advisor_role_rbac_isolation(monkeypatch):
     # 2. Herramienta denegada para advisor (cancel_invoice / delete_client / transfer)
     mock_tool.reset_mock()
     mock_llm.generate.side_effect = [
-        '{"tool": "cancel_invoice", "args": {"invoice_id": "F-2026-001"}}',
-        'Factura cancelada.'
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "cancel_invoice", "tool_args": {"invoice_id": "F-2026-001"}}',
+        '{"type": "message", "message": "Factura cancelada."}'
     ]
     res_denied = await orchestrator.run("cancelar factura", llm=mock_llm, client_id="advisor_client", session_id="test_sess_adv")
     assert res_denied["type"] == "error"

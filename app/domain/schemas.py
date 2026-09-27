@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Literal
+from typing import Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
 class UserProfileSchema(BaseModel):
@@ -157,3 +157,23 @@ class SettlementResultSchema(BaseModel):
     indemnity_amount: float
     total_settlement: float
     is_exempt_irpf: bool
+from enum import Enum
+class IntentType(str, Enum):
+    message = 'message'
+    tool_call = 'tool_call'
+    clarification = 'clarification'
+    confirmation_required = 'confirmation_required'
+    error = 'error'
+
+class LLMDecisionEnvelope(BaseModel):
+    type: IntentType
+    message: Optional[str] = None
+    tool_name: Optional[str] = None
+    tool_args: Optional[Dict[str, Any]] = None
+    error_code: Optional[str] = None
+
+class ProtocolError(Exception):
+    def __init__(self, message: str, raw_output: str):
+        self.message = message
+        self.raw_output = raw_output
+        super().__init__(self.message)

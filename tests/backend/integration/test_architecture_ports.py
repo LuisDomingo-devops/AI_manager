@@ -22,8 +22,10 @@ async def test_orchestrator_dependency_injection_with_mocks():
     mock_vector_memory.query_facts.return_value = []
     mock_bridge.client_info = {"client_id": "mock_client"}
     
-    # Simular una respuesta directa de chat del LLM
-    mock_llm.generate = AsyncMock(return_value="Hola, soy un mock inyectado.")
+    mock_llm.generate = AsyncMock(side_effect=[
+        '{"type": "message", "message": "conversational"}',
+        "Hola, soy un mock inyectado."
+    ])
     
     # 2. Instanciar el orquestador inyectando los mocks (Arquitectura Hexagonal limpia)
     orchestrator = PlannerOrchestrator(
@@ -47,4 +49,4 @@ async def test_orchestrator_dependency_injection_with_mocks():
     # Verificar que se interactuó con el mock de memoria corta y no con la BD real
     mock_memory.add_message.assert_any_call("session-test-di", "user", "Hola Alfonso", client_id=None)
     mock_memory.add_message.assert_any_call("session-test-di", "assistant", "Hola, soy un mock inyectado.", client_id=None)
-    mock_llm.generate.assert_called_once()
+    assert mock_llm.generate.call_count == 2

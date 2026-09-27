@@ -123,8 +123,9 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
     # Mocking LLM
     mock_llm = AsyncMock()
     mock_llm.generate.side_effect = [
-        '{"tool": "read_emails", "args": {}}',
-        'Mensaje final de chat.'
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "read_emails", "tool_args": {}}',
+        '{"type": "message", "message": "Mensaje final de chat."}'
     ]
     
     monkeypatch.setattr("app.utils.license_validator.is_tool_allowed_for_tier", lambda *args, **kwargs: (True, ""))
@@ -136,8 +137,9 @@ async def test_rbac_orchestrator_permissions(tmp_path, monkeypatch):
     
     # Restablecer side effect para la ejecución del admin
     mock_llm.generate.side_effect = [
-        '{"tool": "read_emails", "args": {}}',
-        'Mensaje final de chat.'
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "read_emails", "tool_args": {}}',
+        '{"type": "message", "message": "Mensaje final de chat."}'
     ]
     
     # 2. Ejecución de admin sobre tool de servidor -> Debería permitirse

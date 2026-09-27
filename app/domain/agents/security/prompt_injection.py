@@ -56,9 +56,18 @@ class PromptInjectionFilter:
         try:
             client = GeminiClient()
             response = await client.generate(prompt, options={"temperature": 0.0})
-            from app.infrastructure.adapters.llm_client import extract_json_robust
+            import json
             
-            result = extract_json_robust(response)
+            try:
+                # Extraemos el json manualmente, descartando backticks markdown si los hay
+                clean_response = response.strip()
+                if clean_response.startswith("```"):
+                    lines = clean_response.split("\n")
+                    clean_response = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+                result = json.loads(clean_response)
+            except json.JSONDecodeError:
+                result = {}
+
             if not result or "is_safe" not in result:
                 if "false" in response.lower() and "true" not in response.lower():
                      return False, "Bloqueado por seguridad heurística del LLM (Capa 2)."

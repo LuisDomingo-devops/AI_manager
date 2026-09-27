@@ -32,8 +32,9 @@ async def test_orchestrator_memory_lifecycle(mock_get_role):
     mock_llm.generate = AsyncMock()
     # Forzar una llamada a la tool save_user_preference, luego terminar con chat, luego el resumen
     mock_llm.generate.side_effect = [
-        '{"tool": "save_user_preference", "args": {"fact": "El perro del usuario se llama Toby."}}',
-        'Preferencia guardada.',
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "save_user_preference", "tool_args": {"fact": "El perro del usuario se llama Toby."}}',
+        '{"type": "message", "message": "Preferencia guardada."}',
         'Resumen de la conversación.'
     ]
 
@@ -54,7 +55,8 @@ async def test_orchestrator_memory_lifecycle(mock_get_role):
     # --- FASE 2: Recuperación del contexto semántico en el siguiente turno ---
     # El usuario pregunta cómo se llama su perro.
     mock_llm.generate = AsyncMock(side_effect=[
-        '{"tool": "no_op", "args": {"message": "Buscando..."}}',
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "no_op", "tool_args": {"message": "Buscando..."}}',
         'Resumen de la conversación.'
     ])
 
@@ -66,7 +68,7 @@ async def test_orchestrator_memory_lifecycle(mock_get_role):
     )
 
     # Verificar que mock_llm.generate fue llamado con el contexto de la memoria recuperada
-    args, kwargs = mock_llm.generate.call_args_list[0]
+    args, kwargs = mock_llm.generate.call_args_list[1]
     memory_context = kwargs.get("memory")
     assert memory_context is not None
     assert "El perro del usuario se llama Toby." in memory_context
@@ -75,8 +77,9 @@ async def test_orchestrator_memory_lifecycle(mock_get_role):
     # Petición para olvidar. Usamos una palabra clave explícita para la coincidencia de substring
     mock_llm.generate = AsyncMock()
     mock_llm.generate.side_effect = [
-        '{"tool": "forget_user_fact", "args": {"query": "Toby"}}',
-        'He borrado ese recuerdo.',
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "forget_user_fact", "tool_args": {"query": "Toby"}}',
+        '{"type": "message", "message": "He borrado ese recuerdo."}'
         'Resumen de la conversación.'
     ]
 
@@ -104,7 +107,8 @@ async def test_orchestrator_style_injection(mock_get_role):
     # Simular una consulta del usuario
     mock_llm = MagicMock()
     mock_llm.generate = AsyncMock(side_effect=[
-        '{"tool": "no_op", "args": {"message": "Listo"}}',
+        '{"type": "message", "message": "operational"}',
+        '{"type": "tool_call", "tool_name": "no_op", "tool_args": {"message": "Listo"}}',
         'Resumen de la conversación.'
     ])
 
@@ -116,7 +120,7 @@ async def test_orchestrator_style_injection(mock_get_role):
     )
 
     # Verificar que la directriz se recuperó e inyectó bajo el bloque de estilo
-    args, kwargs = mock_llm.generate.call_args_list[0]
+    args, kwargs = mock_llm.generate.call_args_list[1]
     memory_context = kwargs.get("memory")
     assert memory_context is not None
     assert "[Directrices de estilo preferidas por el usuario:]" in memory_context
