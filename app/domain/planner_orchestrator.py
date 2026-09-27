@@ -220,23 +220,31 @@ class SpecializedAgentRouter:
             "cuanto llevo", "cuánto llevo"
         ])
 
-        is_marcos_query = (re.search(r"\bmarcos\b", msg_lower) or any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
+        is_pure_legal = (re.search(r"\bmarcos\b", msg_lower) or any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
             "codigo civil", "código civil", "codigo penal", "código penal",
             "constitucion española", "constitucion espanola", "constitución española",
             "asesoria legal", "asesoría legal", "consulta juridica", "consulta jurídica",
             "normativa", "contrato", "obligación legal", "obligacion legal",
             "jurisprudencia", "sentencia", "ley", "legal", "derecho"
+        ]))
+
+        is_fiscal_tax = (re.search(r"\biva\b", msg_lower) or any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
+            "aeat", "requerimiento", "hacienda", "tributario", "tributaria"
         ])) and not is_calculation_or_personal
 
+        is_marcos_query = (is_pure_legal or is_fiscal_tax) and not is_calculation_or_personal
+
         if session_id:
-            meta = self.memory.get_metadata(session_id, client_id)
-            if meta:
+            try:
+                meta = self.memory.get_metadata(session_id, client_id=client_id)
+            except TypeError:
+                meta = self.memory.get_metadata(session_id)
+            if meta and isinstance(meta, dict):
                 # Si el dominio activo es accounting y no hay mención explícita de temas legales puros, no enrutar a marcos
                 active_domain = meta.get("active_domain")
-                if active_domain == "accounting" and not is_marcos_query:
-                    # Cancelamos cualquier falso positivo de regex (ej. "iva" en medio de una corrección)
-                    pass 
-                # Si el regex sigue detectando temas contables sueltos sin contexto legal explícito, ignorar.
+                if active_domain == "accounting" and not is_pure_legal:
+                    # Cancelamos cualquier falso positivo de regex (ej. "iva" en medio de una corrección contable)
+                    is_marcos_query = False
         
         # Eliminamos términos contables ambiguos del trigger de marcos para forzar que vayan por el orquestador 
         # a menos que sean explícitamente legales (T006 - US2).
@@ -640,21 +648,26 @@ class PlannerOrchestrator:
         )
 
         # 2.5 Interaction Intent Gate
-        intent, domain = await self._classify_intent(user_message, llm, request_id, client_id)
+        raw_intent = await self._classify_intent(user_message, llm, request_id, client_id)
+        if isinstance(raw_intent, (tuple, list)) and len(raw_intent) == 2:
+            intent, domain = raw_intent
+        elif isinstance(raw_intent, str):
+            intent, domain = raw_intent, "general"
+        else:
+            intent, domain = "operational", "general"
         
         # Persistir el active_domain y last_intent para la sesión (Domain Stickiness)
         if session_id:
             try:
                 from app.adapters.memory.memory import memory
-                meta = memory.get_metadata(session_id, client_id=client_id)
-                if meta:
-                    # Si el nuevo domain es general pero estábamos en accounting o legal, lo mantenemos (stickiness).
-                    # Salvo que la nueva intención sea puramente conversacional o haya un cambio de tema claro.
-                    current_domain = meta.get("active_domain", "general")
-                    if domain == "general" and current_domain in ("accounting", "legal") and intent == "operational":
-                        domain = current_domain
-                    
-                    memory.update_domain_context(session_id, active_domain=domain, last_intent=intent, client_id=client_id)
+                meta = memory.get_metadata(session_id, client_id=client_id) or {}
+                # Si el nuevo domain es general pero estábamos en accounting o legal, lo mantenemos (stickiness).
+                # Salvo que la nueva intención sea puramente conversacional o haya un cambio de tema claro.
+                current_domain = meta.get("active_domain", "general")
+                if domain == "general" and current_domain in ("accounting", "legal") and intent == "operational":
+                    domain = current_domain
+                
+                memory.update_domain_context(session_id, active_domain=domain, last_intent=intent, client_id=client_id)
             except Exception as e:
                 error.warning("No se pudo actualizar el contexto de dominio: %s", e)
 
@@ -679,18 +692,26 @@ class PlannerOrchestrator:
         if routed:
             # T011: Unified Legal Disclaimer para consultas puramente legales
             if session_id:
-                meta = self.memory.get_metadata(session_id, client_id)
+                try:
+                    meta = self.memory.get_metadata(session_id, client_id=client_id)
+                except TypeError:
+                    meta = self.memory.get_metadata(session_id)
                 active_domain = meta.get("active_domain") if meta else "general"
                 # Si el enrutador usó marcos_agent, añadimos disclaimer
-                if active_domain == "legal" or "marcos" in user_message.lower() or "ley" in user_message.lower() or "normativa" in user_message.lower():
+                legal_terms = ["marcos", "ley", "normativa", "constitución", "constitucion", "código", "codigo", "jurídica", "juridica", "jurisprudencia", "sentencia", "derecho"]
+                is_legal = (
+                    active_domain == "legal"
+                    or any(term in user_message.lower() for term in legal_terms)
+                    or routed.get("agent") == "marcos"
+                )
+                if is_legal:
                     # Si ya lo tiene, no lo duplicamos
                     if "AVISO LEGAL:" not in routed.get("response", ""):
                         routed["response"] = f"{routed.get('response', '')}\n\nAVISO LEGAL: La información proporcionada tiene carácter orientativo. Consulte siempre la normativa oficial."
                         # Actualizamos el último mensaje en memoria para que incluya el disclaimer
                         history = self.memory.get_history(session_id, client_id)
                         if history and history[-1]["role"] == "assistant":
-                            # Hack rápido para actualizar el último mensaje (o simplemente añadir otro)
-                            pass # Ya se guardó antes del disclaimer, el usuario lo verá en la UI.
+                            pass
             return routed
 
         # 3.5. Enrutamiento unificado nativo mediante el function-calling del LLM (heurístico regex retirado para producción)

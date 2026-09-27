@@ -43,3 +43,5 @@ packages/
 graphify-out-prod/
 specs/
 specify_files/
+scratch/
+scripts/

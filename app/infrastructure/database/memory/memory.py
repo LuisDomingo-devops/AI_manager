@@ -284,7 +284,7 @@ class SessionMemory(MemoryPort):
         """Actualiza específicamente el active_domain o last_intent de una sesión."""
         cid = client_id or "default"
         with _get_connection(cid) as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
                 UPDATE conversation_metadata
                 SET active_domain = coalesce(?, active_domain),
@@ -294,6 +294,18 @@ class SessionMemory(MemoryPort):
                 """,
                 (active_domain, last_intent, session_id)
             )
+            if cursor.rowcount == 0:
+                conn.execute(
+                    """
+                    INSERT INTO conversation_metadata (session_id, title, discipline, project_name, is_persistent, active_domain, last_intent, updated_at)
+                    VALUES (?, 'Nueva Conversación', 'general', 'default', 1, coalesce(?, 'general'), ?, datetime('now'))
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        active_domain = coalesce(excluded.active_domain, conversation_metadata.active_domain),
+                        last_intent = coalesce(excluded.last_intent, conversation_metadata.last_intent),
+                        updated_at = datetime('now')
+                    """,
+                    (session_id, active_domain, last_intent)
+                )
             conn.commit()
 
     def list_persistent_conversations(self, client_id: str | None = None) -> List[dict]:

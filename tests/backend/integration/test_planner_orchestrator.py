@@ -18,7 +18,7 @@ async def test_orchestrator_chat_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value="operational"):
+         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value=("operational", "general")):
         mock_llm.generate.return_value = '{"type": "message", "message": "Hola Luis, soy tu asistente."}'
         
         orchestrator = PlannerOrchestrator()
@@ -46,7 +46,7 @@ async def test_orchestrator_client_tool_flow(mock_llm, session_memory_fixture):
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value="operational"):
+         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value=("operational", "general")):
         # El LLM responde con una herramienta cliente: calendar_open_ui
         mock_llm.generate.return_value = '{"type": "tool_call", "tool_name": "calendar_open_ui", "tool_args": {}}'
         
@@ -78,7 +78,7 @@ async def test_orchestrator_server_tool_flow(mock_llm, session_memory_fixture):
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
          patch("app.config.Settings.get_client_role", return_value="admin"), \
-         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value="operational"):
+         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value=("operational", "general")):
         # El LLM devuelve el JSON de tool en el primer turno y texto en el segundo
         mock_llm.generate.side_effect = [
             '{"type": "tool_call", "tool_name": "get_current_datetime", "tool_args": {}}',
@@ -116,7 +116,7 @@ async def test_orchestrator_mail_bypass_flow(mock_llm, session_memory_fixture):
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
          patch("app.config.Settings.get_client_role", return_value="admin"), \
-         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value="operational"):
+         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value=("operational", "general")):
         
         mock_mail_func = AsyncMock(return_value={"status": "ok", "message": "Inyectados"})
         
@@ -147,7 +147,7 @@ async def test_orchestrator_composite_bypass_flow(mock_llm, session_memory_fixtu
 
     with patch("app.domain.planner_orchestrator.memory", session_memory_fixture), \
          patch("app.domain.planner_orchestrator.vector_memory", mock_vector), \
-         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value="operational"):
+         patch.object(PlannerOrchestrator, "_classify_intent", new_callable=AsyncMock, return_value=("operational", "general")):
         
         mock_composite_func = AsyncMock(return_value={"status": "ok", "message": "Calendario abierto"})
         

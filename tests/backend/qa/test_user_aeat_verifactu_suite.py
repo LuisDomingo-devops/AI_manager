@@ -3,7 +3,7 @@ import sys
 import logging
 import pytest
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from lxml import etree
 
 from app.domain.services.verifactu_service import VerifactuService
@@ -217,7 +217,9 @@ async def test_aeat_requirements_legal_agent():
     assert email_id > 0
     
     # 2. Consultar a Alfonso/Marcos a través de PlannerOrchestrator
-    orchestrator = PlannerOrchestrator()
+    mock_orchestrator_llm = MagicMock()
+    mock_orchestrator_llm.generate = AsyncMock(return_value='{"type": "message", "message": "operational", "domain": "legal"}')
+    orchestrator = PlannerOrchestrator(llm=mock_orchestrator_llm)
     
     # Mockear el cliente LLM del agente Marcos para controlar la respuesta legal sin invocar Ollama
     with patch("app.domain.agents.marcos.marcos_agent.marcos_agent.llm.generate", new_callable=AsyncMock) as mock_llm:

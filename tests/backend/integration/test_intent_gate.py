@@ -23,8 +23,12 @@ def session_memory_fixture():
         def clear(self, session_id):
             self.history = []
             self.metadata = {}
-        def get_metadata(self, session_id):
+        def get_metadata(self, session_id, client_id=None):
             return self.metadata.get(session_id)
+        def update_domain_context(self, session_id, **kwargs):
+            if session_id not in self.metadata:
+                self.metadata[session_id] = {}
+            self.metadata[session_id].update(kwargs)
         def upsert_metadata(self, session_id, **kwargs):
             if session_id not in self.metadata:
                 self.metadata[session_id] = {}
