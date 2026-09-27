@@ -300,9 +300,11 @@ TEXTO DE LA FACTURA:
             def parse_amt(val):
                 if isinstance(val, (int, float)): return float(val)
                 if not val: return 0.0
-                val = str(val).lower().replace("eur", "").replace("€", "").strip()
-                val = val.replace(".", "").replace(",", ".")
-                try: return float(val)
+                val_str = str(val).lower()
+                # T003 [US1] Limpiar símbolos monetarios
+                val_str = val_str.replace("eur", "").replace("€", "").replace("$", "").strip()
+                val_str = val_str.replace(".", "").replace(",", ".")
+                try: return float(val_str)
                 except ValueError: return 0.0
                 
             base = parse_amt(parsed.get("base_imponible", 0))
@@ -346,6 +348,23 @@ TEXTO DE LA FACTURA:
             else:
                 iva_rate = 0.0
             
+            # T002 [US1] Fallback y corrección si el LLM intercambia montos y tasas
+            raw_iva_rate = parse_amt(parsed.get("iva_rate", iva_rate))
+            
+            # Si la tasa recibida es > 100 y el importe recibido es <= 100, probablemente se han cruzado
+            if raw_iva_rate > 100 and iva <= 100:
+                # Verificamos si matemáticamente encaja
+                expected_amount = round((iva / 100) * base, 2)
+                # Permitimos un pequeño margen de redondeo (±0.05)
+                if abs(expected_amount - raw_iva_rate) <= 0.05:
+                    # Hacemos el swap
+                    old_iva = iva
+                    iva = raw_iva_rate
+                    iva_rate = old_iva
+                    
+            elif raw_iva_rate > 0 and raw_iva_rate <= 100:
+                iva_rate = raw_iva_rate
+
             if base > 0:
                 irpf_rate = float(round((irpf / base) * 100, 2))
             else:
@@ -385,6 +404,33 @@ TEXTO DE LA FACTURA:
             if is_albaran:
                 status = "NO_CONTABILIZABLE"
                 requires_manual_confirmation = True
+
+            # T005 [US2] Validar con el esquema explícitamente para atrapar ValidationErrors
+            from app.domain.schemas import InvoiceSchema
+            try:
+                # Intentamos validarlo instanciándolo
+                InvoiceSchema(
+                    invoice_id=str(parsed.get("invoice_id", f"FAC-{int(datetime.now().timestamp())}")),
+                    date=date_str,
+                    issuer_name=parsed.get("issuer_name", "Proveedor Desconocido"),
+                    issuer_nif=issuer_nif,
+                    receiver_name=parsed.get("receiver_name", "Cliente Desconocido"),
+                    receiver_nif=receiver_nif,
+                    base_imponible=base,
+                    iva_rate=iva_rate,
+                    iva_amount=iva,
+                    irpf_rate=irpf_rate,
+                    irpf_amount=irpf,
+                    total_amount=total,
+                    category=category,
+                    quarter=quarter,
+                    year=year,
+                    status=status
+                )
+            except Exception as schema_err:
+                app_logger.warning(f"Error de validación de esquema en extracción: {str(schema_err)}")
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
 
             from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
             engine = TaxEngine(tax_rules_port=FileTaxRulesAdapter())
