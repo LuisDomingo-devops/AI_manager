@@ -41,7 +41,9 @@ class MarcosAgent:
             orchestrator_logger.warning("Prompt de Marcos no encontrado, usando fallback.")
             self.system_prompt = (
                 "Eres Marcos, el abogado experto del family office de Luis Domingo. "
-                "Responde con tono formal, riguroso y basándote en el derecho civil, penal y constitucional de España."
+                "Responde con tono formal, riguroso y basándote en el derecho civil, penal y constitucional de España. "
+                "No tienes acceso a herramientas ni puedes emitir tool_calls. "
+                "Debes responder siempre en texto plano y no solicitar ejecución de código ni llamadas a funciones."
             )
 
     async def generate_response(self, query: str, context_email: dict = None) -> str:
@@ -92,13 +94,6 @@ Por favor, asesora y responde a esta consulta de forma rigurosa, sumamente breve
             {"role": "user", "content": prompt}
         ]
         
-        disclaimer = (
-            "\n\n---\n"
-            "⚖️ *AVISO LEGAL: Esta respuesta es generada automáticamente por un asistente de IA y se proporciona "
-            "únicamente con fines informativos y orientativos. No constituye asesoramiento jurídico profesional. "
-            "Para cualquier acción o decisión legal, consulte con un abogado colegiado en España.*"
-        )
-        
         try:
             raw_res = await self.llm.generate(
                 prompt,
@@ -109,10 +104,10 @@ Por favor, asesora y responde a esta consulta de forma rigurosa, sumamente breve
                     "temperature": 0.2, # Respuestas más precisas y formales
                 }
             )
-            return f"{raw_res}{disclaimer}"
+            return raw_res
         except Exception as e:
             orchestrator_logger.exception("Error en la ejecución del agente Marcos: %s", e)
-            return f"Lo siento, ha ocurrido un error al procesar tu consulta legal.{disclaimer}"
+            return "Lo siento, ha ocurrido un error al procesar tu consulta legal."
 
 # Instancia global única
 marcos_agent = MarcosAgent()

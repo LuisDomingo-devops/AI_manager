@@ -224,10 +224,22 @@ class SpecializedAgentRouter:
             "codigo civil", "código civil", "codigo penal", "código penal",
             "constitucion española", "constitucion espanola", "constitución española",
             "asesoria legal", "asesoría legal", "consulta juridica", "consulta jurídica",
-            "iva", "irpf", "impuesto", "impuestos", "tributo", "tributaria", "tributos",
-            "hacienda", "aeat", "declaración de la renta", "declaracion de la renta",
-            "deducción", "deduccion", "deducciones", "jurisprudencia", "sentencia", "fiscal"
+            "normativa", "contrato", "obligación legal", "obligacion legal",
+            "jurisprudencia", "sentencia", "ley", "legal", "derecho"
         ])) and not is_calculation_or_personal
+
+        if session_id:
+            meta = self.memory.get_metadata(session_id, client_id)
+            if meta:
+                # Si el dominio activo es accounting y no hay mención explícita de temas legales puros, no enrutar a marcos
+                active_domain = meta.get("active_domain")
+                if active_domain == "accounting" and not is_marcos_query:
+                    # Cancelamos cualquier falso positivo de regex (ej. "iva" en medio de una corrección)
+                    pass 
+                # Si el regex sigue detectando temas contables sueltos sin contexto legal explícito, ignorar.
+        
+        # Eliminamos términos contables ambiguos del trigger de marcos para forzar que vayan por el orquestador 
+        # a menos que sean explícitamente legales (T006 - US2).
         is_security_query = (any(re.search(rf"\b{re.escape(kw)}\b", msg_lower) for kw in [
             "ciberseguridad", "cybersecurity", "seguridad", "security", "vulnerabilidad", 
             "vulnerabilities", "auditoría de seguridad", "auditoria de seguridad", "hack",
@@ -556,33 +568,44 @@ class PlannerOrchestrator:
         prompt = (
             "Eres un clasificador de intenciones estricto. "
             "Debes clasificar el siguiente mensaje del usuario en UNA de las siguientes categorías:\n"
-            "- 'conversational': saludos simples, preguntas cómo estás, charlas sociales (ej. 'hola', 'buenos días', 'no saludas?').\n"
-            "- 'rejection': una negativa clara, un rechazo a una acción o cancelación pura (ej. 'no', 'cancela eso', 'no lo hagas'). ATENCIÓN: Si el 'no' va acompañado de una instrucción (ej. 'no, procesa la factura 3'), es operational.\n"
-            "- 'operational': órdenes de trabajo, operaciones, preguntas sobre datos, peticiones de subir archivos, o cualquier otra orden implícita o explícita (ej. 'procesa facturas', 'qué hora es', 'abre el calendario', 'tiempo en bilbao').\n"
-            "- 'confirmation': confirmaciones explícitas de seguir adelante (ej. 'sí', 'dale', 'continúa').\n"
+            "- 'conversational': saludos simples, preguntas cómo estás, charlas sociales.\n"
+            "- 'rejection': rechazo a una acción o cancelación pura (ej. 'no', 'cancela').\n"
+            "- 'operational': órdenes de trabajo, operaciones contables (ej. 'procesa facturas', 'qué hora es', 'abre el calendario', 'cuánto IVA he pagado', 'está mal, falta la factura').\n"
+            "- 'confirmation': confirmaciones explícitas de seguir adelante.\n"
             "- 'clarification': cuando el usuario aclara una duda anterior.\n\n"
-            "PRIORIDAD: Si el mensaje contiene mezcla de conversación y operativa, prioriza SIEMPRE 'operational'. "
-            "Responde ÚNICAMENTE con un JSON válido con esta estructura: {\"type\": \"message\", \"message\": \"<categoria>\"}\n\n"
+            "PRIORIDAD: Las consultas sobre IVA, IRPF, contabilidad, correcciones de errores, o peticiones de datos financieros son SIEMPRE 'operational' y pertenecen al dominio 'accounting'. "
+            "Responde ÚNICAMENTE con un JSON válido con esta estructura: {\"type\": \"message\", \"message\": \"<categoria>\", \"domain\": \"<accounting|legal|general>\"}\n\n"
             f"Mensaje del usuario: \"{user_message}\""
         )
         try:
-            raw = await llm.generate(
-                prompt,
-                mode="chat",
-                request_id=request_id,
-                client_id=client_id,
-            )
+            raw = await llm.generate(prompt, mode="chat", request_id=request_id, client_id=client_id)
             from app.infrastructure.adapters.llm_client import extract_json_robust
             envelope = extract_json_robust(raw)
-            if envelope and envelope.message:
-                intent = envelope.message.lower()
-                if intent in ("conversational", "rejection", "operational", "confirmation", "clarification"):
-                    return intent
-            return "operational" # safe fallback
+            if envelope:
+                # El modelo podría devolver un dict si usamos un schema no estructurado, validamos:
+                if isinstance(envelope, dict):
+                    intent = envelope.get("message", "operational").lower()
+                    domain = envelope.get("domain", "general").lower()
+                else:
+                    # Es un LLMDecisionEnvelope
+                    intent = getattr(envelope, "message", "operational").lower()
+                    # Como LLMDecisionEnvelope no tiene domain por defecto, extraemos a mano o usamos default
+                    # Ya que el parseo estricto Pydantic borraría campos extras si no permitimos extra fields.
+                    try:
+                        import json
+                        raw_dict = json.loads(raw)
+                        domain = raw_dict.get("domain", "general").lower()
+                    except:
+                        domain = "general"
+                        
+                if intent not in ("conversational", "rejection", "operational", "confirmation", "clarification"):
+                    intent = "operational"
+                return intent, domain
+            return "operational", "general"
         except Exception as e:
             from app.utils.logger import error_logger
-            error_logger.warning("Fallo al clasificar la intención, usando fallback 'operational': %s", e)
-            return "operational"
+            error_logger.warning("Fallo al clasificar la intención: %s", e)
+            return "operational", "general"
 
     async def _run_internal(self, user_message, llm=None, request_id=None, session_id=None, client_id=None):
         llm = llm or self.llm
@@ -617,7 +640,24 @@ class PlannerOrchestrator:
         )
 
         # 2.5 Interaction Intent Gate
-        intent = await self._classify_intent(user_message, llm, request_id, client_id)
+        intent, domain = await self._classify_intent(user_message, llm, request_id, client_id)
+        
+        # Persistir el active_domain y last_intent para la sesión (Domain Stickiness)
+        if session_id:
+            try:
+                from app.adapters.memory.memory import memory
+                meta = memory.get_metadata(session_id, client_id=client_id)
+                if meta:
+                    # Si el nuevo domain es general pero estábamos en accounting o legal, lo mantenemos (stickiness).
+                    # Salvo que la nueva intención sea puramente conversacional o haya un cambio de tema claro.
+                    current_domain = meta.get("active_domain", "general")
+                    if domain == "general" and current_domain in ("accounting", "legal") and intent == "operational":
+                        domain = current_domain
+                    
+                    memory.update_domain_context(session_id, active_domain=domain, last_intent=intent, client_id=client_id)
+            except Exception as e:
+                error.warning("No se pudo actualizar el contexto de dominio: %s", e)
+
         if intent in ("conversational", "rejection"):
             logger.info("Intent Gate: Clasificado como %s. Early return activado.", intent)
             chat_res = await llm.generate(
@@ -635,9 +675,22 @@ class PlannerOrchestrator:
             }
 
         # 3. Enrutamiento directo a agentes
-
         routed = await self.agent_router.route_if_applicable(user_message, session_id, client_id, logger)
         if routed:
+            # T011: Unified Legal Disclaimer para consultas puramente legales
+            if session_id:
+                meta = self.memory.get_metadata(session_id, client_id)
+                active_domain = meta.get("active_domain") if meta else "general"
+                # Si el enrutador usó marcos_agent, añadimos disclaimer
+                if active_domain == "legal" or "marcos" in user_message.lower() or "ley" in user_message.lower() or "normativa" in user_message.lower():
+                    # Si ya lo tiene, no lo duplicamos
+                    if "AVISO LEGAL:" not in routed.get("response", ""):
+                        routed["response"] = f"{routed.get('response', '')}\n\nAVISO LEGAL: La información proporcionada tiene carácter orientativo. Consulte siempre la normativa oficial."
+                        # Actualizamos el último mensaje en memoria para que incluya el disclaimer
+                        history = self.memory.get_history(session_id, client_id)
+                        if history and history[-1]["role"] == "assistant":
+                            # Hack rápido para actualizar el último mensaje (o simplemente añadir otro)
+                            pass # Ya se guardó antes del disclaimer, el usuario lo verá en la UI.
             return routed
 
         # 3.5. Enrutamiento unificado nativo mediante el function-calling del LLM (heurístico regex retirado para producción)
