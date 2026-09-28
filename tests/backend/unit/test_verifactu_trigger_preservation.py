@@ -10,9 +10,14 @@ from app.adapters.memory.memory import _get_connection
 
 def test_verifactu_delete_trigger_blocks_deletion():
     """Comprueba que intentar borrar registros en verifactu_invoices lanza un error por trigger."""
+    import importlib
     from app.infrastructure.database.migrations import MigrationRunner
+    m019 = importlib.import_module("migrations.versions.019_immutability_triggers")
     with _get_connection() as conn:
         MigrationRunner.run_pending_migrations(conn)
+        # Re-aplicar triggers si algún test anterior ejecutó DROP TRIGGER
+        m019.upgrade(conn)
+        
         # Asegurar que el trigger está activo en el esquema
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_prevent_delete_verifactu'")

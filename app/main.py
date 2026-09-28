@@ -32,9 +32,8 @@ from app.api.routes import router
 from app.infrastructure.adapters.llm_client import GeminiClient, get_system_prompt
 from app.infrastructure.monitoring.metrics import increment_http_errors, increment_http_requests, record_http_latency
 from app.domain.planner_orchestrator import PlannerOrchestrator
-from app.infrastructure.adapters.alfonso_bridge import bridge as alfonso_bridge
 from app.tools.client.browser_tools import _close as _close_playwright
-from app.utils.logger import LOG_DIR, app_logger, attach_request_id
+from app.utils.logger import LOG_DIR, app_logger, attach_request_id, error_logger
 from app.infrastructure.security.license_features import ROUTE_FEATURE_MAP, check_feature_access
 
 import asyncio
@@ -310,9 +309,8 @@ async def request_id_middleware(request: Request, call_next):
             async def receive():
                 return {"type": "http.request", "body": body_bytes, "more_body": False}
             request._receive = receive
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada al decodificar body:", exc_info=True)
+        except (UnicodeDecodeError, RuntimeError, OSError) as exc:
+            error_logger.warning("Fallo al decodificar o reinyectar el body de la petición: %s", exc, exc_info=True)
 
     # 2. Inspección del WAF Local (Solo si NO hay WAF gestionado externo o si queremos protección en profundidad)
     if not managed_waf_enabled:
