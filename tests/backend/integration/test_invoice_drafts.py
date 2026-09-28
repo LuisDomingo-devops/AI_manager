@@ -6,6 +6,8 @@ from app.utils.encryption import encryptor
 from app.tools.server.billing_tools import generate_invoice_pdf
 from app.domain.services.verifactu_service import VerifactuService
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.fixture(autouse=True)
 def clean_db(tmp_path, monkeypatch):
     import sys

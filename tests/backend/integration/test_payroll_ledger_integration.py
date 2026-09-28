@@ -33,7 +33,7 @@ def setup_test_db():
 
 
 @pytest.mark.asyncio
-async def test_payroll_tools_guardrails_require_confirmation():
+async def test_payroll_tools_guardrails_require_confirmation(mock_approval_service):
     # 1. Intentar dar de alta sin confirmación expresa
     from unittest.mock import patch, AsyncMock
     with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
@@ -68,7 +68,7 @@ async def test_payroll_tools_guardrails_require_confirmation():
 
 
 @pytest.mark.asyncio
-async def test_issue_monthly_payroll_records_journal_entry():
+async def test_issue_monthly_payroll_records_journal_entry(mock_approval_service):
     # Crear empleado
     emp_id = EmployeeService.create_employee({
         "nif": "12345678Z",
@@ -102,7 +102,7 @@ async def test_issue_monthly_payroll_records_journal_entry():
 
 
 @pytest.mark.asyncio
-async def test_issue_settlement_and_dismissal_records_journal_and_updates_status():
+async def test_issue_settlement_and_dismissal_records_journal_and_updates_status(mock_approval_service):
     emp_id = EmployeeService.create_employee({
         "nif": "12345678Z",
         "nss": "281234567890",

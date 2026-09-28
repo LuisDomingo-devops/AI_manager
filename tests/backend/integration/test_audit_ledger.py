@@ -5,6 +5,8 @@ from app.adapters.memory.memory import _get_connection, tenant_context
 from app.domain.services.audit_ledger import AuditLedgerService
 from app.tools.server.billing_tools import delete_client, create_product
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.fixture(autouse=True)
 def clean_test_db():
     # Establecer entorno de test

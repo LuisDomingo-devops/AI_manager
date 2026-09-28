@@ -21,6 +21,8 @@ from app.tools.server.aeat_automation_tools import (
 from app.domain.planner_orchestrator import PlannerOrchestrator
 from app.infrastructure.database.mail_db import create_email
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 # 1. Configuración de rutas de certificados de prueba
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 CERT_PATH = str(PROJECT_ROOT / "data" / "certificados_prueba" / "certificado_pruebas.pem")

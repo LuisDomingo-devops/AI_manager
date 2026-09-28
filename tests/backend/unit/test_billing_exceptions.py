@@ -4,6 +4,8 @@ import sqlite3
 
 from app.tools.server.billing_tools import delete_client, _generate_unique_quote_id
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 async def test_delete_client_audit_failure_logs_severe_error():
     """

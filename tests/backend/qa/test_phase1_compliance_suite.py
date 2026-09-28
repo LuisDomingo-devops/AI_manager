@@ -15,6 +15,8 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 _test_keys = {}
 
 def _mock_get_cert(tenant_id="default"):

@@ -7,6 +7,8 @@ from app.tools.server.billing_tools import (
 from app.adapters.memory.memory import _get_connection
 from app.utils.encryption import encryptor
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 @patch("app.tools.server.mail_tools.mail_send_email")
 async def test_payments_flow(mock_mail):

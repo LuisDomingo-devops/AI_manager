@@ -8,6 +8,8 @@ from app.domain.services.verifactu_service import VerifactuService
 from app.adapters.memory.memory import _get_connection
 import app.api.routes as routes
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.fixture
 def test_client():
     headers = {"X-API-Key": "test_api_key_default"}

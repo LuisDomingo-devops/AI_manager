@@ -12,6 +12,8 @@ from app.tools.server.aeat_automation_tools import (
 )
 from app.utils.encryption import encryptor
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 async def test_get_aeat_aggregated_data_empty():
     with patch("app.domain.services.tax_parser_service.TaxParserService.get_quarterly_aggregates", return_value=[]):

@@ -12,7 +12,7 @@ from app.tools.server.billing_tools import delete_client, delete_product, create
 from app.adapters.memory.memory import _get_connection
 
 @pytest.mark.asyncio
-async def test_bank_reconciliation_confirmation():
+async def test_bank_reconciliation_confirmation(mock_approval_service):
     # Sin confirmacion
     from unittest.mock import patch, AsyncMock
     with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
@@ -57,7 +57,7 @@ async def test_aeat_models_confirmation():
         assert res_202["status"] == "pending_confirmation"
 
 @pytest.mark.asyncio
-async def test_delete_operations_confirmation():
+async def test_delete_operations_confirmation(mock_approval_service):
     # Setup data
     conn = _get_connection()
     try:

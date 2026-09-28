@@ -8,10 +8,17 @@ class ApprovalService:
     def __init__(self):
         self._pending_approvals: Dict[str, asyncio.Future] = {}
 
-    async def request_approval(self, action_type: str, details: Dict[str, Any], timeout: float = 120.0) -> bool:
+    async def request_approval(self_or_cls, action_type: str, details: Dict[str, Any] = None, timeout: float = 120.0) -> bool:
         """
         Request human approval for a sensitive action via the frontend.
+        Soporta invocación como método de instancia y como método estático/de clase para máxima compatibilidad.
         """
+        details = details or {}
+        if isinstance(self_or_cls, ApprovalService):
+            self = self_or_cls
+        else:
+            return await approval_service.request_approval(action_type, details, timeout)
+
         action_id = str(uuid.uuid4())
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -21,12 +28,15 @@ class ApprovalService:
         
         try:
             # Enviar solicitud al frontend
-            await alfonso_bridge.send_command("approval_required", params={
+            cmd_result = await alfonso_bridge.send_command("approval_required", params={
                 "action_id": action_id,
                 "action_type": action_type,
                 "details": details,
                 "message": f"Se requiere confirmación para: {action_type}"
             })
+            if isinstance(cmd_result, dict) and cmd_result.get("status") == "error":
+                app_logger.warning(f"No se pudo enviar solicitud de aprobación OOB: {cmd_result.get('error')}")
+                return False
             
             # Esperar resolución (confirm o reject)
             result = await asyncio.wait_for(future, timeout=timeout)

@@ -4,6 +4,8 @@ from app.utils.validators import validate_nif_nie_cif
 from app.tools.server.billing_tools import create_client, update_client, delete_client, get_clients
 from app.adapters.memory.memory import _get_connection
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 def test_nif_nie_cif_validation():
     # NIF válidos
     assert validate_nif_nie_cif("12345678Z") is True

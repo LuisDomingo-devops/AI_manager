@@ -1,4 +1,4 @@
-from app.domain.services.approval_service import ApprovalService
+from app.domain.services.approval_service import approval_service
 """
 AEAT AUTOMATION TOOLS — Herramientas para la automatización del Modelo 303 en la web de la AEAT.
 
@@ -60,7 +60,7 @@ async def generate_modelo_303_autofill_script(year: int, quarter: int, confirmed
     Genera un script de JavaScript que el usuario puede ejecutar en la consola del navegador
     para autorellenar el formulario activo del Modelo 303 con los datos de facturación.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -160,7 +160,7 @@ async def fill_modelo_303_playwright(year: int, quarter: int, headless: bool = F
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 303.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -211,7 +211,7 @@ async def fill_modelo_303_guardian(year: int, quarter: int, confirmed_by_user: b
     """
     Rellena el borrador del Modelo 303 en la sesión del navegador abierta por el usuario a través de la extensión Guardián.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -279,7 +279,7 @@ async def generate_modelo_130_autofill_script(year: int, quarter: int, confirmed
     Genera un script de JavaScript para autocompletar el borrador del Modelo 130 (IRPF autónomos)
     en la Sede Electrónica de la AEAT con los datos contables del trimestre.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -356,7 +356,7 @@ async def fill_modelo_130_playwright(year: int, quarter: int, headless: bool = F
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 130 (IRPF).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -394,7 +394,7 @@ async def fill_modelo_130_guardian(year: int, quarter: int, confirmed_by_user: b
     """
     Rellena el borrador del Modelo 130 (IRPF autónomos) en la sesión del navegador abierta a través de la extensión Guardián.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -461,7 +461,7 @@ async def generate_modelo_111_autofill_script(year: int, quarter: int, confirmed
     """
     Genera un script para autocompletar el borrador del Modelo 111 (Retenciones de IRPF a profesionales/trabajadores).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -516,7 +516,7 @@ async def fill_modelo_111_playwright(year: int, quarter: int, headless: bool = F
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 111 (Retenciones IRPF).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -590,7 +590,7 @@ async def generate_modelo_115_autofill_script(year: int, quarter: int, confirmed
     """
     Genera un script para autocompletar el borrador del Modelo 115 (Retenciones sobre alquileres de oficinas/locales).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -647,7 +647,7 @@ async def fill_modelo_115_playwright(year: int, quarter: int, headless: bool = F
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Modelo 115 (Alquileres).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -716,7 +716,7 @@ async def fill_modelo_200_playwright(year: int, headless: bool = False, confirme
     """
     Inicia una sesión de Playwright headed para guiar al usuario en el rellenado del Impuesto sobre Sociedades (Modelo 200).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -750,7 +750,7 @@ async def generate_modelo_202_autofill_script(year: int, period: int, confirmed_
     """
     Genera un script para autocompletar el borrador del Modelo 202 (Pago fraccionado del Impuesto sobre Sociedades).
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",

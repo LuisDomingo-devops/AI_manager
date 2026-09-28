@@ -37,11 +37,18 @@ def _patched_request(self, method, url, **kwargs):
 
 OriginalTestClient.request = _patched_request
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_approval_service():
-    """Mock global para simular que el usuario siempre aprueba por WebSocket en los tests."""
+    """Mock explícito para simular que el usuario aprueba por WebSocket cuando el test lo solicita."""
     with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
         mocked.return_value = True
+        yield mocked
+
+@pytest.fixture
+def mock_approval_rejected():
+    """Mock explícito para simular que el usuario rechaza la acción por WebSocket."""
+    with patch("app.domain.services.approval_service.ApprovalService.request_approval", new_callable=AsyncMock) as mocked:
+        mocked.return_value = False
         yield mocked
 
 @pytest.fixture

@@ -4,6 +4,8 @@ import sqlite3
 
 from app.tools.server.billing_tools import delete_client
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 async def test_billing_qa_audit_trail_never_silently_lost():
     """

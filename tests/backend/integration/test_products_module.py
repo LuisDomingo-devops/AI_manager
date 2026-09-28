@@ -2,6 +2,8 @@ import pytest
 from app.tools.server.billing_tools import create_product, get_products, update_product, delete_product
 from app.adapters.memory.memory import _get_connection
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 async def test_products_crud_flow():
     # 1. Limpiar tabla de productos para asegurar independencia del test

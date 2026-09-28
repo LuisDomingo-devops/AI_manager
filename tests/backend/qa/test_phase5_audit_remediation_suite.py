@@ -19,6 +19,8 @@ from app.tools.server.billing_tools import (
 from app.adapters.memory.memory import _get_connection, tenant_context, _init_db_schema
 from app.main import app
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.fixture(autouse=True)
 def setup_audit_env():
     token = tenant_context.set("audit_remediation_tenant")

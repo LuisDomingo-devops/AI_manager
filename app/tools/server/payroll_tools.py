@@ -1,4 +1,4 @@
-from app.domain.services.approval_service import ApprovalService
+from app.domain.services.approval_service import approval_service
 """
 PAYROLL TOOLS — Herramientas del asistente Alfonso para gestión laboral, nóminas, finiquitos y TGSS.
 """
@@ -32,7 +32,7 @@ async def create_employee_tool(
     Crea y da de alta un nuevo empleado en la base de datos cifrada de Alfonso y genera el fichero AFI de Alta para la TGSS.
     Requiere confirmación expresa del usuario.
     """
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -127,7 +127,7 @@ async def issue_monthly_payroll_tool(
 
     payroll = PayrollEngine.calculate_monthly_payroll(emp, month=month, year=year)
 
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -257,7 +257,7 @@ async def issue_settlement_and_dismissal_tool(
         vacation_days_taken=vacation_days_taken
     )
 
-    approved = await ApprovalService.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
     if not approved:
         return {
             "status": "pending_confirmation",

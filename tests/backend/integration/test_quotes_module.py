@@ -4,6 +4,8 @@ from pathlib import Path
 from app.tools.server.billing_tools import create_quote, get_quotes, convert_quote_to_invoice
 from app.adapters.memory.memory import _get_connection
 
+pytestmark = pytest.mark.usefixtures("mock_approval_service")
+
 @pytest.mark.asyncio
 async def test_quotes_flow():
     # 1. Limpiar base de datos para pruebas
