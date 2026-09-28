@@ -3,6 +3,7 @@ import hashlib
 from typing import Optional, Dict, Any, Tuple
 from app.adapters.memory.memory import _get_connection
 from app.utils.encryption import encryptor
+from app.utils.logger import error_logger
 
 class InvoiceRepository:
     @staticmethod
@@ -174,9 +175,8 @@ class InvoiceRepository:
                                 if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
                                     concept = dec_concept
                             break
-                    except Exception:
-                        from app.utils.logger import error_logger
-                        error_logger.warning("Excepción interceptada:", exc_info=True)
+                    except (ValueError, TypeError, Exception) as dec_err:
+                        error_logger.error(f"Error al descifrar campos en find_existing_invoice_match: {dec_err}", exc_info=True)
             finally:
                 conn.close()
         return existing_id_db, existing_file_path, client_name, client_nif, amount, concept
@@ -217,9 +217,8 @@ class InvoiceRepository:
                             "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
                             "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else ""
                         }
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar campos en find_invoice_by_id para id '{invoice_id}': {dec_err}", exc_info=True)
             return None
         finally:
             conn.close()
@@ -323,9 +322,8 @@ class InvoiceRepository:
                     dec_id = encryptor.decrypt(r["invoice_id"])
                     if dec_id.upper() == invoice_id.upper():
                         return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar file_path en find_invoice_file_path_by_id: {dec_err}", exc_info=True)
             return None
         finally:
             conn.close()
@@ -364,9 +362,8 @@ class InvoiceRepository:
                         "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
                         "date": encryptor.decrypt(r["date"]) if r["date"] else ""
                     })
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar factura pendiente en get_pending_invoices: {dec_err}", exc_info=True)
             return invoices
         finally:
             conn.close()

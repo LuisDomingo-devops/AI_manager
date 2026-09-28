@@ -19,7 +19,7 @@ from pathlib import Path
 import chromadb
 from chromadb.utils import embedding_functions
 from app.config import settings
-from app.utils.logger import orchestrator_logger
+from app.utils.logger import orchestrator_logger, error_logger
 
 
 from app.domain.ports.memory_port import VectorMemoryPort
@@ -257,9 +257,8 @@ class VectorMemory(VectorMemoryPort):
         """Borra todos los registros de la colección."""
         try:
             self.client.delete_collection("alfonso_memory")
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (ValueError, KeyError, OSError, RuntimeError) as e:
+            error_logger.warning("Fallo al eliminar colección en ChromaDB: %s", e)
         self._refresh_collection()
 
 

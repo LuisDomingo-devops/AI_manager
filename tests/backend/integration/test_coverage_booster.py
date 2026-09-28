@@ -74,13 +74,48 @@ def test_tax_parser_aggregation_decryption_exception():
     assert agg["income"]["base"] == 0.0
     assert agg["income"]["total"] == 0.0
 
-def test_verifactu_integrity_verification_empty():
-    """Verifica que la auditoría Verifactu sea válida si no hay facturas registradas."""
-    with _get_connection() as conn:
-        conn.execute("DROP TRIGGER IF EXISTS trg_prevent_delete_verifactu")
-        conn.execute("DELETE FROM verifactu_invoices")
-        conn.commit()
-        
+def test_verifactu_integrity_verification_empty(monkeypatch):
+    """
+    Verifica que la auditoría Verifactu sea válida si no hay facturas registradas
+    usando una base de datos aislada en memoria sin destruir los triggers del esquema real.
+    """
+    import sqlite3
+    
+    mem_conn = sqlite3.connect(":memory:")
+    mem_conn.row_factory = sqlite3.Row
+    mem_conn.execute("""
+        CREATE TABLE verifactu_invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_number TEXT,
+            date_of_issue TEXT,
+            issuer_nif TEXT,
+            receiver_nif TEXT,
+            base_imponible REAL,
+            iva_amount REAL,
+            total_amount REAL,
+            prev_hash TEXT,
+            current_hash TEXT
+        )
+    """)
+    mem_conn.execute("""
+        CREATE TRIGGER trg_prevent_delete_verifactu
+        BEFORE DELETE ON verifactu_invoices
+        BEGIN
+            SELECT RAISE(ABORT, 'Inalterabilidad fiscal Veri*Factu: no se permite eliminar registros');
+        END;
+    """)
+    mem_conn.commit()
+
+    class MockContext:
+        def __enter__(self):
+            return mem_conn
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr("app.domain.services.verifactu_service._get_connection", lambda: MockContext())
+
     audit = VerifactuService.verify_chain_integrity()
+    mem_conn.close()
+
     assert audit["status"] == "valid"
     assert "0 facturas" in audit["message"]

@@ -25,7 +25,8 @@ from app.domain.actions import CLIENT_ALIASES
 from app.infrastructure.adapters.tool_base import ToolArgsModel, ValidatedArgs, coerce_and_validate
 from app.utils.logger import (
     attach_request_id,
-    tool_registry_logger
+    tool_registry_logger,
+    error_logger
 )
 
 
@@ -405,9 +406,8 @@ def get_tool_schemas() -> list[dict]:
                     }
                     if param.default == inspect.Parameter.empty:
                         required.append(param_name)
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (ValueError, TypeError, AttributeError) as e:
+                error_logger.warning("Fallo al inspeccionar firma de herramienta %s: %s", name, e)
             parameters = {
                 "type": "object",
                 "properties": properties,

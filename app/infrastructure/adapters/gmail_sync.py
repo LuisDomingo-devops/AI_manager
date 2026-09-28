@@ -8,6 +8,7 @@ import email
 import asyncio
 from email.header import decode_header
 from app.infrastructure.database.mail_db import create_email, get_connection
+from app.utils.logger import error_logger
 
 def clean_header(header_value) -> str:
     if not header_value:
@@ -39,9 +40,8 @@ def _sync_from_gmail_blocking() -> int:
         try:
             import keyring
             gmail_pass = keyring.get_password("AlfonsoAutonomo", "GMAIL_APP_PASSWORD")
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (OSError, AttributeError, TypeError, ValueError) as e:
+            error_logger.warning("Fallo al obtener contraseña de Gmail desde keyring: %s", e)
             
     if not gmail_user or not gmail_pass:
         return 0
@@ -152,7 +152,6 @@ def _sync_from_gmail_blocking() -> int:
         mail.logout()
         return inserted_count
     except Exception as e:
-        from app.utils.logger import error_logger
         error_logger.warning("Error sincronizando gmail: %s", e)
         return 0
 

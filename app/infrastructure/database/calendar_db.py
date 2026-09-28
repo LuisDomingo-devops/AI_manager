@@ -20,6 +20,7 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+from app.utils.logger import error_logger
 
 IS_TESTING = "pytest" in sys.modules or os.getenv("TESTING") == "true"
 
@@ -142,9 +143,8 @@ def list_events(start_date: Optional[str] = None, end_date: Optional[str] = None
             fiscal_deadlines = TaxEngine.get_fiscal_deadlines(s_date, e_date)
             results.extend(fiscal_deadlines)
             results.sort(key=lambda x: x.get("start_time", ""))
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
+            error_logger.warning("Fallo al obtener plazos fiscales en calendario: %s", e)
             
         return results
 

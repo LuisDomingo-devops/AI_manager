@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from app.main import app
 from app.adapters.memory.memory import _get_connection
+from app.utils.logger import app_logger
 
 @pytest.fixture
 def test_client():
@@ -28,8 +29,9 @@ def cleanup_pdfs_and_db():
             conn.execute("DELETE FROM journal_entries WHERE concept LIKE '%StressIntegration%'")
             conn.execute("DELETE FROM ledger_entries WHERE journal_entry_id NOT IN (SELECT id FROM journal_entries)")
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        from app.utils.logger import app_logger
+        app_logger.warning(f"Aviso en limpieza de base de datos en StressIntegration teardown: {e}")
 
     # Borrar PDFs que hayan sido creados durante esta prueba
     if pdf_dir.exists():
@@ -37,9 +39,10 @@ def cleanup_pdfs_and_db():
         new_pdfs = post_pdfs - pre_existing_pdfs
         for pdf in new_pdfs:
             try:
-                pdf.unlink()
-            except Exception:
-                pass
+                pdf.unlink(missing_ok=True)
+            except OSError as e:
+                from app.utils.logger import app_logger
+                app_logger.warning(f"Aviso eliminando PDF temporal {pdf}: {e}")
 
 
 def test_sqlite_concurrent_writes_stress():
@@ -80,17 +83,19 @@ def test_sqlite_concurrent_writes_stress():
         concurrent.futures.wait(futures)
 
     # Reportar resultados
-    pass
+    from app.utils.logger import app_logger
+    app_logger.info(f"Concurrencia SQLite: {success_count} exitos, {len(errors)} bloqueos de {total_workers} workers.")
     if errors:
-        pass
-        # En SQLite ordinario sin WAL, concurrencias altas arrojarán "database is locked"
-        assert any("locked" in str(err).lower() for err in errors)
+        # En SQLite ordinario sin WAL, concurrencias altas arrojaran "database is locked"
+        assert all("locked" in str(err).lower() for err in errors), f"Errores no esperados en concurrencia SQLite: {errors}"
+    else:
+        assert success_count == total_workers, f"Discrepancia en workers exitosos: {success_count}/{total_workers}"
 
 
 def test_api_concurrent_invoice_creation(test_client):
     """
-    Prueba de integración de API para comprobar cuántas peticiones concurrentes de creación
-    de factura tolera el endpoint /api/v1/billing/invoices/create antes de fallar o degradarse.
+    Prueba de integración de API para comprobar que las peticiones concurrentes de creación
+    de factura en /api/v1/billing/invoices/create se procesan correctamente sin fallos encubiertos.
     """
     results = []
     total_requests = 10
@@ -124,11 +129,13 @@ def test_api_concurrent_invoice_creation(test_client):
     successful_calls = [r for r in results if r[0] == 200]
     failed_calls = [r for r in results if r[0] != 200]
     
-    pass
+    app_logger.info(f"Concurrencia API factura: {len(successful_calls)} exitos, {len(failed_calls)} fallos de {total_requests} peticiones.")
     if failed_calls:
-        pass
+        app_logger.error(f"Detalle de llamadas fallidas en concurrencia: {failed_calls}")
         
-    # Asegurar que al menos algunas llamadas logran completarse exitosamente bajo condiciones normales de test
-    assert len(successful_calls) > 0
+    # Validación estricta del 100% de llamadas exitosas
+    assert len(failed_calls) == 0, f"Fallaron {len(failed_calls)} llamadas concurrentes: {failed_calls}"
+    assert len(successful_calls) == total_requests, f"Se esperaba exito en el 100% de peticiones ({len(successful_calls)}/{total_requests})"
+
 
 

@@ -23,7 +23,7 @@ from pathlib import Path
 from app.config import settings
 from app.infrastructure.adapters.http_client import client
 from app.infrastructure.adapters.tool_registry import get_tool
-from app.domain.prompt_generator import generate_tool_prompt
+from app.domain.prompt_generator import generate_tool_prompt, get_client_context_str
 from app.utils.logger import attach_request_id, llm_logger, error_logger, app_logger
 # ---------------------------------------------------------------------
 # REGEX
@@ -77,12 +77,10 @@ def get_system_prompt(mode: str, client_id: str | None = None) -> str:
     if mode == "chat":
         template = load_prompt(settings.CHAT_PROMPT_PATH)
         try:
-            from app.domain.prompt_generator import get_client_context_str
             client_ctx = get_client_context_str(client_id)
             template = template + "\n\n" + client_ctx
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (KeyError, ValueError, AttributeError, OSError) as e:
+            error_logger.warning("Fallo al obtener contexto del cliente para prompt del sistema: %s", e)
     elif mode == "raw":
         return "Eres un asistente de procesamiento de datos útil y preciso."
     else:

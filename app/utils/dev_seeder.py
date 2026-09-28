@@ -2,9 +2,10 @@ import sqlite3
 from datetime import datetime
 from app.adapters.memory.memory import _get_connection, init_all_schemas
 from app.utils.encryption import encryptor
+from app.utils.logger import app_logger
 
 def seed_database():
-    pass
+    app_logger.info("Iniciando siembra de base de datos de desarrollo...")
     
     # Asegurar que el esquema existe
     with _get_connection() as conn:
@@ -14,7 +15,7 @@ def seed_database():
         # Limpiar facturas existentes para evitar duplicados en la demo
         cursor.execute("DELETE FROM invoices")
         conn.commit()
-        pass
+        app_logger.info("Tablas de facturas limpiadas para siembra de prueba.")
         
         # Datos de prueba (5 ingresos, 5 gastos del Q1 2026)
         invoices_data = [
@@ -213,7 +214,7 @@ def seed_database():
         cursor.execute("DELETE FROM ledger_entries")
         cursor.execute("DELETE FROM journal_entries")
         conn.commit()
-        pass
+        app_logger.info("Tablas de libro diario y mayor limpiadas.")
 
         # Insertar registros cifrados
         from app.domain.services.ledger_service import LedgerService
@@ -243,12 +244,13 @@ def seed_database():
                 data["year"],
                 encryptor.encrypt(data["file_path"])
             ))
+            # Hacer commit de la factura antes de invocar LedgerService para evitar bloqueo en SQLite
+            conn.commit()
             
             # Registrar asiento contable PGC por partida doble
             LedgerService.record_invoice_asiento(data)
             
-        conn.commit()
-        pass
+        app_logger.info(f"Sembradas {len(invoices_data)} facturas cifradas y sus correspondientes asientos PGC.")
 
         # --- SEMBRAR PROYECTOS MOCK ---
         cursor.execute("DELETE FROM projects")
@@ -263,7 +265,7 @@ def seed_database():
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (name, client_name, client_nif, budget, status, desc))
         conn.commit()
-        pass
+        app_logger.info(f"Sembrados {len(projects_data)} proyectos de prueba.")
 
         # --- SEMBRAR CLIENTES MOCK ---
         cursor.execute("DELETE FROM clients")
@@ -278,7 +280,7 @@ def seed_database():
                 VALUES (?, ?, ?, ?)
             """, (name, nif, email, address))
         conn.commit()
-        pass
+        app_logger.info(f"Sembrados {len(clients_data)} clientes de prueba.")
 
 if __name__ == "__main__":
     seed_database()

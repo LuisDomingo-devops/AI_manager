@@ -14,7 +14,7 @@ from app.domain.services.excel_sync import ExcelSyncService
 from app.domain.services.verifactu_service import VerifactuService
 from app.infrastructure.database.repositories.invoice_repository import InvoiceRepository
 from app.core.events import event_bus
-from app.utils.logger import tool_logger
+from app.utils.logger import tool_logger, error_logger
 from app.utils.validators import validate_nif_nie_cif
 
 import io
@@ -307,9 +307,10 @@ async def delete_client(client_id: int) -> dict:
                 description=f"Desactivación (Soft Delete) del cliente con ID {client_id}.",
                 client_id=cid
             )
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except Exception as audit_err:
+            error_logger.critical(f"Error crítico al registrar auditoría en DELETE_CLIENT para cliente {client_id}: {audit_err}", exc_info=True)
+            res["audit_warning"] = True
+            res["message"] += " (Advertencia: Falló el registro de auditoría legal)."
             
     return res
 
@@ -563,9 +564,8 @@ def _generate_unique_quote_id(is_draft: bool, quote_id: str = None) -> str:
                 dec_id = encryptor.decrypt(r["quote_id"])
                 if dec_id.startswith(prefix):
                     count += 1
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (ValueError, TypeError, Exception) as dec_err:
+                error_logger.error(f"Error al descifrar quote_id en generación secuencial: {dec_err}", exc_info=True)
         return f"{prefix}{count + 101:03d}"
     finally:
         conn.close()
@@ -609,9 +609,8 @@ async def create_quote(
                         emisor_name = encryptor.decrypt(row["razon_social"])
                     if row["nif"]:
                         emisor_nif = encryptor.decrypt(row["nif"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.error(f"Error al obtener emisor de user_profile para presupuesto: {err}", exc_info=True)
 
         iva_amount = round(amount * (iva_rate / 100.0), 2)
         irpf_amount = round(amount * (irpf_rate / 100.0), 2)
@@ -646,9 +645,8 @@ async def create_quote(
             try:
                 import json
                 elements_layout = json.loads(cust["quote_elements_layout"])
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (json.JSONDecodeError, TypeError, ValueError) as err:
+                error_logger.warning(f"Error al deserializar quote_elements_layout: {err}", exc_info=True)
         if not elements_layout or not isinstance(elements_layout, list):
             elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
 
@@ -884,9 +882,8 @@ async def get_quotes() -> dict:
                         "file_path": encryptor.decrypt(r["file_path"]),
                         "status": r["status"]
                     })
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, KeyError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar registro en get_quotes: {dec_err}", exc_info=True)
             return {"status": "ok", "quotes": quotes}
         finally:
             conn.close()
@@ -911,9 +908,8 @@ async def update_quote_status(quote_id: str, new_status: str) -> dict:
                     if encryptor.decrypt(r["quote_id"]) == quote_id:
                         db_id = r["id"]
                         break
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar quote_id en update_quote_status: {dec_err}", exc_info=True)
             
             if not db_id:
                 return {"status": "error", "message": f"No se encontró el presupuesto '{quote_id}'."}
@@ -960,9 +956,8 @@ async def convert_quote_to_invoice(quote_id: str) -> dict:
                         quote_data["items"] = quote_items
                         
                         break
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar datos de presupuesto {quote_id} en convert_quote_to_invoice: {dec_err}", exc_info=True)
             
             if not quote_data:
                 return {"status": "error", "message": f"No se encontró el presupuesto con ID '{quote_id}'."}
@@ -1073,9 +1068,8 @@ async def generate_invoice_pdf(
                         emisor_nif = encryptor.decrypt(row["nif"])
                     if row["direccion"]:
                         emisor_direccion = encryptor.decrypt(row["direccion"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.error(f"Error al obtener emisor de user_profile para factura: {err}", exc_info=True)
 
         # Si es factura firme (no borrador), verificar obligatoriamente que emisor_nif no esté vacío
         if not is_draft and not emisor_nif:
@@ -1131,9 +1125,8 @@ async def generate_invoice_pdf(
             try:
                 import json
                 elements_layout = json.loads(cust["elements_layout"])
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (json.JSONDecodeError, TypeError, ValueError) as err:
+                error_logger.warning(f"Error al deserializar elements_layout en factura: {err}", exc_info=True)
         if not elements_layout or not isinstance(elements_layout, list):
             elements_layout = ["cabecera", "emisor_receptor", "detalles", "totales", "pie_verifactu"]
 
@@ -1359,9 +1352,8 @@ async def generate_invoice_pdf(
         if qr_temp_path and os.path.exists(str(qr_temp_path)):
             try:
                 os.remove(qr_temp_path)
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (OSError, FileNotFoundError) as err:
+                error_logger.warning(f"No se pudo eliminar archivo QR temporal {qr_temp_path}: {err}", exc_info=True)
 
         # Si el archivo PDF viejo existe y el nombre/ruta cambió, lo borramos
         if existing_file_path and existing_file_path != str(pdf_path):
@@ -1494,9 +1486,8 @@ async def send_invoice_email(invoice_id: str, recipient_email: str) -> dict:
                 row_profile = cursor_profile.fetchone()
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.warning(f"No se pudo obtener emisor_name en send_invoice_email: {err}", exc_info=True)
 
         subject = f"Factura {invoice_id} emitida por {emisor_name.upper()}"
         body = (
@@ -1547,9 +1538,8 @@ async def send_quote_email(quote_id: str, recipient_email: str) -> dict:
                 row_profile = cursor_profile.fetchone()
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.warning(f"No se pudo obtener emisor_name en send_quote_email: {err}", exc_info=True)
 
         subject = f"Presupuesto {quote_id} de {emisor_name.upper()}"
         body = (
@@ -1598,9 +1588,8 @@ async def sign_quote(quote_id: str) -> dict:
                             "date": encryptor.decrypt(r["date"])
                         }
                         break
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar campos para sign_quote '{quote_id}': {dec_err}", exc_info=True)
         finally:
             conn.close()
 
@@ -1671,9 +1660,8 @@ async def verify_quote_signature(quote_id: str) -> dict:
                             "date": encryptor.decrypt(r["date"])
                         }
                         break
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar campos para verify_quote_signature '{quote_id}': {dec_err}", exc_info=True)
         finally:
             conn.close()
 
@@ -1947,9 +1935,8 @@ async def send_payment_reminder_email(invoice_id: str) -> dict:
                 row_profile = cursor_profile.fetchone()
                 if row_profile and row_profile["razon_social"]:
                     emisor_name = encryptor.decrypt(row_profile["razon_social"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.warning(f"No se pudo obtener emisor_name en send_payment_reminder_email: {err}", exc_info=True)
 
         from app.tools.server.mail_tools import mail_send_email
         subject = f"Recordatorio de pago pendiente — Factura {invoice_id}"
@@ -2034,9 +2021,8 @@ async def create_rectificativa_invoice(
                         emisor_nif = encryptor.decrypt(row["nif"])
                     if row["direccion"]:
                         emisor_direccion = encryptor.decrypt(row["direccion"])
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (sqlite3.Error, ValueError, KeyError) as err:
+            error_logger.warning(f"No se pudo obtener emisor de user_profile en create_rectificativa_invoice: {err}", exc_info=True)
 
         if not is_draft and not emisor_nif:
             if settings.ENV == "development" or "pytest" in sys.modules:

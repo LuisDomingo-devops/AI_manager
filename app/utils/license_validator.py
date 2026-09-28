@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives import hashes, serialization
+from app.utils.logger import error_logger
 
 # Clave pública RSA por defecto para validar firmas de licencias de Alfonso Autónomo
 # En producción, esto corresponde a la clave privada en posesión de Alfonso S.L.
@@ -166,9 +167,8 @@ def get_machine_fingerprint() -> str:
                 guid, _ = winreg.QueryValueEx(key, "MachineGuid")
                 if guid:
                     raw_components.append(f"win_guid:{guid.strip()}")
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (OSError, AttributeError) as e:
+            error_logger.warning("Fallo al consultar MachineGuid en registro de Windows: %s", e)
 
     # 2. Linux Machine ID
     elif platform.system() == "Linux":
@@ -177,17 +177,15 @@ def get_machine_fingerprint() -> str:
                 try:
                     raw_components.append(f"linux_id:{Path(p).read_text().strip()}")
                     break
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (OSError, UnicodeDecodeError) as e:
+                    error_logger.warning("Fallo al leer ID de máquina Linux (%s): %s", p, e)
 
     # 3. Fallbacks de hardware universales
     try:
         node_mac = hex(uuid.getnode())
         raw_components.append(f"mac:{node_mac}")
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción interceptada:", exc_info=True)
+    except (ValueError, OSError, AttributeError) as e:
+        error_logger.warning("Fallo al obtener MAC/node ID: %s", e)
 
     raw_components.append(f"host:{platform.node()}")
     raw_components.append(f"arch:{platform.machine()}")
@@ -212,9 +210,8 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
             # Permitir un margen de 300 segundos (5 min) por pequeños desajustes NTP
             if now_epoch < (last_seen_epoch - 300):
                 return False
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
+            error_logger.warning("Error al leer reloj de integridad persistido: %s", e)
 
     try:
         CLOCK_INTEGRITY_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -225,9 +222,8 @@ def check_clock_integrity(current_dt: Optional[datetime] = None) -> bool:
             }),
             encoding="utf-8"
         )
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción interceptada:", exc_info=True)
+    except (OSError, TypeError) as e:
+        error_logger.warning("Error al persistir reloj de integridad local: %s", e)
 
     return True
 

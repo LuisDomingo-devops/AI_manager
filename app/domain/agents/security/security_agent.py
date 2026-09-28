@@ -12,6 +12,7 @@ Expone interfaces para bloqueo de IPs sospechosas y responde a consultas sobre c
 3. Consultas directas del usuario enrutadas por PlannerOrchestrator.
 """
 
+import json
 import os
 import re
 import time
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import List, Dict, Set, Optional
 
 from app.infrastructure.adapters.llm_client import GeminiClient
-from app.utils.logger import build_logger, orchestrator_logger
+from app.utils.logger import build_logger, orchestrator_logger, error_logger
 
 # Logger exclusivo de seguridad
 cyber_logger = build_logger("cybersecurity", "cybersecurity.log", log_to_console=False)
@@ -170,14 +171,12 @@ class CyberSecurityAgent:
         inspected_body = body
         if body and "customization" in path:
             try:
-                import json
                 data = json.loads(body)
                 if isinstance(data, dict) and "logo_base64" in data:
                     data["logo_base64"] = ""
                     inspected_body = json.dumps(data)
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as e:
+                error_logger.warning("Fallo al sanitizar body de personalización para análisis de seguridad: %s", e)
 
         normalized_body = self._normalize_payload(inspected_body)
         payloads = [normalized_path, normalized_body]

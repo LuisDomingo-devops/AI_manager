@@ -35,7 +35,7 @@ LAWS = {
 
 async def fetch_law_xml(boe_id: str) -> str:
     url = f"https://boe.es/datosabiertos/api/legislacion-consolidada/id/{boe_id}"
-    pass
+    app_logger.info(f"Descargando legislacion consolidada desde el BOE: {boe_id}")
     headers = {"Accept": "application/xml"}
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.get(url, headers=headers)
@@ -44,7 +44,7 @@ async def fetch_law_xml(boe_id: str) -> str:
         return response.text
 
 def parse_law_xml(xml_content: str, law_name: str) -> list[dict]:
-    pass
+    app_logger.info(f"Analizando XML legislativo para '{law_name}'...")
     root = ET.fromstring(xml_content.encode("utf-8"))
     
     # Encontrar todos los bloques
@@ -88,7 +88,7 @@ def parse_law_xml(xml_content: str, law_name: str) -> list[dict]:
             }
         })
         
-    pass
+    app_logger.info(f"Extraidos {len(articles)} preceptos normativos para '{law_name}'.")
     return articles
 
 async def seed_law(law_name: str, boe_id: str):
@@ -97,7 +97,7 @@ async def seed_law(law_name: str, boe_id: str):
         articles = parse_law_xml(xml_content, law_name)
         
         if not articles:
-            pass
+            app_logger.warning(f"No se extrajeron articulos para la ley '{law_name}' ({boe_id}).")
             return
             
         # Ingestar en lotes (batching) para evitar sobrecargar memoria/DB
@@ -113,28 +113,27 @@ async def seed_law(law_name: str, boe_id: str):
                 documents=documents,
                 metadatas=metadatas
             )
-            pass
+            app_logger.info(f"Indexado lote de {len(batch)} articulos en ChromaDB para '{law_name}'.")
             
-        pass
+        app_logger.info(f"Siembra completada con exito para '{law_name}'.")
     except Exception as e:
-        pass
-        app_logger.exception("Error en legal_seeder")
+        app_logger.exception(f"Error en legal_seeder para {law_name}: {e}")
 
 async def main():
-    pass
+    app_logger.info("Iniciando proceso principal de siembra legal en ChromaDB...")
     
     # Limpiar colección legal_knowledge para evitar mezclar leyes antiguas
     try:
         vector_memory.client.delete_collection("legal_knowledge")
-        pass
+        app_logger.info("Coleccion 'legal_knowledge' previa eliminada exitosamente.")
     except Exception as e:
-        pass
+        app_logger.info(f"Coleccion 'legal_knowledge' lista para recreacion inicial: {e}")
         
     vector_memory._refresh_collection()
     
     for law_name, boe_id in LAWS.items():
         await seed_law(law_name, boe_id)
-    pass
+    app_logger.info("Proceso de siembra legal finalizado al 100%.")
 
 if __name__ == "__main__":
     asyncio.run(main())

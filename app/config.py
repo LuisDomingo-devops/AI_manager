@@ -133,9 +133,8 @@ class Settings(BaseSettings):
                 from dotenv import load_dotenv
                 load_dotenv(override=True)
                 self.ALFONSO_CLIENT_ROLES = os.getenv("ALFONSO_CLIENT_ROLES", self.ALFONSO_CLIENT_ROLES)
-            except Exception:
-                from app.utils.logger import error_logger
-                error_logger.warning("Excepción interceptada:", exc_info=True)
+            except (OSError, ImportError, ValueError):
+                pass
 
         default_role = "guest"
 

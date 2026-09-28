@@ -16,9 +16,11 @@ Cargando los archivos de texto planos de app/prompts/ y aplicando reemplazos din
 """
 
 import inspect
+import json
 import os
 import platform
 from pathlib import Path
+from app.utils.logger import error_logger
 
 from app.infrastructure.adapters.tool_registry import list_tools, get_callable_tool_function
 
@@ -43,13 +45,13 @@ def get_client_context_str(client_id: str | None = None) -> str:
         
     if not client_info:
         try:
-            import json
             if os.path.exists("data/last_client_info.json"):
                 with open("data/last_client_info.json", "r", encoding="utf-8") as f:
-                    client_info = json.load(f)
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict):
+                        client_info = loaded
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError, ValueError) as e:
+            error_logger.warning("Fallo al leer datos del cliente desde last_client_info.json: %s", e)
             
     if client_info:
         sys_name = client_info.get("system", platform.system())
@@ -59,16 +61,18 @@ def get_client_context_str(client_id: str | None = None) -> str:
         is_wsl = "microsoft" in client_info.get("release", "").lower()
     else:
         # Fallback al contexto del servidor (WSL)
-        sys_name = platform.system()
+        try:
+            sys_name = platform.system()
+        except OSError:
+            sys_name = "Windows"
         username = Path.home().name
         home_dir_str = str(Path.home().resolve())
         current_dir_str = str(Path.cwd().resolve())
         is_wsl = False
         try:
             is_wsl = "microsoft" in platform.uname().release.lower() or os.path.exists("/proc/sys/fs/binfmt_misc/WSLInterop")
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (OSError, AttributeError) as e:
+            error_logger.warning("Fallo al verificar entorno WSL: %s", e)
 
     # Normalizar barras a barra inclinada
     home_dir_str = home_dir_str.replace("\\", "/")

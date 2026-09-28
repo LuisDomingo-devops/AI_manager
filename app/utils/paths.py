@@ -12,7 +12,7 @@ import platform
 import json
 import re
 from pathlib import Path
-from app.utils.logger import tool_logger
+from app.utils.logger import tool_logger, error_logger
 
 def get_client_context(client_id: str | None = None) -> dict:
     """
@@ -32,10 +32,12 @@ def get_client_context(client_id: str | None = None) -> dict:
         try:
             info_file = Path("data/last_client_info.json")
             if info_file.exists():
-                client_info = json.loads(info_file.read_text(encoding="utf-8"))
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+                content = info_file.read_text(encoding="utf-8")
+                loaded = json.loads(content)
+                if isinstance(loaded, dict):
+                    client_info = loaded
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError, ValueError) as e:
+            error_logger.warning("Fallo al leer last_client_info.json: %s", e)
 
     if client_info:
         return {

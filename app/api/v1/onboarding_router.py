@@ -1,5 +1,6 @@
 import os
 import json
+import sqlite3
 from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
@@ -9,6 +10,7 @@ from app.adapters.memory.memory import _get_connection, tenant_context
 from app.utils.license_validator import check_license_status, install_license, get_machine_fingerprint
 from app.domain.services.tenant_provisioner import TenantProvisioningService
 from app.api.routes import verify_api_key
+from app.utils.logger import error_logger
 
 router = APIRouter(prefix="/onboarding")
 
@@ -62,9 +64,8 @@ async def get_onboarding_status(client_id: Optional[str] = None):
                         "razon_social": dec_rs,
                         "direccion": dec_dir
                     }
-    except Exception:
-        from app.utils.logger import error_logger
-        error_logger.warning("Excepción interceptada:", exc_info=True)
+    except (sqlite3.Error, OSError, KeyError, ValueError, Exception) as e:
+        error_logger.warning("Fallo al verificar perfil de onboarding para cliente %s: %s", cid, e)
 
     is_completed = has_profile and license_result.is_operational
 

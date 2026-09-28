@@ -2,6 +2,8 @@ import json
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import httpx
+from app.utils.logger import error_logger
 
 class BaseBankProvider(ABC):
     """
@@ -265,9 +267,8 @@ class WiseProvider(BaseBankProvider):
                     if b_res.status_code == 200:
                         balances = b_res.json()
                         accounts = [str(b["id"]) for b in balances if "id" in b]
-                except Exception:
-                    from app.utils.logger import error_logger
-                    error_logger.warning("Excepción interceptada:", exc_info=True)
+                except (httpx.HTTPError, json.JSONDecodeError, KeyError, ValueError) as e:
+                    error_logger.warning("Fallo al consultar balances en Wise: %s", e)
                 
                 return {
                     "valid": True,
@@ -432,9 +433,8 @@ class WiseProvider(BaseBankProvider):
                             parts = amt_str.split()
                             try:
                                 amt_val = float(parts[0].replace(",", ""))
-                            except Exception:
-                                from app.utils.logger import error_logger
-                                error_logger.warning("Excepción interceptada:", exc_info=True)
+                            except (ValueError, IndexError) as e:
+                                error_logger.warning("Error al parsear importe en actividad Wise (%s): %s", amt_str, e)
                                 
                         all_movements.append({
                             "date": fmt_date,
@@ -442,8 +442,8 @@ class WiseProvider(BaseBankProvider):
                             "amount": amt_val,
                             "reference": str(act.get("id", ""))
                         })
-            except Exception as e:
-                pass
+            except (httpx.HTTPError, json.JSONDecodeError, KeyError) as e:
+                error_logger.warning("Error al consultar actividades de Wise: %s", e)
 
         return all_movements
 
@@ -513,9 +513,8 @@ class RevolutProvider(BaseBankProvider):
                         "reference": tx.get("id", "")
                     })
                 return mapped
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, ValueError) as e:
+            error_logger.warning("Error al obtener transacciones de Revolut: %s", e)
         return []
 
 
@@ -622,9 +621,8 @@ class StripeProvider(BaseBankProvider):
                         "reference": tx.get("id", "")
                     })
                 return mapped
-        except Exception:
-            from app.utils.logger import error_logger
-            error_logger.warning("Excepción interceptada:", exc_info=True)
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, ValueError) as e:
+            error_logger.warning("Error al obtener transacciones de Stripe: %s", e)
         return []
 
 
