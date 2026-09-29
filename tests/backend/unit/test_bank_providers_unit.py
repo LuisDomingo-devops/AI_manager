@@ -101,8 +101,8 @@ def test_qonto_provider_unit():
     val_mock = provider.validate_credentials({"secret_key": "mock_sec", "organization_slug": "my_org"})
     assert val_mock["valid"] is True
 
-    txs = provider.fetch_transactions({"secret_key": "mock_sec"}, "qonto_1", "01/08/2026")
-    assert len(txs) >= 1
+    with pytest.raises(NotImplementedError):
+        provider.fetch_transactions({"secret_key": "mock_sec"}, "qonto_1", "01/08/2026")
 
 
 def test_stripe_provider_unit():
@@ -145,9 +145,8 @@ def test_tink_provider_unit():
     assert "link.tink.com" in link
     assert "market=ES" in link
 
-    txs = provider.fetch_transactions({"client_id": "mock_id"}, "acc_1", "01/08/2026")
-    assert len(txs) == 2
-    assert any("Tink" in t["concept"] for t in txs)
+    with pytest.raises(ValueError):
+        provider.fetch_transactions({"client_id": "mock_id"}, "acc_1", "01/08/2026")
 
 
 def test_plaid_provider_unit():
@@ -158,9 +157,10 @@ def test_plaid_provider_unit():
     val_mock = provider.validate_credentials({"client_id": "mock_plaid_id", "secret": "mock_secret"})
     assert val_mock["valid"] is True
     
-    txs = provider.fetch_transactions({}, "acc_1", "01/08/2026")
-    assert len(txs) == 1
-    assert any("Plaid" in t["concept"] for t in txs)
+    with pytest.raises(NotImplementedError):
+        provider.fetch_transactions({}, "acc_1", "01/08/2026")
+    with pytest.raises(NotImplementedError):
+        provider.get_auth_link("http://localhost:8000/callback", {})
 
 def test_gocardless_provider_real_api_enforcement():
     provider = GoCardlessProvider()

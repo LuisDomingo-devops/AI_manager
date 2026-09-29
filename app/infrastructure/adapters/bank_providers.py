@@ -546,18 +546,7 @@ class QontoProvider(BaseBankProvider):
         return {"status": "success", "accounts": ["qonto_main"]}
 
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
-        secret_key = credentials_dict.get("secret_key", "").strip()
-        if not secret_key or secret_key.startswith("mock_"):
-            today_str = datetime.now().strftime("%d/%m/%Y")
-            return [
-                {
-                    "date": today_str,
-                    "concept": "Qonto Pago Proveedor Servicios Cloud",
-                    "amount": -145.20,
-                    "reference": "QNT-TX-88"
-                }
-            ]
-        return []
+        raise NotImplementedError("La descarga de transacciones vía API de Qonto no está implementada.")
 
 
 class StripeProvider(BaseBankProvider):
@@ -631,7 +620,7 @@ class GenericApiProvider(BaseBankProvider):
     Proveedor REST API genérico extensible para cualquier banco o fintech con Token Bearer / ApiKey.
     """
     def get_auth_link(self, redirect_url: str, credentials_dict: Dict[str, Any]) -> str:
-        return credentials_dict.get("portal_url") or "https://developer.example.com"
+        raise NotImplementedError("El proveedor GenericApiProvider no tiene integración de autorización implementada.")
 
     def validate_credentials(self, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
         api_url = credentials_dict.get("api_url", "").strip()
@@ -641,18 +630,10 @@ class GenericApiProvider(BaseBankProvider):
         return {"valid": True, "message": "Configuración API genérica registrada."}
 
     def confirm_auth(self, requisition_id: str, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "success", "accounts": ["generic_account_01"]}
+        raise NotImplementedError("El proveedor GenericApiProvider no tiene confirmación de autorización implementada.")
 
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
-        today_str = datetime.now().strftime("%d/%m/%Y")
-        return [
-            {
-                "date": today_str,
-                "concept": "Movimiento API Genérica Integrada",
-                "amount": 100.00,
-                "reference": "GEN-API-001"
-            }
-        ]
+        raise NotImplementedError("El proveedor GenericApiProvider no tiene integración de descarga de transacciones implementada.")
 
 
 class TinkProvider(BaseBankProvider):
@@ -703,21 +684,7 @@ class TinkProvider(BaseBankProvider):
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
         client_id, client_secret = self._resolve_credentials(credentials_dict)
         if not client_id or not client_secret or client_id.startswith("mock_"):
-            today_str = datetime.now().strftime("%d/%m/%Y")
-            return [
-                {
-                    "date": today_str,
-                    "concept": "Cobro Factura Cliente ABANCA (vía Tink)",
-                    "amount": 1250.00,
-                    "reference": "TINK-IN-01"
-                },
-                {
-                    "date": today_str,
-                    "concept": "Gasto Proveedor Servicios (vía Tink)",
-                    "amount": -85.20,
-                    "reference": "TINK-OUT-02"
-                }
-            ]
+            raise ValueError("Credenciales de Tink no configuradas (se requiere client_id y client_secret válidos).")
         try:
             import httpx
             # 1. Obtener access token de Tink
@@ -756,7 +723,7 @@ class TinkProvider(BaseBankProvider):
                     })
                 return mapped
         except Exception as e:
-            pass
+            error_logger.warning("Fallo al obtener transacciones de Tink: %s", e)
         return []
 
 
@@ -781,22 +748,13 @@ class PlaidProvider(BaseBankProvider):
         return {"valid": True, "message": "Credenciales Plaid registradas."}
 
     def get_auth_link(self, redirect_url: str, credentials_dict: Dict[str, Any]) -> str:
-        bank_name = credentials_dict.get("bank_name", "ABANCA")
-        return f"http://localhost:8000/bank/mock-auth?redirect={redirect_url}&bank={bank_name}&gateway=plaid"
+        raise NotImplementedError("El proveedor Plaid no tiene integración de autorización implementada.")
 
     def confirm_auth(self, requisition_id: str, credentials_dict: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "success", "accounts": ["acc_plaid_main_01"]}
+        raise NotImplementedError("El proveedor Plaid no tiene confirmación de autorización implementada.")
 
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
-        today_str = datetime.now().strftime("%d/%m/%Y")
-        return [
-            {
-                "date": today_str,
-                "concept": "Movimiento Bancario ABANCA (vía Plaid)",
-                "amount": 540.00,
-                "reference": "PLAID-TX-01"
-            }
-        ]
+        raise NotImplementedError("El proveedor Plaid no tiene integración de descarga de transacciones implementada.")
 
 
 class MockBankProvider(BaseBankProvider):
