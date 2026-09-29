@@ -15,6 +15,8 @@ Conectándose a una base de datos local persistente ChromaDB e indexando datos e
 """
 
 import uuid
+import hashlib
+import time
 from pathlib import Path
 import chromadb
 from chromadb.utils import embedding_functions
@@ -62,14 +64,15 @@ class VectorMemory(VectorMemoryPort):
 
     def add_fact(self, session_id: str, fact: str, client_id: str | None = None) -> str:
         """
-        Inserta un hecho relevante en la base de datos vectorial.
-        Devuelve el ID generado para el hecho.
+        Inserta o actualiza un hecho relevante en la base de datos vectorial de forma idempotente.
+        Aplica deduplicación determinista (Sección 10 del Discovery Contract):
+        same fact + multiple iterations = one logical fact.
+        Devuelve el ID determinista generado para el hecho.
         """
         if not fact or not fact.strip():
             return ""
         
         self._refresh_collection()
-        fact_id = str(uuid.uuid4())
         cid = client_id
         if not cid:
             try:
@@ -78,16 +81,26 @@ class VectorMemory(VectorMemoryPort):
             except ImportError:
                 cid = "default"
         cid = cid or "default"
+
+        # Identidad determinista y normalización del hecho
+        normalized_fact = " ".join(fact.strip().split())
+        fact_hash = hashlib.sha256(f"{cid}:{normalized_fact.lower()}".encode("utf-8")).hexdigest()[:16]
+        fact_id = f"fact_{cid}_{fact_hash}"
+
         try:
-            self.collection.add(
-                documents=[fact.strip()],
-                metadatas=[{"session_id": session_id or "global", "client_id": cid}],
+            self.collection.upsert(
+                documents=[normalized_fact],
+                metadatas=[{
+                    "session_id": session_id or "global",
+                    "client_id": cid,
+                    "updated_at": int(time.time())
+                }],
                 ids=[fact_id]
             )
-            orchestrator_logger.info("Recuerdo semántico guardado para cliente %s: %s (ID: %s)", cid, fact.strip(), fact_id)
+            orchestrator_logger.info("Recuerdo semántico guardado/actualizado para cliente %s: %s (ID: %s)", cid, normalized_fact, fact_id)
             return fact_id
         except Exception as e:
-            orchestrator_logger.exception("Error guardando hecho en ChromaDB: %s", e)
+            orchestrator_logger.exception("Error guardando/actualizando hecho en ChromaDB: %s", e)
             return ""
 
     def query_facts(self, query: str, limit: int = 3, client_id: str | None = None) -> list[str]:
