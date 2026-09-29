@@ -113,6 +113,29 @@ class SafeRotatingFileHandler(RotatingFileHandler):
                     pass
 
 
+import re
+
+class CredentialSanitizingFilter(logging.Filter):
+    """
+    Filtro de seguridad que intercepta y sanitiza credenciales, tokens y secretos
+    en los mensajes de registro para evitar fugas inadvertidas en archivos de log y consola.
+    """
+    PATTERNS = [
+        (re.compile(r'(Bearer\s+)[A-Za-z0-9_\-\.]+', re.IGNORECASE), r'\1[REDACTED]'),
+        (re.compile(r'((?:password|passwd|pwd)\s*[:=]\s*[\'"]?)[^\'"\s,]+([\'"]?)', re.IGNORECASE), r'\1[REDACTED]\2'),
+        (re.compile(r'((?:api[_-]?key|client[_-]?secret|auth[_-]?secret)\s*[:=]\s*[\'"]?)[^\'"\s,]+([\'"]?)', re.IGNORECASE), r'\1[REDACTED]\2'),
+        (re.compile(r'((?:access[_-]?token|refresh[_-]?token)\s*[:=]\s*[\'"]?)[^\'"\s,]+([\'"]?)', re.IGNORECASE), r'\1[REDACTED]\2'),
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            sanitized = record.msg
+            for pattern, repl in self.PATTERNS:
+                sanitized = pattern.sub(repl, sanitized)
+            record.msg = sanitized
+        return True
+
+
 formatter = RequestIdFormatter(FORMAT)
 console_formatter = ColorFormatter(FORMAT)
 json_formatter = JSONFormatter()
@@ -130,6 +153,7 @@ def get_shared_json_handler():
             delay=True
         )
         _shared_json_handler.setFormatter(json_formatter)
+        _shared_json_handler.addFilter(CredentialSanitizingFilter())
     return _shared_json_handler
 
 
@@ -148,6 +172,9 @@ def build_logger(name: str, filename: str, log_to_console: bool = True):
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
+    sanitizer = CredentialSanitizingFilter()
+    logger.addFilter(sanitizer)
+
     # 1. Handler tradicional de texto seguro
     file_handler = SafeRotatingFileHandler(
         LOG_DIR / filename,
@@ -157,6 +184,7 @@ def build_logger(name: str, filename: str, log_to_console: bool = True):
         delay=True
     )
     file_handler.setFormatter(formatter)
+    file_handler.addFilter(sanitizer)
     logger.addHandler(file_handler)
 
     # 2. Handler estructurado JSON global compartido (singleton)
@@ -166,6 +194,7 @@ def build_logger(name: str, filename: str, log_to_console: bool = True):
     if log_to_console:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
+        console_handler.addFilter(sanitizer)
         logger.addHandler(console_handler)
 
     return logger

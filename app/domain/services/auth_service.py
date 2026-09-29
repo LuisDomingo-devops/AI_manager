@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -124,7 +124,7 @@ class AuthService:
     # ── Helpers privados ──────────────────────────────────────────────────
     @classmethod
     def _create_access_token(cls, user: AppUser) -> str:
-        expire = datetime.utcnow() + timedelta(hours=_ACCESS_TOKEN_EXPIRE_HOURS)
+        expire = datetime.now(timezone.utc) + timedelta(hours=_ACCESS_TOKEN_EXPIRE_HOURS)
         payload = {
             "sub": str(user.id),
             "username": user.username,
