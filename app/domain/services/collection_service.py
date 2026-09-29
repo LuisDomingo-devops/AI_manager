@@ -4,12 +4,14 @@ from datetime import datetime
 from app.adapters.memory.memory import _get_connection
 from app.utils.logger import tool_logger
 from app.utils.encryption import encryptor
+from app.domain.services.ledger_service import LedgerService
+
 class CollectionService:
     @staticmethod
     def register_payment(invoice_id: str, amount: float, payment_method: str, date: str, notes: str = "", invoice_repository=None) -> dict:
         """
         Registra un pago para una factura y actualiza su estado si está completamente cobrada.
-        También genera el asiento contable del cobro.
+        También genera el asiento contable del cobro de forma atómica y verificable.
         """
         conn = _get_connection()
         try:
@@ -68,8 +70,8 @@ class CollectionService:
                 status_msg = "Pago registrado. Factura completamente cobrada."
                 
             conn.commit()
-            
-            # 5. Generar apunte contable
+
+            # 5. Generar apunte contable obligatorio y verificable (Libro Diario y Mayor)
             # De clientes (430) a caja/banco (572/570)
             account_debe = "57000000" if payment_method.lower() in ("efectivo", "cash") else "57200001"
             
@@ -84,7 +86,12 @@ class CollectionService:
             try:
                 LedgerService.record_journal_entry(ledger_entry)
             except Exception as e:
-                tool_logger.warning(f"No se pudo registrar asiento del cobro: {e}")
+                # Transacción compensatoria: revertir el pago si el apunte contable falla
+                cursor.execute("DELETE FROM payments WHERE payment_id = ?", (payment_id,))
+                cursor.execute("UPDATE invoices SET status = 'firmada' WHERE id = ?", (invoice_db_id,))
+                conn.commit()
+                tool_logger.error(f"Fallo en apunte contable, cobro compensado: {e}")
+                return {"status": "error", "message": f"Error registrando asiento contable: {e}"}
                 
             return {
                 "status": "ok",
