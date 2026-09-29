@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.services.tenant_provisioner import TenantProvisioningService
 from app.api.routes import verify_api_key
+from app.utils.paths import DATA_DIR
 import logging
 
 logger = logging.getLogger("subscriptions_router")
@@ -132,29 +133,36 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
     event_id = event.get("id") if endpoint_secret else raw_data.get("id")
     
     if event_type in ("checkout.session.completed", "invoice.payment_succeeded"):
-        # Idempotency check
+        # Idempotency check estricto (Sección 9 del Discovery Contract)
         if event_id:
+            events_file = DATA_DIR / "stripe_events.json"
+            processed_events = set()
+            if events_file.exists():
+                try:
+                    with open(events_file, "r", encoding="utf-8") as f:
+                        loaded = json.load(f)
+                        if isinstance(loaded, list):
+                            processed_events = set(loaded)
+                except (json.JSONDecodeError, OSError) as e:
+                    logger.warning("Fallo al leer stripe_events.json: %s. Se inicializará nuevo registro.", e)
+
+            if event_id in processed_events:
+                logger.info("Evento de Stripe %s ya fue procesado. Ignorando para mantener idempotencia.", event_id)
+                return {"status": "ignored", "reason": "already_processed", "event": event_type}
+
+            processed_events.add(event_id)
             try:
-                from app.utils.paths import DATA_DIR
-                events_file = DATA_DIR / "stripe_events.json"
-                
-                processed_events = []
-                if events_file.exists():
-                    try:
-                        with open(events_file, "r", encoding="utf-8") as f:
-                            processed_events = json.load(f)
-                    except Exception:
-                        pass
-                
-                if event_id in processed_events:
-                    logger.info("Evento de Stripe %s ya fue procesado. Ignorando para mantener idempotencia.", event_id)
-                    return {"status": "ignored", "reason": "already_processed", "event": event_type}
-                
-                processed_events.append(event_id)
-                with open(events_file, "w", encoding="utf-8") as f:
-                    json.dump(processed_events, f)
-            except Exception as e:
-                logger.warning("No se pudo procesar la idempotencia del evento de Stripe: %s", str(e), exc_info=True)
+                temp_file = DATA_DIR / f"stripe_events_{os.getpid()}_{uuid.uuid4().hex[:6]}.tmp"
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(sorted(list(processed_events)), f, indent=2)
+                temp_file.replace(events_file)
+            except OSError as e:
+                logger.error("Error al persistir registro de idempotencia de Stripe en %s: %s", events_file, e)
+                try:
+                    with open(events_file, "w", encoding="utf-8") as f:
+                        json.dump(sorted(list(processed_events)), f, indent=2)
+                except Exception as inner_e:
+                    logger.error("Fallo definitivo al escribir stripe_events.json: %s", inner_e)
 
         metadata = stripe_obj.get("metadata", {})
         

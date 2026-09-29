@@ -14,6 +14,10 @@ import re
 from pathlib import Path
 from app.utils.logger import tool_logger, error_logger
 
+# Directorio raíz de datos compartidos / persistencia local
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 def get_client_context(client_id: str | None = None) -> dict:
     """
     Obtiene los datos del cliente conectado consultando el bridge de Alfonso
