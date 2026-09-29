@@ -98,26 +98,32 @@ async def request_document(
 
 async def get_compliance_declaration_dossier() -> dict:
     """
-    Genera y devuelve la Declaración Responsable del fabricante/desarrollador
-    para el cumplimiento normativo (Ley Antifraude / Veri*Factu / RGPD).
+    Genera y devuelve el Borrador Técnico de Declaración Responsable del fabricante/desarrollador
+    para el cumplimiento normativo (Ley Antifraude / Veri*Factu / RGPD), clasificado como UNVERIFIED
+    hasta su verificación y homologación formal ante la AEAT.
     """
     declaracion = (
-        "DECLARACIÓN RESPONSABLE DEL SISTEMA INFORMATICO DE FACTURACIÓN\n"
-        "==============================================================\n\n"
+        "[BORRADOR TÉCNICO - PENDIENTE DE HOMOLOGACIÓN OFICIAL]\n"
+        "DECLARACIÓN RESPONSABLE DEL SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF)\n"
+        "====================================================================\n\n"
         "De conformidad con lo dispuesto en el artículo 29.2.j) de la Ley 58/2003, "
         "de 17 de diciembre, General Tributaria, y en el Reglamento que establece "
         "los requisitos que deben adoptar los sistemas y programas informáticos o electrónicos, "
-        "se declara bajo responsabilidad que este software (Alfonso Autónomo) cumple con:\n"
+        "se emite el presente borrador técnico acreditando que el software Alfonso Autónomo "
+        "ha sido diseñado con la finalidad de:\n"
         "1. Garantizar la integridad, conservación, accesibilidad, legibilidad, trazabilidad e "
         "inalterabilidad de los registros de facturación.\n"
         "2. No disponer de software de doble uso ni alterar u ocultar la facturación real.\n"
         "3. Aplicar protocolos criptográficos (Veri*Factu) en el registro y comunicación de facturas.\n\n"
+        "Estado normativo: UNVERIFIED (diseño técnico preliminar en proceso de certificación oficial).\n"
         "Fecha de generación de la declaración: " + datetime.now().strftime("%d/%m/%Y")
     )
     
     return {
         "status": "ok",
-        "message": "Declaración Responsable generada correctamente.",
+        "regulatory_status": "UNVERIFIED",
+        "declaration_state": "draft",
+        "message": "Borrador de Declaración Responsable generado correctamente.",
         "content": declaracion
     }
 

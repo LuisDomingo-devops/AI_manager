@@ -48,6 +48,7 @@ class TgssAffiliationService:
             "contract_type": contract_type,
             "contribution_group": group,
             "coefficient": "1000", # 100% jornada completa
+            "regulatory_status": "UNVERIFIED",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -68,10 +69,12 @@ class TgssAffiliationService:
 
         return {
             "status": "ok",
+            "regulatory_status": "UNVERIFIED",
             "action": "MA",
             "file_path": str(file_path),
             "record": record,
-            "afi_raw": afi_text_line
+            "afi_raw": afi_text_line,
+            "warning": "Formato plano experimental clasificado como UNVERIFIED; requiere homologación formal SILTRA."
         }
 
     @classmethod
@@ -105,6 +108,7 @@ class TgssAffiliationService:
             "cause_code": cause_code,
             "termination_type": termination_type,
             "vacation_days_l13": vacation_days_int,
+            "regulatory_status": "UNVERIFIED",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -124,9 +128,11 @@ class TgssAffiliationService:
 
         return {
             "status": "ok",
+            "regulatory_status": "UNVERIFIED",
             "action": "MB",
             "cause_code": cause_code,
             "file_path": str(file_path),
             "record": record,
-            "afi_raw": afi_text_line
+            "afi_raw": afi_text_line,
+            "warning": "Formato plano experimental clasificado como UNVERIFIED; requiere homologación formal SILTRA."
         }

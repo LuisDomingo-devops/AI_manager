@@ -993,12 +993,14 @@ class VerifactuService:
         now_str = datetime.now().isoformat()
 
         statement_text = (
-            f"{settings.SIF_DEVELOPER} declara bajo su expresa y exclusiva responsabilidad que el Sistema "
-            f"Informático de Facturación (SIF) '{settings.SIF_SOFTWARE_NAME}', versión {settings.SIF_VERSION}, "
-            f"cumple íntegramente con todos los requisitos establecidos en el artículo 29.2.j) de la Ley 58/2003 "
+            f"[BORRADOR TÉCNICO - PENDIENTE DE HOMOLOGACIÓN OFICIAL] "
+            f"{settings.SIF_DEVELOPER} emite el presente borrador técnico de Declaración Responsable "
+            f"para el Sistema Informático de Facturación (SIF) '{settings.SIF_SOFTWARE_NAME}', versión {settings.SIF_VERSION}. "
+            f"El software ha sido diseñado con la finalidad de ajustarse a los requisitos del artículo 29.2.j) de la Ley 58/2003 "
             f"(LGT), el Real Decreto 1007/2023 (Reglamento Veri*factu), las especificaciones técnicas de la "
             f"Orden HAC/1177/2024, el Reglamento de Facturación (RD 1619/2012) y la Ley 18/2022 (Crea y Crece). "
-            "Garantiza la integridad, inalterabilidad, trazabilidad, accesibilidad y legibilidad de los registros."
+            "Implementa controles para la integridad, inalterabilidad, trazabilidad, accesibilidad y legibilidad de los registros, "
+            "permaneciendo en estado UNVERIFIED hasta su validación definitiva ante los servicios oficiales de la AEAT."
         )
 
         # Firma digital con la clave RSA del sistema
@@ -1012,6 +1014,8 @@ class VerifactuService:
 
         return {
             "status": "ok",
+            "regulatory_status": "UNVERIFIED",
+            "declaration_state": "draft",
             "developer": settings.SIF_DEVELOPER,
             "software_name": settings.SIF_SOFTWARE_NAME,
             "version": settings.SIF_VERSION,
@@ -1026,14 +1030,15 @@ class VerifactuService:
                 "Ley 18/2022, de 28 de septiembre (Crea y Crece - Factura Electrónica B2B)"
             ],
             "expediente_evidencias_tecnicas": {
-                "encadenamiento_criptografico_sha256": "CONFORME" if cls.verify_chain_integrity().get("status") == "valid" else "NO_CONFORME",
-                "registro_eventos_sif_log": "CONFORME" if cls.get_last_event_log_hash() is not None else "NO_EVALUADO",
+                "encadenamiento_criptografico_sha256": "CONFORME (Local/Unverified)" if cls.verify_chain_integrity().get("status") == "valid" else "NO_CONFORME",
+                "registro_eventos_sif_log": "CONFORME (Local/Unverified)" if cls.get_last_event_log_hash() is not None else "NO_EVALUADO",
                 "codigo_qr_cotejo_aeat": "CONFORME (Anexo III Orden HAC/1177/2024)",
                 "facturacion_rectificativa": "CONFORME (Series R-YYYY-XXX y tipos R1-R5)",
                 "aislamiento_multitenant_rsa": "CONFORME (Claves privadas y certificados por tenant)",
                 "partida_doble_estricta": "CONFORME (Debe == Haber y soporte IRPF)",
                 "factura_electronica_ubl_en16931": "CONFORME (Peppol BIS 3.0 y Facturae 3.2.2)",
-                "estados_comerciales_b2b": "CONFORME (5 estados obligatorios Ley 18/2022)"
+                "estados_comerciales_b2b": "CONFORME (5 estados obligatorios Ley 18/2022)",
+                "homologacion_oficial_aeat": "UNVERIFIED_PENDING_AEAT_VALIDATION"
             },
             "statement": statement_text,
             "digital_signature": digital_signature

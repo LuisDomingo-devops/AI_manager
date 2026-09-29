@@ -1,30 +1,56 @@
 # Especificación: 009-regulatory-verification
 
-## Contexto
+## 1. Contexto y Hallazgo en Discovery (Secciones 14 y 15 del Contrato)
 
-El sistema requiere saneamiento para asegurar que los tests reflejen la realidad y los fallos se reporten correctamente.
+En las secciones 14 y 15 de `docs/audit/discovery-contract.md` y en las reglas de saneamiento se establece:
+> - Los claims regulatorios deben clasificarse como VERIFIED, UNVERIFIED, CONFLICTING, INCORRECT o NOT_IMPLEMENTED.
+> - AFI TGSS: El formato `EMP*0111*...*MA*...` no debe considerarse válido sin fuente oficial. Clasificar como UNVERIFIED.
+> - Declaración Responsable: Busca cualquier funcionalidad que afirme `"cumple íntegramente con la normativa"`. No permitas esa afirmación mientras la implementación no haya sido formalmente verificada. La declaración debe marcarse como borrador (`draft`) y no afirmar cumplimiento no demostrado.
 
-## Problema
+### Evidencia Técnica en el Código Fuente:
+1. En `app/domain/services/verifactu_service.py` (Línea 998), `get_compliance_declaration_dossier()` afirma categóricamente que el SIF *"cumple íntegramente con todos los requisitos establecidos en el artículo 29.2.j) de la Ley 58/2003 (LGT)..."*, y devuelve `"status": "ok"` como si estuviese formalmente homologado.
+2. En `app/tools/server/advisor_tools.py` (Línea 104), `get_compliance_declaration_dossier()` emite una declaración sin advertir su condición de borrador técnico no homologado.
+3. En `app/domain/services/tgss_affiliation_service.py`, se genera un formato inventado `EMP*0111*...*MA*...` para el Sistema RED sin metadatos de clasificación que aclaren que su validez ante SILTRA es `UNVERIFIED`.
 
-Marcar funcionalidades Veri*Factu, AFI TGSS y AEAT sin probar contra fuentes oficiales reales como UNVERIFIED.
+---
 
-## Comportamiento actual
+## 2. Requisitos Funcionales
 
-[Por definir durante la ejecución de la fase]
+1. **Declaración Responsable y Expediente Técnico**:
+   - En `VerifactuService.get_compliance_declaration_dossier()`:
+     - El estado devuelto debe ser `status: "draft"` con `regulatory_status: "UNVERIFIED"`.
+     - El texto de la declaración debe modificarse para reflejar con honestidad técnica que es un *diseño técnico preliminar en fase de certificación/evaluación técnica (borrador)*, eliminando la aserción no demostrada de *"cumple íntegramente"*.
+     - En el expediente de evidencias técnicas, marcar las capacidades no contrastadas en entorno real con la AEAT como `UNVERIFIED_PENDING_AEAT_VALIDATION`.
+2. **Herramienta del Asesor (`advisor_tools.py`)**:
+   - Marcar el resultado de la Declaración Responsable explícitamente con `status: "draft"` y encabezado `[BORRADOR TÉCNICO - PENDIENTE DE HOMOLOGACIÓN OFICIAL]`.
+3. **Ficheros AFI de TGSS (`tgss_affiliation_service.py`)**:
+   - Los registros y resultados de generación de ficheros AFI deben incluir el atributo `regulatory_status: "UNVERIFIED"` y advertir en el log y respuesta que el formato plano es experimental y requiere validación formal en SILTRA.
 
-## Comportamiento esperado
+---
 
-[Fallar correctamente si la operación es inválida; testear funcionalidad real sin mockear el core si no es necesario]
+## 3. Plan de Pruebas (TDD)
 
-## Requisitos funcionales
+1. **Unitario**:
+   - `tests/backend/unit/test_regulatory_claims_classification.py`:
+     - Verificar que `VerifactuService.get_compliance_declaration_dossier()` devuelve `status == "draft"` y `regulatory_status == "UNVERIFIED"`.
+     - Verificar que el texto de la declaración no contiene la frase prohibida *"cumple íntegramente"*.
+     - Verificar que `TgssAffiliationService.generate_alta_afi()` incluye `regulatory_status == "UNVERIFIED"`.
 
-- Corregir producción.
-- Añadir aserciones significativas a los tests asociados.
+2. **Integración**:
+   - `tests/backend/integration/test_compliance_router_regulatory_integrity.py`:
+     - Invocar `GET /compliance/declaration` y validar que el payload retornado por la API expone `status == "draft"` y `regulatory_status == "UNVERIFIED"`.
 
-## Tests requeridos
+3. **QA**:
+   - `tests/backend/qa/test_regulatory_audit_claims_qa_suite.py`:
+     - Auditoría exhaustiva sobre los endpoints de compliance y tools de advisor para certificar que ningún componente emite claims absolutos o no demostrados.
 
-- Tests de integración que fallen si la corrección se revierte.
+---
 
-## Archivos afectados
+## 4. Archivos Afectados
 
-- [Por llenar]
+- `app/domain/services/verifactu_service.py`
+- `app/tools/server/advisor_tools.py`
+- `app/domain/services/tgss_affiliation_service.py`
+- `tests/backend/unit/test_regulatory_claims_classification.py`
+- `tests/backend/integration/test_compliance_router_regulatory_integrity.py`
+- `tests/backend/qa/test_regulatory_audit_claims_qa_suite.py`
