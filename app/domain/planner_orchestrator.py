@@ -925,8 +925,8 @@ class PlannerOrchestrator:
     async def manejar_domain_error_contract(
         self,
         contrato: "DomainErrorContract",
-        session_id: str | None,
-        client_id: str | None,
+        session_id: str | None = None,
+        client_id: str | None = None,
     ) -> dict:
         """
         (FR-003, FR-005) Convierte un DomainErrorContract en una respuesta
