@@ -76,16 +76,38 @@ class MigrationRunner:
             module_name = f"migrations.versions.{file.stem}"
             try:
                 mod = importlib.import_module(module_name)
-                version = getattr(mod, "VERSION", file.stem.split("_")[0])
-                description = getattr(mod, "DESCRIPTION", file.stem)
+                raw_version = getattr(mod, "VERSION", getattr(mod, "version", file.stem.split("_")[0]))
+                raw_desc = getattr(mod, "DESCRIPTION", getattr(mod, "description", file.stem))
                 upgrade_fn = getattr(mod, "upgrade", None)
                 if upgrade_fn:
-                    migrations.append(Migration(version=str(version), description=description, upgrade_fn=upgrade_fn))
+                    migrations.append(Migration(version=str(raw_version), description=str(raw_desc), upgrade_fn=upgrade_fn))
             except Exception as e:
                 logger.warning("No se pudo cargar la migración %s: %s", file.name, str(e))
 
         migrations.sort(key=lambda m: m.version)
         return migrations
+
+    @classmethod
+    def check_foreign_keys(cls, conn: sqlite3.Connection) -> List[Dict[str, Any]]:
+        """
+        Ejecuta PRAGMA foreign_key_check para verificar la integridad referencial en la base de datos.
+        Devuelve una lista de diccionarios con las violaciones encontradas, o [] si no hay errores.
+        """
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_key_check")
+        rows = cursor.fetchall()
+        violations = []
+        for row in rows:
+            if isinstance(row, dict) or hasattr(row, "keys"):
+                violations.append(dict(row))
+            else:
+                violations.append({
+                    "table": row[0],
+                    "rowid": row[1],
+                    "target_table": row[2],
+                    "fkid": row[3]
+                })
+        return violations
 
     @classmethod
     def run_pending_migrations(cls, conn: sqlite3.Connection) -> List[str]:
