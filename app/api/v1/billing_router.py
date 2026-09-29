@@ -103,9 +103,7 @@ class ContactUpdateRequest(BaseModel):
 @router.get("/invoices")
 async def list_invoices(year: Optional[int] = None):
     """Lista todas las facturas emitidas y recibidas del inquilino."""
-    invoices = InvoiceRepository.find_all_invoices()
-    if year is not None:
-        invoices = [inv for inv in invoices if inv.get("year") == year]
+    invoices = InvoiceRepository.find_all_invoices(year=year)
     return {"status": "ok", "total": len(invoices), "invoices": invoices}
 
 @router.post("/invoices/create")

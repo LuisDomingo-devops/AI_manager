@@ -367,3 +367,62 @@ class InvoiceRepository:
             return invoices
         finally:
             conn.close()
+
+    @staticmethod
+    def find_all_invoices(year: Optional[int] = None) -> list:
+        """
+        Retorna todas las facturas persistidas con sus campos descifrados.
+        Permite filtrar opcionalmente por ejercicio fiscal (year).
+        """
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            if year is not None:
+                cursor.execute("""
+                    SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                           base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                           category, quarter, year, file_path, status, concept, tax_engine_version
+                    FROM invoices
+                    WHERE year = ?
+                    ORDER BY id ASC
+                """, (year,))
+            else:
+                cursor.execute("""
+                    SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                           base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                           category, quarter, year, file_path, status, concept, tax_engine_version
+                    FROM invoices
+                    ORDER BY id ASC
+                """)
+            rows = cursor.fetchall()
+            invoices = []
+            for r in rows:
+                try:
+                    invoices.append({
+                        "db_id": r["id"],
+                        "invoice_id": encryptor.decrypt(r["invoice_id"]) if r["invoice_id"] else "",
+                        "date": encryptor.decrypt(r["date"]) if r["date"] else "",
+                        "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
+                        "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
+                        "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
+                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
+                        "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
+                        "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 0.0,
+                        "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
+                        "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
+                        "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
+                        "category": r["category"],
+                        "quarter": r["quarter"],
+                        "year": r["year"],
+                        "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else "",
+                        "status": r["status"],
+                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                        "tax_engine_version": r["tax_engine_version"]
+                    })
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar factura en find_all_invoices: {dec_err}", exc_info=True)
+            return invoices
+        finally:
+            conn.close()
+
