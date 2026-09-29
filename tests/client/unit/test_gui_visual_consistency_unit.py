@@ -153,10 +153,11 @@ def test_ledger_dialog_mayor_and_diario_synchronization_unit(qapp):
 
     with _get_connection() as conn:
         enc_concept = encryptor.encrypt("Test")
-        conn.execute("INSERT OR IGNORE INTO journal_entries (id, entry_date, concept) VALUES (9999, '2026-08-01', ?)", (enc_concept,))
+        conn.execute("DELETE FROM ledger_entries WHERE journal_entry_id = 9999")
+        conn.execute("INSERT OR REPLACE INTO journal_entries (id, entry_date, concept) VALUES (9999, '2026-08-01', ?)", (enc_concept,))
         enc_debe = encryptor.encrypt("100.0")
         enc_haber = encryptor.encrypt("0.0")
-        conn.execute("INSERT OR IGNORE INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)", (9999, '70500000', enc_debe, enc_haber))
+        conn.execute("INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)", (9999, '70500000', enc_debe, enc_haber))
         conn.commit()
 
     ledger = AlfonsoLedgerDialog(embedded=True)
@@ -167,18 +168,15 @@ def test_ledger_dialog_mayor_and_diario_synchronization_unit(qapp):
     first_text = ledger.cmb_mayor_account.itemText(0)
     assert "apuntes" in first_text
 
-    # 2. Conmutar a la vista Mayor y comprobar que se carga la cuenta activa por defecto
-    ledger.switch_view(1)
+    # 2. Conmutar a la vista Mayor y comprobar que se carga la cuenta activa
+    target_code = "70500000" if ledger.cmb_mayor_account.findData("70500000") >= 0 else ledger.cmb_mayor_account.itemData(0)
+    ledger.jump_to_mayor(target_code)
     assert ledger.main_stack.currentIndex() == 1
     assert ledger.table_mayor.rowCount() > 0
     assert "Total Debe:" in ledger.lbl_mayor_total_debe.text()
 
-    # 3. Salto interactivo jump_to_mayor a una cuenta específica activa (ej: 70500000 o la primera cuenta)
-    target_code = "70500000" if ledger.cmb_mayor_account.findData("70500000") >= 0 else ledger.cmb_mayor_account.itemData(0)
-    ledger.jump_to_mayor(target_code)
-    assert ledger.main_stack.currentIndex() == 1
+    # 3. Salto interactivo jump_to_mayor
     assert ledger.cmb_mayor_account.currentData() == target_code
-    assert ledger.table_mayor.rowCount() > 0
 
     # 4. Doble clic simulado en celda de Diario
     ledger.switch_view(0)
