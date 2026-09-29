@@ -289,9 +289,20 @@ class SpecializedAgentRouter:
                 "response": response,
             }
 
-        # ── WordAgent Routing ───────────────────────────────────────────
-        is_word_query = "word" in msg_lower or "docx" in msg_lower or "redacta" in msg_lower or "informe financiero" in msg_lower or "documento" in msg_lower
-        if is_word_query and ("genera" in msg_lower or "crea" in msg_lower or "redacta" in msg_lower or "word" in msg_lower):
+        # ── WordAgent Routing (Sección 11 del Discovery Contract) ─────────
+        is_word_query = (
+            bool(re.search(r"\bword\b", msg_lower)) or
+            bool(re.search(r"\bdocx\b", msg_lower)) or
+            "informe financiero" in msg_lower or
+            (bool(re.search(r"\bredacta\b", msg_lower)) and bool(re.search(r"\bdocumento\b", msg_lower)))
+        )
+        has_word_action = (
+            bool(re.search(r"\bgenera\b", msg_lower)) or
+            bool(re.search(r"\bcrea\b", msg_lower)) or
+            bool(re.search(r"\bredacta\b", msg_lower)) or
+            bool(re.search(r"\bword\b", msg_lower))
+        )
+        if is_word_query and has_word_action:
             logger.info("Consulta de redacción documental. Delegando a WordAgent.")
             from app.domain.agents.word.word_agent import word_agent
             response = await word_agent.generate_response(user_message, client_id=client_id or "default")
