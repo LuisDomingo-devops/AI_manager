@@ -264,7 +264,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con estas claves:
 - "receiver_name": string (nombre del receptor)
 - "receiver_nif": string (NIF/CIF del receptor)
 - "base_imponible": float (base imponible)
+- "iva_rate": float (porcentaje o tipo de IVA aplicado, ej: 21.0, 10.0, 4.0, o 0.0 si exento. NUNCA un importe monetario en euros)
 - "iva_amount": float (cuota de IVA)
+- "irpf_rate": float (porcentaje de IRPF o retención si aplica, ej: 15.0, 7.0, 0.0 si no hay)
 - "irpf_amount": float (cuota de IRPF, 0.0 si no hay)
 - "total_amount": float (total de la factura o documento)
 
@@ -298,14 +300,32 @@ TEXTO DE LA FACTURA:
             parsed = json.loads(detok_response)
             
             def parse_amt(val):
-                if isinstance(val, (int, float)): return float(val)
-                if not val: return 0.0
-                val_str = str(val).lower()
-                # T003 [US1] Limpiar símbolos monetarios
-                val_str = val_str.replace("eur", "").replace("€", "").replace("$", "").strip()
-                val_str = val_str.replace(".", "").replace(",", ".")
-                try: return float(val_str)
-                except ValueError: return 0.0
+                if isinstance(val, (int, float)):
+                    return float(val)
+                if not val:
+                    return 0.0
+                val_str = str(val).strip().lower()
+                # T003 [US1] Limpiar símbolos monetarios y de porcentaje
+                val_str = re.sub(r'[€$£%]|eur|usd', '', val_str).strip()
+                if not val_str:
+                    return 0.0
+                has_dot = '.' in val_str
+                has_comma = ',' in val_str
+                if has_dot and has_comma:
+                    if val_str.rfind(',') > val_str.rfind('.'):
+                        # Formato europeo: 1.234,56
+                        val_str = val_str.replace('.', '').replace(',', '.')
+                    else:
+                        # Formato anglosajón: 1,234.56
+                        val_str = val_str.replace(',', '')
+                elif has_comma:
+                    # Solo coma: e.g. "34,51" o "1,234"
+                    val_str = val_str.replace(',', '.')
+                # Si solo tiene punto (e.g. "503.47"), se mantiene como separador decimal
+                try:
+                    return float(val_str)
+                except ValueError:
+                    return 0.0
                 
             base = parse_amt(parsed.get("base_imponible", 0))
             iva = parse_amt(parsed.get("iva_amount", 0))
@@ -343,32 +363,70 @@ TEXTO DE LA FACTURA:
             status = "firmada"
             is_iva_inferred = False
 
-            if base > 0:
-                iva_rate = float(round((iva / base) * 100, 2))
-            else:
-                iva_rate = 0.0
-            
-            # T002 [US1] Fallback y corrección si el LLM intercambia montos y tasas
-            raw_iva_rate = parse_amt(parsed.get("iva_rate", iva_rate))
-            
-            # Si la tasa recibida es > 100 y el importe recibido es <= 100, probablemente se han cruzado
-            if raw_iva_rate > 100 and iva <= 100:
-                # Verificamos si matemáticamente encaja
+            # T002 [US1] Extraer iva_rate declarado o inferido
+            raw_iva_rate = parse_amt(parsed.get("iva_rate")) if parsed.get("iva_rate") is not None else None
+
+            # Inferir tasa matemática si base > 0
+            inferred_rate = float(round((iva / base) * 100, 2)) if base > 0 else 0.0
+
+            # Caso Swap (Regresión P-06): Si raw_iva_rate > 100 y el iva recibido <= 100 (cruce tasa/monto)
+            if raw_iva_rate is not None and raw_iva_rate > 100 and iva <= 100:
                 expected_amount = round((iva / 100) * base, 2)
-                # Permitimos un pequeño margen de redondeo (±0.05)
-                if abs(expected_amount - raw_iva_rate) <= 0.05:
-                    # Hacemos el swap
+                if abs(expected_amount - raw_iva_rate) <= 0.05 or (iva in [21.0, 10.0, 5.0, 4.0, 0.0]):
                     old_iva = iva
                     iva = raw_iva_rate
-                    iva_rate = old_iva
-                    
-            elif raw_iva_rate > 0 and raw_iva_rate <= 100:
-                iva_rate = raw_iva_rate
+                    raw_iva_rate = old_iva
 
-            if base > 0:
-                irpf_rate = float(round((irpf / base) * 100, 2))
+            # Determinar iva_rate preliminar
+            if raw_iva_rate is not None and 0.0 <= raw_iva_rate <= 100.0:
+                iva_rate = raw_iva_rate
+            elif 0.0 <= inferred_rate <= 100.0:
+                iva_rate = inferred_rate
+                is_iva_inferred = True
+            else:
+                iva_rate = 0.0
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+
+            # FR-002: Un valor monetario > 100 NUNCA puede asignarse a iva_rate
+            if iva_rate > 100.0 or iva_rate < 0.0:
+                if 0.0 <= inferred_rate <= 100.0:
+                    iva_rate = inferred_rate
+                else:
+                    iva_rate = 0.0
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+
+            if raw_iva_rate is not None and (raw_iva_rate > 100.0 or raw_iva_rate < 0.0):
+                requires_manual_confirmation = True
+                status = "PENDIENTE_REVISION"
+
+            # Ajuste a tramos legales estándar en España (21%, 10%, 5%, 4%, 0%) ante pequeñas desviaciones de redondeo (±0.06)
+            legal_brackets = [21.0, 10.0, 5.0, 4.0, 0.0]
+            for bracket in legal_brackets:
+                if abs(iva_rate - bracket) <= 0.06:
+                    iva_rate = bracket
+                    break
+
+            # Si iva es 0 pero base > 0 y tasa > 0, calcular cuota
+            if iva == 0.0 and base > 0 and iva_rate > 0:
+                iva = round((iva_rate / 100.0) * base, 2)
+
+            # Si total es 0 y base > 0, calcular total
+            if total == 0.0 and base > 0:
+                total = round(base + iva - irpf, 2)
+
+            # IRPF rate cálculo y validación
+            raw_irpf_rate = parse_amt(parsed.get("irpf_rate")) if parsed.get("irpf_rate") is not None else None
+            inferred_irpf = float(round((irpf / base) * 100, 2)) if base > 0 else 0.0
+            if raw_irpf_rate is not None and 0.0 <= raw_irpf_rate <= 100.0:
+                irpf_rate = raw_irpf_rate
+            elif 0.0 <= inferred_irpf <= 100.0:
+                irpf_rate = inferred_irpf
             else:
                 irpf_rate = 0.0
+                if irpf > 0:
+                    requires_manual_confirmation = True
             
             # Validaciones de campos obligatorios requeridos por VERIFACTU
             if not issuer_nif or not receiver_nif:
