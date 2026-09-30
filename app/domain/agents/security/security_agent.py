@@ -26,7 +26,27 @@ from app.utils.logger import build_logger, orchestrator_logger, error_logger
 # Logger exclusivo de seguridad
 cyber_logger = build_logger("cybersecurity", "cybersecurity.log", log_to_console=False)
 
-class CyberSecurityAgent:
+from app.domain.agents.base import IAgentPlugin, AgentContext, AgentResponse
+
+class CyberSecurityAgent(IAgentPlugin):
+    @property
+    def agent_id(self) -> str:
+        return "cyber_agent"
+
+    @property
+    def description(self) -> str:
+        return "Agente experto en ciberseguridad, monitoreo y mitigación de amenazas"
+
+    def can_handle(self, user_message: str, context: AgentContext) -> bool:
+        msg_lower = user_message.lower()
+        if "seguridad social" in msg_lower:
+            return False
+        return any(k in msg_lower for k in ["seguridad", "ciberseguridad", "ataque", "bloquear ip", "waf", "ddos", "vulnerabilidad"])
+
+    async def handle(self, user_message: str, context: AgentContext) -> AgentResponse:
+        content = await self.generate_response(user_message)
+        return AgentResponse(agent_id=self.agent_id, success=True, content=content)
+
     def __init__(self):
         self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/security_system.txt")

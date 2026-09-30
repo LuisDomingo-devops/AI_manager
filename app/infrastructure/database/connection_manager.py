@@ -80,10 +80,52 @@ def reset_thread_local_pool() -> None:
 
 
 def init_all_schemas(conn: sqlite3.Connection) -> None:
-    """Delega la inicialización del esquema al MigrationRunner."""
+    """Delega la inicialización del esquema al MigrationRunner y asegura tablas legales."""
     try:
         from app.infrastructure.database.migrations import MigrationRunner
         MigrationRunner.run_pending_migrations(conn)
+        
+        # Asegurar tablas aisladas del núcleo legal
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS legal_invoices (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                invoice_number TEXT NOT NULL UNIQUE,
+                issue_date TEXT NOT NULL,
+                recipient_tax_id TEXT NOT NULL,
+                recipient_name TEXT NOT NULL,
+                taxable_base REAL NOT NULL,
+                tax_rate REAL NOT NULL,
+                tax_amount REAL NOT NULL,
+                total_amount REAL NOT NULL,
+                status TEXT NOT NULL,
+                verifactu_hash TEXT NOT NULL,
+                previous_hash TEXT,
+                qr_payload TEXT NOT NULL,
+                is_rectified INTEGER DEFAULT 0,
+                rectified_invoice_number TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS legal_journal_entries (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                entry_number INTEGER NOT NULL,
+                entry_date TEXT NOT NULL,
+                fiscal_year INTEGER NOT NULL,
+                concept TEXT NOT NULL,
+                document_ref TEXT,
+                is_closed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS legal_journal_lines (
+                id TEXT PRIMARY KEY,
+                entry_id TEXT NOT NULL,
+                account_code TEXT NOT NULL,
+                debit REAL DEFAULT 0.0,
+                credit REAL DEFAULT 0.0,
+                FOREIGN KEY (entry_id) REFERENCES legal_journal_entries(id)
+            );
+        """)
     except Exception as e:
         logger.error(f"Error executing migrations: {e}")
         raise

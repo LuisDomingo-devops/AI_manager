@@ -265,52 +265,19 @@ class SpecializedAgentRouter:
                 "response": response,
             }
 
-        if is_security_query:
-            logger.info("Consulta de seguridad. Delegando a CyberSecurityAgent.")
-            from app.domain.agents.security.security_agent import security_agent
-            response = await security_agent.generate_response(user_message)
-            if session_id:
-                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
-            return {
-                "type": "chat",
-                "response": response,
-            }
+        # ── Despacho Dinámico de Plugins de Agentes (T034) ─────────────
+        from app.domain.agents.registry import default_agent_registry
+        from app.domain.agents.base import AgentContext
 
-        # ── ExcelAgent Routing ──────────────────────────────────────────
-        is_excel_query = re.search(r"\bexcel\b", msg_lower) or re.search(r"\bhoja de cálculo\b", msg_lower) or re.search(r"\bhoja de calculo\b", msg_lower) or re.search(r"\blibro diario\b", msg_lower) or re.search(r"\bbalance de situación\b", msg_lower) or re.search(r"\bbalance de situacion\b", msg_lower)
-        if is_excel_query and (re.search(r"\bexporta\b", msg_lower) or re.search(r"\bgenera\b", msg_lower) or re.search(r"\bcrea\b", msg_lower) or re.search(r"\bexcel\b", msg_lower)):
-            logger.info("Consulta de hoja de cálculo. Delegando a ExcelAgent.")
-            from app.domain.agents.excel.excel_agent import excel_agent
-            response = await excel_agent.generate_response(user_message, client_id=client_id or "default")
+        agent_context = AgentContext(tenant_id=client_id or "default")
+        dispatched_resp = await default_agent_registry.safe_dispatch(user_message, agent_context)
+        if dispatched_resp and dispatched_resp.success:
+            logger.info(f"Consulta atendida por plugin dinámico: {dispatched_resp.agent_id}")
             if session_id:
-                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
+                self.memory.add_message(session_id, "assistant", dispatched_resp.content, client_id=client_id)
             return {
                 "type": "chat",
-                "response": response,
-            }
-
-        # ── WordAgent Routing (Sección 11 del Discovery Contract) ─────────
-        is_word_query = (
-            bool(re.search(r"\bword\b", msg_lower)) or
-            bool(re.search(r"\bdocx\b", msg_lower)) or
-            "informe financiero" in msg_lower or
-            (bool(re.search(r"\bredacta\b", msg_lower)) and bool(re.search(r"\bdocumento\b", msg_lower)))
-        )
-        has_word_action = (
-            bool(re.search(r"\bgenera\b", msg_lower)) or
-            bool(re.search(r"\bcrea\b", msg_lower)) or
-            bool(re.search(r"\bredacta\b", msg_lower)) or
-            bool(re.search(r"\bword\b", msg_lower))
-        )
-        if is_word_query and has_word_action:
-            logger.info("Consulta de redacción documental. Delegando a WordAgent.")
-            from app.domain.agents.word.word_agent import word_agent
-            response = await word_agent.generate_response(user_message, client_id=client_id or "default")
-            if session_id:
-                self.memory.add_message(session_id, "assistant", response, client_id=client_id)
-            return {
-                "type": "chat",
-                "response": response,
+                "response": dispatched_resp.content,
             }
 
         return None

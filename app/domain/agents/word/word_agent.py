@@ -5,11 +5,42 @@ from app.domain.services.ledger_service import LedgerService
 from app.utils.logger import orchestrator_logger
 from app.utils.paths import get_client_desktop
 
-class WordAgent:
+from app.domain.agents.base import IAgentPlugin, AgentContext, AgentResponse
+
+class WordAgent(IAgentPlugin):
     """
     Word Agent: Subagente de redacción documental de Alfonso que redacta informes
     financieros formales y los guarda como documentos Word (.docx).
     """
+    @property
+    def agent_id(self) -> str:
+        return "word_agent"
+
+    @property
+    def description(self) -> str:
+        return "Subagente de redacción documental formal en formato Word (.docx)"
+
+    def can_handle(self, user_message: str, context: AgentContext) -> bool:
+        import re
+        msg_lower = user_message.lower()
+        is_word_query = (
+            bool(re.search(r"\bword\b", msg_lower))
+            or bool(re.search(r"\bdocx\b", msg_lower))
+            or "informe financiero" in msg_lower
+            or (bool(re.search(r"\bredacta\b", msg_lower)) and bool(re.search(r"\bdocumento\b", msg_lower)))
+        )
+        has_action = (
+            bool(re.search(r"\bgenera\b", msg_lower))
+            or bool(re.search(r"\bcrea\b", msg_lower))
+            or bool(re.search(r"\bredacta\b", msg_lower))
+            or bool(re.search(r"\bword\b", msg_lower))
+        )
+        return is_word_query and has_action
+
+    async def handle(self, user_message: str, context: AgentContext) -> AgentResponse:
+        content = await self.generate_response(user_message, client_id=context.tenant_id or "default")
+        return AgentResponse(agent_id=self.agent_id, success=True, content=content)
+
     def __init__(self):
         self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/word_system.txt")

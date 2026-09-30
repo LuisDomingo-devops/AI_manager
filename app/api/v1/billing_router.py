@@ -124,6 +124,27 @@ async def create_invoice_endpoint(req: InvoiceCreateRequest):
     )
     return res
 
+@router.post("/invoices/legal/issue")
+@retry_on_db_lock
+async def issue_legal_invoice_endpoint(req: InvoiceCreateRequest):
+    """Emite una factura oficial con hash encadenado inmutable mediante VeriFactuService."""
+    from decimal import Decimal
+    from app.domain.accounting.ports import IssueInvoiceCommand
+    from app.domain.accounting.verifactu_service import VeriFactuService
+
+    service = VeriFactuService()
+    cmd = IssueInvoiceCommand(
+        tenant_id=tenant_context.get(),
+        series="F2026",
+        recipient_tax_id=req.client_nif,
+        recipient_name=req.client_name,
+        taxable_base=Decimal(str(req.amount)),
+        tax_rate=Decimal(str(req.iva_rate)),
+        description=req.concept,
+    )
+    invoice = service.issue_legal_invoice(cmd)
+    return invoice.model_dump()
+
 @router.post("/invoices/rectificativa")
 @retry_on_db_lock
 async def create_rectificativa_endpoint(req: RectificativaCreateRequest):

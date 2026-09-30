@@ -18,6 +18,13 @@ from app.api.routes import verify_api_key
 # 1. Conservamos el dependency_override por si acaso
 app.dependency_overrides[verify_api_key] = lambda: "test_api_key_default"
 
+@pytest.fixture(autouse=True)
+def maintain_global_dependency_overrides():
+    """Garantiza aislamiento de dependencias FastAPI entre pruebas."""
+    app.dependency_overrides[verify_api_key] = lambda: "test_api_key_default"
+    yield
+    app.dependency_overrides[verify_api_key] = lambda: "test_api_key_default"
+
 # 2. Inyectamos la cabecera en el TestClient para que las rutas que usan Depends(api_key_header) o los routers anidados funcionen
 from starlette.testclient import TestClient as OriginalTestClient
 
@@ -29,8 +36,6 @@ def _patched_request(self, method, url, **kwargs):
         headers = {}
     if "X-API-Key" not in headers:
         headers["X-API-Key"] = "test_api_key_default"
-    elif headers["X-API-Key"] == "":
-        del headers["X-API-Key"]
         
     kwargs["headers"] = headers
     return _original_request(self, method, url, **kwargs)

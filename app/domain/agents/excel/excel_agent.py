@@ -6,11 +6,44 @@ from app.domain.services.ledger_service import LedgerService
 from app.utils.logger import orchestrator_logger
 from app.utils.paths import get_client_desktop
 
-class ExcelAgent:
+from app.domain.agents.base import IAgentPlugin, AgentContext, AgentResponse
+
+class ExcelAgent(IAgentPlugin):
     """
     Excel Agent: Subagente contable que traduce datos del PGC a archivos de Excel (.xlsx)
     con formato financiero y fórmulas contables.
     """
+    @property
+    def agent_id(self) -> str:
+        return "excel_agent"
+
+    @property
+    def description(self) -> str:
+        return "Modelado y exportación de datos contables a Excel (.xlsx)"
+
+    def can_handle(self, user_message: str, context: AgentContext) -> bool:
+        import re
+        msg_lower = user_message.lower()
+        is_excel_query = (
+            re.search(r"\bexcel\b", msg_lower)
+            or re.search(r"\bhoja de cálculo\b", msg_lower)
+            or re.search(r"\bhoja de calculo\b", msg_lower)
+            or re.search(r"\blibro diario\b", msg_lower)
+            or re.search(r"\bbalance de situación\b", msg_lower)
+            or re.search(r"\bbalance de situacion\b", msg_lower)
+        )
+        has_action = (
+            re.search(r"\bexporta\b", msg_lower)
+            or re.search(r"\bgenera\b", msg_lower)
+            or re.search(r"\bcrea\b", msg_lower)
+            or re.search(r"\bexcel\b", msg_lower)
+        )
+        return bool(is_excel_query and has_action)
+
+    async def handle(self, user_message: str, context: AgentContext) -> AgentResponse:
+        content = await self.generate_response(user_message, client_id=context.tenant_id or "default")
+        return AgentResponse(agent_id=self.agent_id, success=True, content=content)
+
     def __init__(self):
         self.llm = GeminiClient()
         self.prompt_path = Path("app/prompts/excel_system.txt")
