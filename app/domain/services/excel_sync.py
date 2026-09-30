@@ -2,7 +2,7 @@ import os
 import logging
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from app.adapters.memory.memory import _get_connection
+from app.adapters.memory.memory import _get_connection, get_readonly_connection
 from app.utils.encryption import encryptor
 
 logger = logging.getLogger("excel_sync")
@@ -57,18 +57,18 @@ class ExcelSyncService:
                 cell.fill = fill
                 cell.alignment = align_center
 
-        # Leer de la base de datos
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
-                       base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                       category, quarter, year 
-                FROM invoices 
-                WHERE status = 'firmada' OR status IS NULL
-                ORDER BY year DESC, quarter DESC, id DESC
-            """)
-            rows = cursor.fetchall()
+        # Leer de la base de datos de solo lectura para evitar contención de bloqueos
+        conn = get_readonly_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                   base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                   category, quarter, year 
+            FROM invoices 
+            WHERE status = 'firmada' OR status IS NULL
+            ORDER BY year DESC, quarter DESC, id DESC
+        """)
+        rows = cursor.fetchall()
 
         count_ingresos = 0
         count_gastos = 0

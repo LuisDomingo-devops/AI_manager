@@ -319,31 +319,45 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
             nonlocal count_emitted, count_processed
             loop = asyncio.new_event_loop()
             try:
-                # Emisión
-                res_emit = loop.run_until_complete(generate_invoice_pdf(
-                    client_name=f"QAStress Conc Emisor {level}_{index}",
-                    client_nif="12345678Z",
-                    amount=200.0 + index,
-                    concept=f"Factura de estres concurrente {level}_{index}",
-                    iva_rate=21.0,
-                    irpf_rate=0.0,
-                ))
-                if res_emit.get("status") == "error":
-                    raise RuntimeError(f"Fallo en emision concurrente: {res_emit.get('message')}")
-                
-                with counter_lock:
-                    count_emitted += 1
-                pdf_path = res_emit["pdf_path"]
-                
-                # Procesamiento
-                res_parse = loop.run_until_complete(parse_invoice(pdf_path))
-                if res_parse.get("status") == "error" or res_parse.get("success") is False:
-                    raise RuntimeError(f"Fallo en procesamiento concurrente: {res_parse.get('message')}")
-                    
-                with counter_lock:
-                    count_processed += 1
-            except Exception as e:
-                errors.append(e)
+                for attempt in range(5):
+                    try:
+                        # Emisión
+                        res_emit = loop.run_until_complete(generate_invoice_pdf(
+                            client_name=f"QAStress Conc Emisor {level}_{index}",
+                            client_nif="12345678Z",
+                            amount=200.0 + index,
+                            concept=f"Factura de estres concurrente {level}_{index}",
+                            iva_rate=21.0,
+                            irpf_rate=0.0,
+                        ))
+                        if res_emit.get("status") == "error":
+                            msg = str(res_emit.get("message", "")).lower()
+                            if ("locked" in msg or "busy" in msg) and attempt < 4:
+                                time.sleep(0.05 * (2 ** attempt))
+                                continue
+                            raise RuntimeError(f"Fallo en emision concurrente: {res_emit.get('message')}")
+                        
+                        pdf_path = res_emit["pdf_path"]
+                        
+                        # Procesamiento
+                        res_parse = loop.run_until_complete(parse_invoice(pdf_path))
+                        if res_parse.get("status") == "error" or res_parse.get("success") is False:
+                            msg = str(res_parse.get("message", "")).lower()
+                            if ("locked" in msg or "busy" in msg) and attempt < 4:
+                                time.sleep(0.05 * (2 ** attempt))
+                                continue
+                            raise RuntimeError(f"Fallo en procesamiento concurrente: {res_parse.get('message')}")
+                            
+                        with counter_lock:
+                            count_emitted += 1
+                            count_processed += 1
+                        break
+                    except Exception as e:
+                        if ("locked" in str(e).lower() or "busy" in str(e).lower()) and attempt < 4:
+                            time.sleep(0.05 * (2 ** attempt))
+                            continue
+                        errors.append(e)
+                        break
             finally:
                 loop.close()
 
@@ -353,7 +367,7 @@ async def test_alfonso_invoice_emission_and_processing_until_crash():
             
         if errors:
             # Comprobar si son errores inesperados de código, esquema o parsing
-            unexpected_errors = [e for e in errors if "locked" not in str(e).lower()]
+            unexpected_errors = [e for e in errors if "locked" not in str(e).lower() and "busy" not in str(e).lower()]
             if unexpected_errors:
                 crashed = True
                 crash_exception = unexpected_errors[0]

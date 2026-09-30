@@ -80,7 +80,7 @@ def is_lock_error(exc: Exception) -> bool:
     """Verifica si la excepción corresponde a un bloqueo transitorio de SQLite."""
     if isinstance(exc, sqlite3.OperationalError):
         msg = str(exc).lower()
-        if "database is locked" in msg or "database table is locked" in msg or "locked" in msg:
+        if "database is locked" in msg or "database table is locked" in msg or "locked" in msg or "busy" in msg:
             return True
     return False
 
