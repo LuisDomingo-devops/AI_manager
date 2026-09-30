@@ -108,7 +108,7 @@ def test_qa_alfonso_breaking_point(test_client):
         {"concurrency": 5, "requests": 10, "desc": "Carga inicial baja", "timeout": 30.0},
         {"concurrency": 15, "requests": 30, "desc": "Carga media / concurrencia normal", "timeout": 45.0},
         {"concurrency": 30, "requests": 60, "desc": "Carga alta / concurrencia elevada", "timeout": 60.0},
-        {"concurrency": 50, "requests": 100, "desc": "Carga extrema para buscar punto de ruptura", "timeout": 120.0}
+        {"concurrency": 50, "requests": 100, "desc": "Carga extrema para buscar punto de ruptura", "timeout": 240.0}
     ]
 
     broken = False

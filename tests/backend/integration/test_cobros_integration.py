@@ -8,8 +8,14 @@ def test_cobros_db_integration():
     Test de integración: almacenamiento de cobros en BD.
     """
     # 1. Preparar datos de prueba (factura)
+    # NOTA: No llamar conn.close() sobre conexiones del pool thread-local.
+    # El pool gestiona el ciclo de vida de la conexión.
     conn = _get_connection()
-    cursor = conn.cursor()
+    # Limpiar estado previo
+    conn.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_1'")
+    conn.execute("DELETE FROM invoices WHERE invoice_id = 'inv_cobro_1'")
+    conn.commit()
+
     # Insertar una factura a través del repo
     invoice_data = {
         "invoice_id": "inv_cobro_1",
@@ -30,30 +36,36 @@ def test_cobros_db_integration():
         "category": "ingreso"
     }
     InvoiceRepository.save(invoice_data)
-    
+
     # 2. Registrar pago
     res = CollectionService.register_payment('inv_cobro_1', 121.0, 'transferencia', '2026-09-07', 'Pago completo')
-    
+
     assert res['status'] == 'ok'
     assert res['outstanding_balance'] == 0.0
-    
-    # 3. Comprobar en BD
+
+    # 3. Comprobar en BD (reutilizar la conexión del pool, que sigue activa)
     invoice_after = InvoiceRepository.find_invoice_by_id('inv_cobro_1')
     assert invoice_after['status'] == 'cobrada'
-    
-    # Limpiar
-    cursor.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_1'")
-    cursor.execute("DELETE FROM invoices")
+
+    # Limpiar (sin cerrar la conexión del pool)
+    conn = _get_connection()
+    conn.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_1'")
+    conn.execute("DELETE FROM invoices WHERE invoice_id = 'inv_cobro_1'")
     conn.commit()
-    conn.close()
 
 def test_cobros_banco_integration():
     """
     Test de integración: interacción con el módulo bancario.
     """
     # Por ahora verificamos que collection_service actualiza el ledger (que es la interacción contable/bancaria)
+    # NOTA: No llamar conn.close() sobre conexiones del pool thread-local.
     conn = _get_connection()
-    cursor = conn.cursor()
+    # Limpiar estado previo
+    conn.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_2'")
+    conn.execute("DELETE FROM invoices WHERE invoice_id = 'inv_cobro_2'")
+    conn.execute("DELETE FROM journal_entries WHERE concept = 'Cobro fra inv_cobro_2'")
+    conn.commit()
+
     invoice_data = {
         "invoice_id": "inv_cobro_2",
         "date": "2026-09-07",
@@ -73,22 +85,21 @@ def test_cobros_banco_integration():
         "category": "ingreso"
     }
     InvoiceRepository.save(invoice_data)
-    
+
     res = CollectionService.register_payment('inv_cobro_2', 50.0, 'transferencia', '2026-09-07', 'Pago parcial')
-    
+
     assert res['status'] == 'ok'
     assert res['outstanding_balance'] == 71.0
-    
-    # Comprobar el ledger
-    # Asumiendo tabla journal_entries
-    cursor.execute("SELECT * FROM journal_entries WHERE concept = 'Cobro fra inv_cobro_2'")
-    entries = cursor.fetchall()
+
+    # Comprobar el ledger usando la conexión del pool (activa y válida)
+    conn = _get_connection()
+    entries = conn.execute("SELECT * FROM journal_entries WHERE concept = 'Cobro fra inv_cobro_2'").fetchall()
     # Si LedgerService guardó correctamente
     if entries:
         assert entries[0]['concept'] == 'Cobro fra inv_cobro_2'
-        
-    cursor.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_2'")
-    cursor.execute("DELETE FROM invoices")
-    cursor.execute("DELETE FROM journal_entries WHERE concept = 'Cobro fra inv_cobro_2'")
+
+    # Limpiar (sin cerrar la conexión del pool)
+    conn.execute("DELETE FROM payments WHERE invoice_id = 'inv_cobro_2'")
+    conn.execute("DELETE FROM invoices WHERE invoice_id = 'inv_cobro_2'")
+    conn.execute("DELETE FROM journal_entries WHERE concept = 'Cobro fra inv_cobro_2'")
     conn.commit()
-    conn.close()

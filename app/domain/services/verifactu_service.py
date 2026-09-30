@@ -6,7 +6,8 @@ import threading
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-from app.adapters.memory.memory import _get_connection
+from app.adapters.memory.memory import _get_connection, write_transaction
+from app.infrastructure.database.concurrency import retry_on_db_lock
 from app.utils.logger import app_logger
 
 # Cryptography imports for real local signing
@@ -69,6 +70,7 @@ class VerifactuService:
         return serialization.load_pem_private_key(key_pem, password=None)
 
     @classmethod
+    @retry_on_db_lock
     def get_last_invoice_hash(cls) -> Optional[str]:
         """Obtiene el hash criptográfico de la última factura registrada."""
 
@@ -110,6 +112,7 @@ class VerifactuService:
         return hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
 
     @classmethod
+    @retry_on_db_lock
     def register_invoice(cls, invoice_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Registra una factura emitida bajo la regulación Verifactu.
@@ -255,7 +258,7 @@ class VerifactuService:
             sig_val = signed_root.find(".//ds:SignatureValue", namespaces={'ds': 'http://www.w3.org/2000/09/xmldsig#'})
             real_sig_base64 = sig_val.text.strip() if sig_val is not None else ""
 
-            with _get_connection() as conn:
+            with write_transaction(cid) as conn:
                 conn.execute("""
                     INSERT INTO verifactu_invoices (
                         invoice_number, date_of_issue, issuer_nif, receiver_nif,
@@ -273,7 +276,6 @@ class VerifactuService:
                     current_hash,
                     real_sig_base64
                 ))
-                conn.commit()
 
             # Guardar en local el XML firmado para auditar
             xml_dir = Path(__file__).resolve().parents[3] / "data" / "xml_invoices"
@@ -292,7 +294,7 @@ class VerifactuService:
             aeat_err_desc = aeat_response.get("error_desc") or aeat_response.get("error") or aeat_response.get("message")
             raw_response = aeat_response.get("raw_response")
 
-            with _get_connection() as conn:
+            with write_transaction(cid) as conn:
                 conn.execute(
                     """
                     UPDATE verifactu_invoices 
@@ -301,7 +303,6 @@ class VerifactuService:
                     """,
                     (delivery_status, aeat_err_desc, csv, aeat_err_code, aeat_err_desc, raw_response, invoice_data["invoice_number"])
                 )
-                conn.commit()
 
             return {
                 "status": "success",
@@ -873,6 +874,7 @@ class VerifactuService:
         }
 
     @classmethod
+    @retry_on_db_lock
     def get_last_event_log_hash(cls) -> Optional[str]:
         """Obtiene el hash del último evento registrado en el log SIF."""
 
@@ -883,11 +885,14 @@ class VerifactuService:
             return row["current_hash"] if row else None
 
     @classmethod
+    @retry_on_db_lock
     def log_sif_event(cls, event_type: str, description: str) -> str:
         """
         Registra un evento del sistema de facturación en el log de auditoría (SIF),
         calculando el hash del evento actual y encadenándolo con el anterior, firmado con la clave privada.
         """
+        from app.adapters.memory.memory import tenant_context
+        cid = (tenant_context.get() or "default").strip().lower()
 
         prev_hash = cls.get_last_event_log_hash()
         
@@ -898,7 +903,7 @@ class VerifactuService:
         current_hash = hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
         
         # Firmar digitalmente con la clave privada local
-        private_key = cls.get_or_create_private_key()
+        private_key = cls.get_or_create_private_key(cid)
         signature_bytes = private_key.sign(
             current_hash.encode("utf-8"),
             padding.PKCS1v15(),
@@ -906,13 +911,12 @@ class VerifactuService:
         )
         signature_b64 = base64.b64encode(signature_bytes).decode("utf-8")
         
-        with _get_connection() as conn:
+        with write_transaction(cid) as conn:
             conn.execute("""
                 INSERT INTO sif_event_log (
                     event_type, description, prev_event_hash, current_hash, signature, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?)
             """, (event_type, description, prev_hash, current_hash, signature_b64, timestamp))
-            conn.commit()
             
         return current_hash
 

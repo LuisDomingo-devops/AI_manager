@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs\\011-security-and-credential-hygiene"
+  "feature_directory": "specs/020-sqlite-connection-pool-concurrency"
 }

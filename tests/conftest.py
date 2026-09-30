@@ -86,12 +86,20 @@ def reset_db_caches():
     Limpia los cachés de inicialización de base de datos antes de cada test.
     Esto permite que si un test hace DROP TABLE en su teardown/setup,
     el siguiente test vuelva a ejecutar CREATE TABLE IF NOT EXISTS.
+    También limpia el pool thread-local para evitar que conexiones en memoria
+    destruidas (cuyas dummy connections fueron cerradas) sean reutilizadas
+    apuntando a BDs vacías sin esquema.
     """
     # 1. Reset connection_manager caches
     try:
         from app.infrastructure.database import connection_manager
         connection_manager._initialized_dbs.clear()
-        
+
+        # Limpiar el pool thread-local para forzar reconexión en el siguiente test.
+        # Sin esto, el pool puede devolver una conexión "viva" apuntando a una BD
+        # en memoria vacía cuya dummy connection fue destruida por el reset anterior.
+        connection_manager.reset_thread_local_pool()
+
         # Clear dynamically created dummy connections to wipe isolated DBs
         for c in connection_manager._test_dummy_conns.values():
             try:
@@ -194,14 +202,16 @@ def pytest_runtest_call(item):
             try:
                 tenant_context.set(ctx)
                 with _get_connection() as conn:
+                    enc_nif = encryptor.encrypt("B12345674")
                     enc_razon = encryptor.encrypt("Empresa Test")
                     conn.execute(
                         "INSERT OR IGNORE INTO user_profile (id, user_type, nif, razon_social) "
-                        "VALUES (1, 'AUTONOMO', 'B12345674', ?)",
-                        (enc_razon,)
+                        "VALUES (1, 'AUTONOMO', ?, ?)",
+                        (enc_nif, enc_razon)
                     )
                     conn.commit()
             finally:
                 tenant_context.set(prev)
     except Exception:
         pass
+

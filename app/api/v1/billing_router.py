@@ -100,13 +100,17 @@ class ContactUpdateRequest(BaseModel):
     contact_type: Optional[str] = None
 
 
+from app.infrastructure.database.concurrency import retry_on_db_lock
+
 @router.get("/invoices")
+@retry_on_db_lock
 async def list_invoices(year: Optional[int] = None):
     """Lista todas las facturas emitidas y recibidas del inquilino."""
     invoices = InvoiceRepository.find_all_invoices(year=year)
     return {"status": "ok", "total": len(invoices), "invoices": invoices}
 
 @router.post("/invoices/create")
+@retry_on_db_lock
 async def create_invoice_endpoint(req: InvoiceCreateRequest):
     """Crea una factura ordinaria y genera su registro Veri*Factu y PDF."""
     res = await generate_invoice_pdf(
@@ -121,6 +125,7 @@ async def create_invoice_endpoint(req: InvoiceCreateRequest):
     return res
 
 @router.post("/invoices/rectificativa")
+@retry_on_db_lock
 async def create_rectificativa_endpoint(req: RectificativaCreateRequest):
     """Emite una factura rectificativa con serie R-YYYY-XXX y vínculo a la original."""
     res = await create_rectificativa_invoice(

@@ -22,12 +22,14 @@ from collections import deque
 from typing import Deque, Dict, List
 from app.domain.ports.memory_port import MemoryPort
 from app.infrastructure.database.connection_manager import (
-    _get_connection, 
+    _get_connection,
+    write_transaction,
     IS_TESTING,
     DB_PATH,
     tenant_context,
     init_all_schemas as _init_db_schema
 )
+from app.infrastructure.database.concurrency import retry_on_db_lock
 
 
 class SessionMemory(MemoryPort):
@@ -55,9 +57,11 @@ class SessionMemory(MemoryPort):
         return f"daily_{today_str}"
 
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Caché
     # ------------------------------------------------------------------
 
+    @retry_on_db_lock
     def _ensure_loaded(self, session_id: str, client_id: str | None = None) -> None:
         """Carga el historial en memoria si no está ya en caché."""
         session_id = self._resolve_session_id(session_id)
@@ -86,6 +90,7 @@ class SessionMemory(MemoryPort):
     # API pública
     # ------------------------------------------------------------------
 
+    @retry_on_db_lock
     def add_message(self, session_id: str, role: str, content: str, client_id: str | None = None) -> None:
         if not session_id:
             return
@@ -99,7 +104,7 @@ class SessionMemory(MemoryPort):
         from app.utils.encryption import encryptor
         encrypted_content = encryptor.encrypt(content)
 
-        with _get_connection(cid) as conn:
+        with write_transaction(cid) as conn:
             conn.execute(
                 "INSERT INTO messages (session_id, client_id, role, content) VALUES (?, ?, ?, ?)",
                 (session_id, cid, role, encrypted_content),
@@ -152,7 +157,6 @@ class SessionMemory(MemoryPort):
                 """,
                 (date_str, json.dumps(archived, ensure_ascii=False), json.dumps(archived, ensure_ascii=False))
             )
-            conn.commit()
 
     def get_history(self, session_id: str, client_id: str | None = None) -> List[Dict[str, str]]:
         session_id = self._resolve_session_id(session_id)
@@ -167,12 +171,13 @@ class SessionMemory(MemoryPort):
             return ""
         return "\n".join(f"{entry['role']}: {entry['content']}" for entry in history)
 
+    @retry_on_db_lock
     def clear(self, session_id: str, client_id: str | None = None) -> None:
         session_id = self._resolve_session_id(session_id)
         cid = client_id or "default"
         cache_key = f"{session_id}:{cid}"
         self._cache.pop(cache_key, None)
-        with _get_connection(cid) as conn:
+        with write_transaction(cid) as conn:
             conn.execute("DELETE FROM messages WHERE session_id = ? AND client_id = ?", (session_id, cid))
             from datetime import datetime
             if self.is_testing:
@@ -180,8 +185,8 @@ class SessionMemory(MemoryPort):
             else:
                 date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
             conn.execute("DELETE FROM session_diary WHERE date = ?", (date_str,))
-            conn.commit()
 
+    @retry_on_db_lock
     def update_summary(self, session_id: str, summary: str, client_id: str | None = None) -> None:
         session_id = self._resolve_session_id(session_id)
         from datetime import datetime
@@ -190,7 +195,7 @@ class SessionMemory(MemoryPort):
         else:
             date_str = session_id.replace("daily_", "") if "daily_" in session_id else datetime.now().strftime("%Y-%m-%d")
         cid = client_id or "default"
-        with _get_connection(cid) as conn:
+        with write_transaction(cid) as conn:
             conn.execute(
                 """
                 INSERT INTO session_diary (date, summary, messages, updated_at)
@@ -201,8 +206,8 @@ class SessionMemory(MemoryPort):
                 """,
                 (date_str, summary, summary)
             )
-            conn.commit()
 
+    @retry_on_db_lock
     def get_diary_entry(self, session_id: str, client_id: str | None = None) -> dict | None:
         session_id = self._resolve_session_id(session_id)
         from datetime import datetime
@@ -226,6 +231,7 @@ class SessionMemory(MemoryPort):
             }
         return None
 
+    @retry_on_db_lock
     def list_sessions(self, client_id: str | None = None) -> List[str]:
         """Devuelve todos los session_id con historial guardado."""
         cid = client_id or "default"
@@ -236,11 +242,12 @@ class SessionMemory(MemoryPort):
                 ).fetchall()
         return [r["session_id"] for r in rows]
 
+    @retry_on_db_lock
     def upsert_metadata(self, session_id: str, title: str, discipline: str = "general", project_name: str = "default", is_persistent: bool = True, client_id: str | None = None, active_domain: str | None = None, last_intent: str | None = None) -> None:
         """Crea o actualiza los metadatos de una conversación."""
         persistent_val = 1 if is_persistent else 0
         cid = client_id or "default"
-        with _get_connection(cid) as conn:
+        with write_transaction(cid) as conn:
             conn.execute(
                 """
                 INSERT INTO conversation_metadata (session_id, title, discipline, project_name, is_persistent, active_domain, last_intent, updated_at)
@@ -256,8 +263,8 @@ class SessionMemory(MemoryPort):
                 """,
                 (session_id, title, discipline, project_name, persistent_val, active_domain, last_intent)
             )
-            conn.commit()
 
+    @retry_on_db_lock
     def get_metadata(self, session_id: str, client_id: str | None = None) -> dict | None:
         """Recupera los metadatos de una conversación."""
         cid = client_id or "default"
@@ -280,10 +287,11 @@ class SessionMemory(MemoryPort):
             }
         return None
 
+    @retry_on_db_lock
     def update_domain_context(self, session_id: str, active_domain: str | None = None, last_intent: str | None = None, client_id: str | None = None) -> None:
         """Actualiza específicamente el active_domain o last_intent de una sesión."""
         cid = client_id or "default"
-        with _get_connection(cid) as conn:
+        with write_transaction(cid) as conn:
             cursor = conn.execute(
                 """
                 UPDATE conversation_metadata
@@ -306,8 +314,8 @@ class SessionMemory(MemoryPort):
                     """,
                     (session_id, active_domain, last_intent)
                 )
-            conn.commit()
 
+    @retry_on_db_lock
     def list_persistent_conversations(self, client_id: str | None = None) -> List[dict]:
         """Devuelve todas las conversaciones marcadas como persistentes."""
         cid = client_id or "default"

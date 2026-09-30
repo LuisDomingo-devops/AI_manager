@@ -187,99 +187,72 @@ class InvoiceRepository:
         Finds an invoice by its user-facing ID string.
         """
         conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
+        cursor = conn.cursor()
+        cursor.execute("""
                 SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
                        base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount, status, concept, file_path
                 FROM invoices
             """)
-            rows = cursor.fetchall()
-            for r in rows:
-                try:
-                    dec_id = encryptor.decrypt(r["invoice_id"])
-                    if dec_id.upper() == invoice_id.upper():
-                        return {
-                            "db_id": r["id"],
-                            "invoice_id": dec_id,
-                            "date": encryptor.decrypt(r["date"]) if r["date"] else "",
-                            "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
-                            "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
-                            "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
-                            "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
-                            "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
-                            "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 21.0,
-                            "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
-                            "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
-                            "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
-                            "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
-                            "status": r["status"],
-                            "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
-                            "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else ""
-                        }
-                except (ValueError, TypeError, Exception) as dec_err:
-                    error_logger.error(f"Error al descifrar campos en find_invoice_by_id para id '{invoice_id}': {dec_err}", exc_info=True)
-            return None
-        finally:
-            conn.close()
+        rows = cursor.fetchall()
+        for r in rows:
+            try:
+                dec_id = encryptor.decrypt(r["invoice_id"])
+                if dec_id.upper() == invoice_id.upper():
+                    return {
+                        "db_id": r["id"],
+                        "invoice_id": dec_id,
+                        "date": encryptor.decrypt(r["date"]) if r["date"] else "",
+                        "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
+                        "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
+                        "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
+                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
+                        "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
+                        "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 21.0,
+                        "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
+                        "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
+                        "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
+                        "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
+                        "status": r["status"],
+                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                        "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else ""
+                    }
+            except (ValueError, TypeError, Exception) as dec_err:
+                error_logger.error(f"Error al descifrar campos en find_invoice_by_id para id '{invoice_id}': {dec_err}", exc_info=True)
+        return None
 
     @staticmethod
     def _get_next_sequence_value(year: int, prefix: str) -> int:
-        import time
-        import sqlite3
-        max_retries = 10
-        conn = _get_connection()
-        for attempt in range(max_retries):
-            try:
-                cursor = conn.cursor()
-                # Iniciar transaccion explicita con bloqueo para concurrencia
-                cursor.execute("BEGIN EXCLUSIVE TRANSACTION")
+        from app.infrastructure.database.connection_manager import write_transaction
+        with write_transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT last_value FROM invoice_sequences WHERE year = ? AND prefix = ?", (year, prefix))
+            row = cursor.fetchone()
+            
+            if row:
+                next_val = row["last_value"] + 1
+                cursor.execute("UPDATE invoice_sequences SET last_value = ? WHERE year = ? AND prefix = ?", (next_val, year, prefix))
+            else:
+                # Fallback inicial: calcular max_val basandose en la BD existente (solo ocurre la primera vez)
+                cursor.execute("SELECT invoice_id FROM invoices")
+                rows = cursor.fetchall()
+                max_val = 100 # Empezamos en 101 por defecto
                 
-                cursor.execute("SELECT last_value FROM invoice_sequences WHERE year = ? AND prefix = ?", (year, prefix))
-                row = cursor.fetchone()
+                for r in rows:
+                    try:
+                        dec_id = encryptor.decrypt(r["invoice_id"])
+                        if dec_id.startswith(f"{prefix}{year}-"):
+                            parts = dec_id.split("-")
+                            if len(parts) >= 3 and parts[-1].isdigit():
+                                val = int(parts[-1])
+                                if val > max_val:
+                                    max_val = val
+                    except Exception:
+                        pass
                 
-                if row:
-                    next_val = row["last_value"] + 1
-                    cursor.execute("UPDATE invoice_sequences SET last_value = ? WHERE year = ? AND prefix = ?", (next_val, year, prefix))
-                else:
-                    # Fallback inicial: calcular max_val basandose en la BD existente (solo ocurre la primera vez)
-                    cursor.execute("SELECT invoice_id FROM invoices")
-                    rows = cursor.fetchall()
-                    max_val = 100 # Empezamos en 101 por defecto
-                    
-                    # Para evitar problemas con el mock de pruebas, contamos simplemente las que coincidan
-                    for r in rows:
-                        try:
-                            dec_id = encryptor.decrypt(r["invoice_id"])
-                            if dec_id.startswith(f"{prefix}{year}-"):
-                                parts = dec_id.split("-")
-                                if len(parts) >= 3 and parts[-1].isdigit():
-                                    val = int(parts[-1])
-                                    if val > max_val:
-                                        max_val = val
-                        except Exception:
-                            pass
-                    
-                    next_val = max_val + 1
-                    cursor.execute("INSERT INTO invoice_sequences (year, prefix, last_value) VALUES (?, ?, ?)", (year, prefix, next_val))
-                
-                conn.commit()
-                return next_val
-            except sqlite3.OperationalError as e:
-                conn.rollback()
-                if "locked" in str(e) and attempt < max_retries - 1:
-                    time.sleep(0.1)
-                    continue
-                raise
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                if attempt == max_retries - 1 or not locals().get('e', None) or "locked" not in str(locals().get('e', '')):
-                    pass # We will close the connection below outside the loop or on raise
-
-        conn.close()
-        return -1
+                next_val = max_val + 1
+                cursor.execute("INSERT INTO invoice_sequences (year, prefix, last_value) VALUES (?, ?, ?)", (year, prefix, next_val))
+            
+            return next_val
 
     @staticmethod
     def generate_unique_rectificativa_id(is_draft: bool, rect_id: str = None) -> str:

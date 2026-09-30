@@ -8,23 +8,20 @@ from app.utils.encryption import encryptor
 @pytest.mark.asyncio
 async def test_cash_flow_forecasting_logic():
     # 1. Limpiar e inicializar base de datos de pruebas
+    # NOTA: No llamar conn.close() sobre conexiones del pool thread-local.
     conn = _get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM bank_movements")
-        cursor.execute("DELETE FROM invoices")
-        
-        # Insertar movimientos bancarios
-        # Saldo inicial = 5000.0 €
-        cursor.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-08-01', 'Saldo inicial', 5000.0)")
-        
-        # Registrar gastos recurrentes (Autónomos los meses anteriores)
-        cursor.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-06-30', 'Seguridad Social Autónomos Junio', -300.0)")
-        cursor.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-07-31', 'Seguridad Social Autónomos Julio', -300.0)")
-        
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute("DELETE FROM bank_movements")
+    conn.execute("DELETE FROM invoices")
+
+    # Insertar movimientos bancarios
+    # Saldo inicial = 5000.0 €
+    conn.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-08-01', 'Saldo inicial', 5000.0)")
+
+    # Registrar gastos recurrentes (Autónomos los meses anteriores)
+    conn.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-06-30', 'Seguridad Social Autónomos Junio', -300.0)")
+    conn.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-07-31', 'Seguridad Social Autónomos Julio', -300.0)")
+
+    conn.commit()
 
     # 2. Agregar factura de venta emitida y pendiente (Inflow previsto)
     # IVA 21%, Base 1000. Total = 1210 €. Fecha de emisión hoy.
@@ -69,13 +66,10 @@ async def test_cash_flow_forecasting_logic():
     # Comprobar si se generó alguna alerta de caída bajo el umbral seguro
     # Si bajamos de 4000.0 € (por ejemplo, después de aplicar Autónomos)
     # insertamos un movimiento de retiro grande para forzar alerta
+    # Añadir movimiento de retiro grande para forzar alerta (sin cerrar la conexión del pool)
     conn = _get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-08-10', 'Compra Material', -4500.0)")
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute("INSERT INTO bank_movements (movement_date, concept, amount) VALUES ('2026-08-10', 'Compra Material', -4500.0)")
+    conn.commit()
 
     res_alert = await get_cash_flow_forecast(horizon_days=30, safe_threshold=2000.0)
     assert len(res_alert["alerts"]) > 0

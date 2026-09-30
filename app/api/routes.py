@@ -397,7 +397,10 @@ async def metrics():
     return snapshot()
 
 
+from app.infrastructure.database.concurrency import retry_on_db_lock
+
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
+@retry_on_db_lock
 async def chat_endpoint(req: ChatRequest, request: Request):
     if "<script" in req.message.lower() or "</script>" in req.message.lower():
         raise HTTPException(status_code=400, detail="Entrada no permitida (posible inyección detectada).")
