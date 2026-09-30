@@ -240,3 +240,40 @@ def pytest_runtest_call(item):
     except Exception:
         pass
 
+
+@pytest.fixture
+def clean_db_conn():
+    """Proporciona una conexión a una base de datos SQLite limpia en memoria con claves foráneas activadas."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("PRAGMA foreign_keys = ON;")
+    yield conn
+    conn.close()
+
+
+@pytest.fixture
+def valid_rsa_key_pair():
+    """Genera un par de claves RSA de 2048 bits matemáticamente válidas para pruebas criptográficas."""
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048
+    )
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    public_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return {
+        "private_key": private_key,
+        "private_pem": private_pem,
+        "public_pem": public_pem
+    }
+
+

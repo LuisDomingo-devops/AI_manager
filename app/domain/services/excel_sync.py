@@ -2,7 +2,7 @@ import os
 import logging
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from app.adapters.memory.memory import _get_connection, get_readonly_connection
+from app.infrastructure.database.connection_manager import _get_connection, get_readonly_connection
 from app.utils.encryption import encryptor
 
 logger = logging.getLogger("excel_sync")

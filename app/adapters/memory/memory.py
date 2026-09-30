@@ -1,8 +1,19 @@
-"""Fachada de compatibilidad hacia atrás para adaptadores de persistencia.
+"""Fachada de compatibilidad hacia atrás para adaptadores de persistencia (DEPRECATED).
 
-Reexporta las funciones históricas de acceso a base de datos e incorpora
-los nuevos puntos de entrada aislados para el núcleo legal.
+Módulo declarado formalmente obsoleto. Se conserva temporalmente para evitar rotura
+de dependencias heredadas. Todos los nuevos desarrollos y servicios de producción
+deben importar directamente desde 'app.infrastructure.database.connection_manager' o
+'app.infrastructure.database.memory'.
 """
+
+import warnings
+
+warnings.warn(
+    "El módulo 'app.adapters.memory.memory' está obsoleto y será eliminado próximamente. "
+    "Importe directamente desde 'app.infrastructure.database.connection_manager'.",
+    category=DeprecationWarning,
+    stacklevel=2,
+)
 
 from app.infrastructure.database.memory.memory import *
 from app.infrastructure.database.connection_manager import (
