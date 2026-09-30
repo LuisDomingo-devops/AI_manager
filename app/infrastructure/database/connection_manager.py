@@ -151,18 +151,22 @@ def _get_connection(client_id: Optional[str] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(f"PRAGMA busy_timeout = {DEFAULT_BUSY_TIMEOUT_MS};")
 
-    if str(target_path) != ":memory:" and "?mode=memory" not in str(target_path):
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        conn.execute("PRAGMA temp_store = MEMORY;")
-
     # Inicialización atómica y segura del esquema ante llamadas concurrentes
     with _schema_init_lock:
         if db_key not in _initialized_dbs:
+            if str(target_path) != ":memory:" and "?mode=memory" not in str(target_path):
+                conn.execute("PRAGMA journal_mode = WAL;")
+                conn.execute("PRAGMA synchronous = NORMAL;")
+                conn.execute("PRAGMA temp_store = MEMORY;")
+
             if IS_TESTING and "?mode=memory" in db_key:
                 _test_dummy_conns[db_key] = sqlite3.connect(db_key, uri=True, check_same_thread=False)
             init_all_schemas(conn)
             _initialized_dbs.add(db_key)
+        else:
+            if str(target_path) != ":memory:" and "?mode=memory" not in str(target_path):
+                conn.execute("PRAGMA synchronous = NORMAL;")
+                conn.execute("PRAGMA temp_store = MEMORY;")
 
     thread_conns[db_key] = conn
     return conn

@@ -154,22 +154,28 @@ class TestConnectionPoolAndTransactions:
         assert conn1 is conn2, "Llamadas en el mismo hilo deben reutilizar la conexión"
 
     def test_thread_local_affinity_different_threads(self):
-        """Verifica que distintos hilos obtienen conexiones distintas."""
-        conns = []
+        """Verifica que distintos hilos obtienen conexiones distintas concurrentemente sin bloqueos de esquema."""
+        num_threads = 10
+        conns = [None] * num_threads
+        exceptions = []
 
-        def worker():
-            c = _get_connection("tenant_pool_test")
-            conns.append(c)
+        def worker(idx):
+            try:
+                c = _get_connection("tenant_pool_concurrent_test")
+                conns[idx] = c
+            except Exception as e:
+                exceptions.append(e)
 
-        t1 = threading.Thread(target=worker)
-        t2 = threading.Thread(target=worker)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-        assert len(conns) == 2
-        assert conns[0] is not conns[1], "Hilos distintos deben tener conexiones separadas"
+        assert len(exceptions) == 0, f"Excepciones concurrentes detectadas: {exceptions}"
+        assert all(c is not None for c in conns), "Todas las conexiones deben haberse inicializado"
+        # Verificar que cada hilo obtuvo su propia instancia única de conexión
+        assert len(set(id(c) for c in conns)) == num_threads, "Cada hilo debe tener una instancia única de conexión"
 
     def test_write_transaction_commit_on_success(self):
         """Verifica que write_transaction realiza commit automático sin error."""

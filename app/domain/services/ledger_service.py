@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import List, Dict, Any
-from app.adapters.memory.memory import _get_connection
+from app.adapters.memory.memory import _get_connection, write_transaction
 from app.utils.encryption import encryptor
 
 class LedgerService:
@@ -56,7 +56,7 @@ class LedgerService:
         if cls.is_fiscal_year_closed(year):
             raise ValueError(f"El ejercicio fiscal {year} está cerrado. No se permiten nuevos asientos ni modificaciones.")
 
-        with _get_connection() as conn:
+        with write_transaction() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO journal_entries (entry_date, concept) VALUES (?, ?)",
@@ -75,7 +75,6 @@ class LedgerService:
                 "INSERT INTO ledger_entries (journal_entry_id, account_code, debe, haber) VALUES (?, ?, ?, ?)",
                 db_apuntes
             )
-            conn.commit()
             return journal_id
 
     @classmethod

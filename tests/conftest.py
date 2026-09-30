@@ -144,8 +144,28 @@ def reset_db_caches():
     _dummy_conns.append(sqlite3.connect("file:mail_mem?mode=memory&cache=shared", uri=True))
     _dummy_conns.append(sqlite3.connect("file:main_mem?mode=memory&cache=shared", uri=True))
     
-    yield
+    try:
+        yield
+    finally:
+        # Teardown de aislamiento post-test
+        try:
+            from app.infrastructure.database import connection_manager
+            connection_manager.reset_thread_local_pool()
+            for c in connection_manager._test_dummy_conns.values():
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            connection_manager._test_dummy_conns.clear()
+        except Exception:
+            pass
 
+        for c in _dummy_conns:
+            try:
+                c.close()
+            except Exception:
+                pass
+        _dummy_conns.clear()
 
 @pytest.fixture(autouse=True)
 def prevent_qmessagebox_blocks():

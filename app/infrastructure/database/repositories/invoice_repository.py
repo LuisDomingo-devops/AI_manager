@@ -1,12 +1,14 @@
 import sqlite3
 import hashlib
 from typing import Optional, Dict, Any, Tuple
-from app.adapters.memory.memory import _get_connection
+from app.adapters.memory.memory import _get_connection, write_transaction
+from app.infrastructure.database.concurrency import retry_on_db_lock
 from app.utils.encryption import encryptor
 from app.utils.logger import error_logger
 
 class InvoiceRepository:
     @staticmethod
+    @retry_on_db_lock(max_retries=10, base_delay=0.05, max_delay=1.0)
     def save(invoice_db_data: Dict[str, Any], existing_id_db: Optional[int] = None) -> int:
         """
         Saves or updates an invoice in the local SQLite database.
@@ -21,8 +23,7 @@ class InvoiceRepository:
             blind_raw = f"{target_invoice_id}:{target_issuer_nif}".encode("utf-8")
             blind_index = hashlib.sha256(blind_raw).hexdigest()
 
-        conn = _get_connection()
-        try:
+        with write_transaction() as conn:
             cursor = conn.cursor()
 
             # Verificar si el ejercicio fiscal está cerrado
@@ -38,7 +39,8 @@ class InvoiceRepository:
             # If inserting and no existing_id_db is provided, check for duplicates
             if not existing_id_db and blind_index:
                 cursor.execute("SELECT id FROM invoices WHERE blind_index = ? LIMIT 1", (blind_index,))
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
+                row = rows[0] if rows else None
                 if row:
                     raise ValueError(f"Factura duplicada detectada: {target_invoice_id} del emisor {target_issuer_nif}")
 
@@ -130,10 +132,7 @@ class InvoiceRepository:
                         cursor.execute("UPDATE products SET stock = stock - ? WHERE id = ? AND item_type = 'product'", 
                                        (item.get("quantity", 1), item.get("product_id")))
                         
-            conn.commit()
             return invoice_db_id
-        finally:
-            conn.close()
 
     @staticmethod
     def find_existing_invoice_data(invoice_id: str, client_name: str, client_nif: str, amount: float, concept: str) -> Tuple[Optional[int], Optional[str], str, str, float, str]:
@@ -144,41 +143,38 @@ class InvoiceRepository:
         existing_file_path = None
         if invoice_id:
             conn = _get_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, base_imponible, concept, file_path FROM invoices")
-                rows = cursor.fetchall()
-                for r in rows:
-                    try:
-                        dec_id = encryptor.decrypt(r["invoice_id"])
-                        if dec_id.upper() == invoice_id.upper():
-                            existing_id_db = r["id"]
-                            existing_file_path = encryptor.decrypt(r["file_path"])
-                            
-                            if not client_name or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
-                                dec_client_name = encryptor.decrypt(r["receiver_name"])
-                                if dec_client_name and dec_client_name.lower().strip() not in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
-                                    client_name = dec_client_name
-                            
-                            if not client_nif or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
-                                dec_client_nif = encryptor.decrypt(r["receiver_nif"])
-                                if dec_client_nif and dec_client_nif.lower().strip() not in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
-                                    client_nif = dec_client_nif
-                            
-                            if not amount or float(amount) <= 0.0:
-                                dec_amount = float(encryptor.decrypt(r["base_imponible"]))
-                                if dec_amount > 0.0:
-                                    amount = dec_amount
-                                    
-                            if not concept or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
-                                dec_concept = encryptor.decrypt(r["concept"])
-                                if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
-                                    concept = dec_concept
-                            break
-                    except (ValueError, TypeError, Exception) as dec_err:
-                        error_logger.error(f"Error al descifrar campos en find_existing_invoice_match: {dec_err}", exc_info=True)
-            finally:
-                conn.close()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, base_imponible, concept, file_path FROM invoices")
+            rows = cursor.fetchall()
+            for r in rows:
+                try:
+                    dec_id = encryptor.decrypt(r["invoice_id"])
+                    if dec_id.upper() == invoice_id.upper():
+                        existing_id_db = r["id"]
+                        existing_file_path = encryptor.decrypt(r["file_path"])
+                        
+                        if not client_name or client_name.lower().strip() in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                            dec_client_name = encryptor.decrypt(r["receiver_name"])
+                            if dec_client_name and dec_client_name.lower().strip() not in ("desconocido", "pendiente", "cliente genérico", "cliente desconocido"):
+                                client_name = dec_client_name
+                        
+                        if not client_nif or client_nif.lower().strip() in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                            dec_client_nif = encryptor.decrypt(r["receiver_nif"])
+                            if dec_client_nif and dec_client_nif.lower().strip() not in ("desconocido", "pendiente", "sin nif", "nif_desconocido", "nif desconocido"):
+                                client_nif = dec_client_nif
+                        
+                        if not amount or float(amount) <= 0.0:
+                            dec_amount = float(encryptor.decrypt(r["base_imponible"]))
+                            if dec_amount > 0.0:
+                                amount = dec_amount
+                                
+                        if not concept or concept.lower().strip() in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                            dec_concept = encryptor.decrypt(r["concept"])
+                            if dec_concept and dec_concept.lower().strip() not in ("desconocido", "pendiente", "concepto desconocido", "sin concepto"):
+                                concept = dec_concept
+                        break
+                except (ValueError, TypeError, Exception) as dec_err:
+                    error_logger.error(f"Error al descifrar campos en find_existing_invoice_match: {dec_err}", exc_info=True)
         return existing_id_db, existing_file_path, client_name, client_nif, amount, concept
 
     @staticmethod
@@ -286,60 +282,50 @@ class InvoiceRepository:
     @staticmethod
     def get_invoice_file_path(invoice_id: str) -> Optional[str]:
         conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT invoice_id, file_path FROM invoices")
-            rows = cursor.fetchall()
-            for r in rows:
-                try:
-                    dec_id = encryptor.decrypt(r["invoice_id"])
-                    if dec_id.upper() == invoice_id.upper():
-                        return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
-                except (ValueError, TypeError, Exception) as dec_err:
-                    error_logger.error(f"Error al descifrar file_path en find_invoice_file_path_by_id: {dec_err}", exc_info=True)
-            return None
-        finally:
-            conn.close()
+        cursor = conn.cursor()
+        cursor.execute("SELECT invoice_id, file_path FROM invoices")
+        rows = cursor.fetchall()
+        for r in rows:
+            try:
+                dec_id = encryptor.decrypt(r["invoice_id"])
+                if dec_id.upper() == invoice_id.upper():
+                    return encryptor.decrypt(r["file_path"]) if r["file_path"] else None
+            except (ValueError, TypeError, Exception) as dec_err:
+                error_logger.error(f"Error al descifrar file_path en find_invoice_file_path_by_id: {dec_err}", exc_info=True)
+        return None
 
     @staticmethod
     def update_invoice_status(db_id: int, status: str, conn=None):
         local_conn = conn or _get_connection()
-        try:
-            cursor = local_conn.cursor()
-            cursor.execute("UPDATE invoices SET status = ? WHERE id = ?", (status, db_id))
-            if not conn:
-                local_conn.commit()
-        finally:
-            if not conn:
-                local_conn.close()
+        cursor = local_conn.cursor()
+        cursor.execute("UPDATE invoices SET status = ? WHERE id = ?", (status, db_id))
+        if not conn:
+            local_conn.commit()
 
     @staticmethod
     def get_pending_invoices() -> list:
         conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept, date FROM invoices")
-            rows = cursor.fetchall()
-            invoices = []
-            for r in rows:
-                if r["status"] == "cobrada":
-                    continue
-                try:
-                    invoices.append({
-                        "db_id": r["id"],
-                        "invoice_id": encryptor.decrypt(r["invoice_id"]),
-                        "receiver_name": encryptor.decrypt(r["receiver_name"]),
-                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
-                        "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
-                        "status": r["status"],
-                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
-                        "date": encryptor.decrypt(r["date"]) if r["date"] else ""
-                    })
-                except (ValueError, TypeError, Exception) as dec_err:
-                    error_logger.error(f"Error al descifrar factura pendiente en get_pending_invoices: {dec_err}", exc_info=True)
-            return invoices
-        finally:
-            conn.close()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, invoice_id, receiver_name, receiver_nif, total_amount, status, concept, date FROM invoices")
+        rows = cursor.fetchall()
+        invoices = []
+        for r in rows:
+            if r["status"] == "cobrada":
+                continue
+            try:
+                invoices.append({
+                    "db_id": r["id"],
+                    "invoice_id": encryptor.decrypt(r["invoice_id"]),
+                    "receiver_name": encryptor.decrypt(r["receiver_name"]),
+                    "receiver_nif": encryptor.decrypt(r["receiver_nif"]),
+                    "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
+                    "status": r["status"],
+                    "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                    "date": encryptor.decrypt(r["date"]) if r["date"] else ""
+                })
+            except (ValueError, TypeError, Exception) as dec_err:
+                error_logger.error(f"Error al descifrar factura pendiente en get_pending_invoices: {dec_err}", exc_info=True)
+        return invoices
 
     @staticmethod
     def find_all_invoices(year: Optional[int] = None) -> list:
@@ -348,54 +334,51 @@ class InvoiceRepository:
         Permite filtrar opcionalmente por ejercicio fiscal (year).
         """
         conn = _get_connection()
-        try:
-            cursor = conn.cursor()
-            if year is not None:
-                cursor.execute("""
-                    SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
-                           base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                           category, quarter, year, file_path, status, concept, tax_engine_version
-                    FROM invoices
-                    WHERE year = ?
-                    ORDER BY id ASC
-                """, (year,))
-            else:
-                cursor.execute("""
-                    SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
-                           base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
-                           category, quarter, year, file_path, status, concept, tax_engine_version
-                    FROM invoices
-                    ORDER BY id ASC
-                """)
-            rows = cursor.fetchall()
-            invoices = []
-            for r in rows:
-                try:
-                    invoices.append({
-                        "db_id": r["id"],
-                        "invoice_id": encryptor.decrypt(r["invoice_id"]) if r["invoice_id"] else "",
-                        "date": encryptor.decrypt(r["date"]) if r["date"] else "",
-                        "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
-                        "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
-                        "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
-                        "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
-                        "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
-                        "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 0.0,
-                        "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
-                        "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
-                        "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
-                        "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
-                        "category": r["category"],
-                        "quarter": r["quarter"],
-                        "year": r["year"],
-                        "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else "",
-                        "status": r["status"],
-                        "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
-                        "tax_engine_version": r["tax_engine_version"]
-                    })
-                except (ValueError, TypeError, Exception) as dec_err:
-                    error_logger.error(f"Error al descifrar factura en find_all_invoices: {dec_err}", exc_info=True)
-            return invoices
-        finally:
-            conn.close()
+        cursor = conn.cursor()
+        if year is not None:
+            cursor.execute("""
+                SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                       base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                       category, quarter, year, file_path, status, concept, tax_engine_version
+                FROM invoices
+                WHERE year = ?
+                ORDER BY id ASC
+            """, (year,))
+        else:
+            cursor.execute("""
+                SELECT id, invoice_id, date, issuer_name, issuer_nif, receiver_name, receiver_nif,
+                       base_imponible, iva_rate, iva_amount, irpf_rate, irpf_amount, total_amount,
+                       category, quarter, year, file_path, status, concept, tax_engine_version
+                FROM invoices
+                ORDER BY id ASC
+            """)
+        rows = cursor.fetchall()
+        invoices = []
+        for r in rows:
+            try:
+                invoices.append({
+                    "db_id": r["id"],
+                    "invoice_id": encryptor.decrypt(r["invoice_id"]) if r["invoice_id"] else "",
+                    "date": encryptor.decrypt(r["date"]) if r["date"] else "",
+                    "issuer_name": encryptor.decrypt(r["issuer_name"]) if r["issuer_name"] else "",
+                    "issuer_nif": encryptor.decrypt(r["issuer_nif"]) if r["issuer_nif"] else "",
+                    "receiver_name": encryptor.decrypt(r["receiver_name"]) if r["receiver_name"] else "",
+                    "receiver_nif": encryptor.decrypt(r["receiver_nif"]) if r["receiver_nif"] else "",
+                    "base_imponible": float(encryptor.decrypt(r["base_imponible"])) if r["base_imponible"] else 0.0,
+                    "iva_rate": float(encryptor.decrypt(r["iva_rate"])) if r["iva_rate"] else 0.0,
+                    "iva_amount": float(encryptor.decrypt(r["iva_amount"])) if r["iva_amount"] else 0.0,
+                    "irpf_rate": float(encryptor.decrypt(r["irpf_rate"])) if r["irpf_rate"] else 0.0,
+                    "irpf_amount": float(encryptor.decrypt(r["irpf_amount"])) if r["irpf_amount"] else 0.0,
+                    "total_amount": float(encryptor.decrypt(r["total_amount"])) if r["total_amount"] else 0.0,
+                    "category": r["category"],
+                    "quarter": r["quarter"],
+                    "year": r["year"],
+                    "file_path": encryptor.decrypt(r["file_path"]) if r["file_path"] else "",
+                    "status": r["status"],
+                    "concept": encryptor.decrypt(r["concept"]) if r["concept"] else "",
+                    "tax_engine_version": r["tax_engine_version"]
+                })
+            except (ValueError, TypeError, Exception) as dec_err:
+                error_logger.error(f"Error al descifrar factura en find_all_invoices: {dec_err}", exc_info=True)
+        return invoices
 
