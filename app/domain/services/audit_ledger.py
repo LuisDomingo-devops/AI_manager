@@ -102,8 +102,15 @@ class AuditLedgerService:
         ph = prev_hash or ""
         cid = client_id or "global"
         
+        # Sanitizar descripción para cumplimiento de privacidad RGPD
+        try:
+            from app.infrastructure.logging.filters import GDPRSanitizingFilter
+            sanitized_description = GDPRSanitizingFilter()._sanitize(description)
+        except Exception:
+            sanitized_description = description
+
         # Generar contenido único para el hash
-        concat_str = f"{cid}|{event_type}|{description}|{timestamp}|{ph}"
+        concat_str = f"{cid}|{event_type}|{sanitized_description}|{timestamp}|{ph}"
         current_hash = hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
         
         # Firmar digitalmente
@@ -121,7 +128,7 @@ class AuditLedgerService:
                 INSERT INTO audit_ledger_log (
                     client_id, event_type, description, prev_hash, current_hash, signature, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (cid, event_type, description, prev_hash, current_hash, signature_b64, timestamp))
+            """, (cid, event_type, sanitized_description, prev_hash, current_hash, signature_b64, timestamp))
             conn.commit()
         finally:
             conn.close()

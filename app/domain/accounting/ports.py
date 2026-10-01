@@ -36,13 +36,56 @@ class InvoiceView(BaseModel):
     tenant_id: str = "default"
 
 
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class JournalLineDTO(BaseModel):
+    """Línea individual de un asiento contable del PGC con exactitud Decimal."""
+    account_code: str = Field(..., pattern=r"^\d{3,7}$", description="Código PGC de 3 a 7 dígitos numéricos")
+    concept: str = Field(default="", min_length=0, max_length=255, description="Concepto del apunte")
+    debit: Decimal = Field(default=Decimal("0.00"), ge=0, description="Importe al Debe")
+    credit: Decimal = Field(default=Decimal("0.00"), ge=0, description="Importe al Haber")
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Normalizar "account" a "account_code" si es necesario
+            if "account_code" not in data and "account" in data:
+                data["account_code"] = str(data["account"])
+        return data
+
+    @field_validator("debit", "credit", mode="before")
+    @classmethod
+    def parse_and_quantize_amount(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        dec = Decimal(str(v))
+        return dec.quantize(Decimal("0.01"))
+
+
 class RecordJournalEntryCommand(BaseModel):
     tenant_id: str = "default"
     entry_date: date = Field(default_factory=date.today)
     fiscal_year: int
     concept: str
     document_ref: Optional[str] = None
-    lines: List[Dict[str, Any]] = Field(default_factory=list)
+    lines: List[JournalLineDTO] = Field(default_factory=list)
+
+    @field_validator("lines", mode="before")
+    @classmethod
+    def convert_lines_to_dto(cls, v):
+        if not isinstance(v, list):
+            return v
+        converted = []
+        for item in v:
+            if isinstance(item, JournalLineDTO):
+                converted.append(item)
+            elif isinstance(item, dict):
+                converted.append(JournalLineDTO.model_validate(item))
+            else:
+                converted.append(item)
+        return converted
 
 
 class JournalEntryView(BaseModel):

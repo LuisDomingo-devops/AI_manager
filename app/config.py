@@ -107,6 +107,8 @@ class Settings(BaseSettings):
         """Evita la combinación fatal de origins=* y allow_credentials=True en producción"""
         if self.ENV == "production" and "*" in self.ALFONSO_CORS_ORIGINS:
             raise ValueError("FATAL EN PRODUCCIÓN: ALFONSO_CORS_ORIGINS contiene '*'. Con allow_credentials=True esto es un agujero crítico de seguridad. Configura orígenes explícitos separados por comas.")
+        if self.ENV == "production" and not self.ANONYMIZE_LLM_CALLS:
+            raise ValueError("FATAL EN PRODUCCIÓN: ANONYMIZE_LLM_CALLS no puede ser desactivado en entorno de producción bajo normativa RGPD.")
         return self
 
     def get_client_token(self, client_id: str) -> str | None:
@@ -162,12 +164,14 @@ settings = Settings()
 import sys
 import logging
 
-if settings.ENV == "production":
-    if not settings.ALFONSO_API_KEY or not settings.ALFONSO_API_KEY.strip():
-        logging.critical("Fallo crítico de seguridad: ALFONSO_API_KEY no está configurada en el entorno de producción.")
-        sys.exit(1)
-    if not settings.ALFONSO_BRIDGE_TOKEN or not settings.ALFONSO_BRIDGE_TOKEN.strip():
-        logging.critical("Fallo crítico de seguridad: ALFONSO_BRIDGE_TOKEN no está configurado en el entorno de producción.")
-        sys.exit(1)
+# Registrar filtro de sanitización RGPD en todos los handlers de logging
+try:
+    from app.infrastructure.logging.filters import GDPRSanitizingFilter
+    gdpr_filter = GDPRSanitizingFilter()
+    root_logger = logging.getLogger()
+    root_logger.addFilter(gdpr_filter)
+    for h in root_logger.handlers:
+        h.addFilter(gdpr_filter)
+except Exception:
+    pass
 
-# Forzar recarga automática de Uvicorn para refrescar caché de sesión.

@@ -85,3 +85,14 @@ class BankConnectionUnavailableError(ExternalProviderError):
     """Lanzada cuando un banco no tiene token o las credenciales han expirado (sin datos simulados)."""
     pass
 
+class GDPRPrivacyError(AlfonsoBaseException):
+    """Excepción base para violaciones o fallos de privacidad RGPD / LOPDGDD."""
+    pass
+
+class AnonymizationFailureError(GDPRPrivacyError):
+    """Lanzada cuando falla la anonimización local; provoca fail-closed síncrono."""
+    def __init__(self, incident_id: str, message: str = "Fallo en motor de anonimización local", details: dict | None = None):
+        super().__init__(f"[{incident_id}] {message}", details)
+        self.incident_id = incident_id
+
+

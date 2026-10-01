@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from app.domain.accounting.ports import (
     IAccountingService,
+    JournalLineDTO,
     RecordJournalEntryCommand,
     JournalEntryView,
 )
@@ -23,8 +24,14 @@ class AccountingService(IAccountingService):
 
     def record_entry(self, command: RecordJournalEntryCommand) -> JournalEntryView:
         # Validación de partida doble y cuadre contable
-        total_debit = sum(Decimal(str(line.get("debit", 0.0))) for line in command.lines)
-        total_credit = sum(Decimal(str(line.get("credit", 0.0))) for line in command.lines)
+        total_debit = sum(
+            line.debit if isinstance(line, JournalLineDTO) else Decimal(str(line.get("debit", 0.0)))
+            for line in command.lines
+        )
+        total_credit = sum(
+            line.credit if isinstance(line, JournalLineDTO) else Decimal(str(line.get("credit", 0.0)))
+            for line in command.lines
+        )
 
         if abs(total_debit - total_credit) >= Decimal("0.01"):
             raise ValueError(
@@ -90,6 +97,9 @@ class AccountingService(IAccountingService):
             )
 
             for line in command.lines:
+                acc_code = line.account_code if isinstance(line, JournalLineDTO) else str(line.get("account", line.get("account_code", "")))
+                deb_val = float(line.debit) if isinstance(line, JournalLineDTO) else float(line.get("debit", 0.0))
+                cred_val = float(line.credit) if isinstance(line, JournalLineDTO) else float(line.get("credit", 0.0))
                 cursor.execute(
                     """
                     INSERT INTO legal_journal_lines (
@@ -99,9 +109,9 @@ class AccountingService(IAccountingService):
                     (
                         str(uuid.uuid4()),
                         entry_id,
-                        str(line.get("account", line.get("account_code", ""))),
-                        float(line.get("debit", 0.0)),
-                        float(line.get("credit", 0.0)),
+                        acc_code,
+                        deb_val,
+                        cred_val,
                     ),
                 )
             cursor.close()

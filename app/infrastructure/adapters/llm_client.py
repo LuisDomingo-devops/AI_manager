@@ -238,14 +238,33 @@ class GeminiClient(LLMPort):
         anonymizer = None
 
         if settings.ANONYMIZE_LLM_CALLS:
-            from app.utils.anonymizer import DataAnonymizer
-            anonymizer = DataAnonymizer()
-            for msg in messages:
-                role = msg.get("role")
-                content = msg.get("content", "") or ""
-                anon_content, msg_map = anonymizer.anonymize(content)
-                mapping.update(msg_map)
-                anonymized_messages.append({"role": role, "content": anon_content})
+            try:
+                from app.utils.anonymizer import DataAnonymizer
+                from app.domain.schemas import AnonymizationSession
+                anonymizer = DataAnonymizer()
+                sess = AnonymizationSession()
+                for msg in messages:
+                    role = msg.get("role")
+                    content = msg.get("content", "") or ""
+                    anon_content, msg_map = anonymizer.anonymize(content, session=sess)
+                    mapping.update(msg_map)
+                    anonymized_messages.append({"role": role, "content": anon_content})
+                try:
+                    from app.api.routes import record_privacy_session
+                    record_privacy_session({
+                        "status": "protected",
+                        "session_id": sess.session_id,
+                        "total_protected_entities": len(sess.entities),
+                        "entities_by_type": dict(sess.entity_counters),
+                    })
+                except Exception:
+                    pass
+            except Exception as e:
+                from app.domain.exceptions import AnonymizationFailureError
+                import uuid
+                incident_id = str(uuid.uuid4())
+                error_logger.error("Fallo crítico en anonimización (Fail-Closed activado): %s [Incidente: %s]", e, incident_id)
+                raise AnonymizationFailureError(incident_id=incident_id, message=f"Fallo en la anonimización de datos pre-Gemini: {e}")
         else:
             anonymized_messages = messages
 
@@ -290,18 +309,39 @@ class GeminiClient(LLMPort):
 
     async def stream_chat(self, messages: list[dict[str, str]], **kwargs):
         """Envía un listado completo de mensajes al modelo de lenguaje y devuelve un generador asíncrono (SSE)."""
-        anonymized_messages = messages
+        session = None
+        mapping = {}
+        anonymized_messages = []
+        buffer = None
+
         if settings.ANONYMIZE_LLM_CALLS:
             from app.utils.anonymizer import DataAnonymizer
+            from app.domain.schemas import AnonymizationSession
+            from app.utils.streaming_buffer import StreamingTokenBuffer
             anonymizer = DataAnonymizer()
-            anonymized_messages = []
+            session = AnonymizationSession()
             for msg in messages:
-                anonymized_messages.append({"role": msg.get("role"), "content": anonymizer.anonymize(msg.get("content", ""))[0]})
+                content = msg.get("content", "") or ""
+                anon_content, msg_map = anonymizer.anonymize(content, session=session)
+                mapping.update(msg_map)
+                anonymized_messages.append({"role": msg.get("role"), "content": anon_content})
+            buffer = StreamingTokenBuffer()
+            try:
+                from app.api.routes import record_privacy_session
+                record_privacy_session({
+                    "status": "protected",
+                    "session_id": session.session_id,
+                    "total_protected_entities": len(session.entities),
+                    "entities_by_type": dict(session.entity_counters),
+                })
+            except Exception:
+                pass
+        else:
+            anonymized_messages = messages
 
         model_name = settings.GEMINI_MODEL_NAME
 
         if settings.GEMINI_PROXY_URL:
-            # Asumimos que el proxy soporta stream enviando una flag o passthrough
             url = settings.GEMINI_PROXY_URL
             headers = {"X-Alfonso-License-Token": settings.ALFONSO_CLIENT_SECRET}
             contents = []
@@ -313,18 +353,30 @@ class GeminiClient(LLMPort):
                 "contents": contents,
                 "model": model_name,
                 "apiVersion": settings.GEMINI_API_VERSION,
-                "stream": True # Flag para el worker
+                "stream": True
             }
             
-            # Usar streaming de httpx
             import httpx
-            async with client.stream("POST", url, json=payload, headers=headers) as response:
-                if response.status_code != 200:
-                    yield f"Error: {response.status_code}"
-                    return
-                async for chunk in response.aiter_text():
-                    if chunk:
-                        yield chunk
+            try:
+                async with client.stream("POST", url, json=payload, headers=headers) as response:
+                    if response.status_code != 200:
+                        yield f"Error: {response.status_code}"
+                        return
+                    async for chunk in response.aiter_text():
+                        if chunk:
+                            if buffer:
+                                resolved = buffer.feed(chunk, mapping)
+                                if resolved:
+                                    yield resolved
+                            else:
+                                yield chunk
+                    if buffer:
+                        remaining = buffer.flush(mapping)
+                        if remaining:
+                            yield remaining
+            finally:
+                if session:
+                    session.purge()
         else:
             raise RuntimeError("GEMINI_PROXY_URL no está configurado para streaming. La conexión a Ollama ha sido descontinuada.")
 
@@ -469,3 +521,6 @@ class GeminiClient(LLMPort):
                 "tool": "no_op",
                 "args": {"message": f"LLM_ERROR: {repr(e)}"}
             })
+
+LLMClient = GeminiClient
+

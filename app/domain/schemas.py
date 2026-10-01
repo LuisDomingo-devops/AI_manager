@@ -185,3 +185,143 @@ class DomainErrorContract(BaseModel):
     missing_values: Dict[str, Any] = Field(default_factory=dict, description="Valores faltantes o inválidos")
     reason_code: str = Field(..., description="Código de error estandarizado")
     technical_details: Optional[str] = Field(None, description="Stack trace interno. NO ENVIAR AL LLM.")
+
+# =====================================================================
+# ESQUEMAS DE PRIVACIDAD Y ANONIMIZACIÓN PRE-GEMINI (GDPR / LOPDGDD)
+# =====================================================================
+from datetime import datetime, timezone
+import uuid
+
+EntityType = Literal[
+    "NIF",
+    "NIE",
+    "CIF",
+    "IBAN",
+    "IMPORTE",
+    "NOMBRE",
+    "EMAIL",
+    "TELEFONO",
+    "DIRECCION",
+    "CODIGO_POSTAL"
+]
+
+ENTITY_TOKEN_PREFIX: Dict[str, str] = {
+    "NIF": "NIF",
+    "NIE": "NIF",
+    "CIF": "NIF",
+    "IBAN": "IBAN",
+    "IMPORTE": "IMPORTE",
+    "NOMBRE": "NOMBRE",
+    "EMAIL": "EMAIL",
+    "TELEFONO": "TELEFONO",
+    "DIRECCION": "DIRECCION",
+    "CODIGO_POSTAL": "CP"
+}
+
+class AnonymizedEntity(BaseModel):
+    token: str = Field(..., description="Token sintético generado determinista, ej: [NIF_1], [IMPORTE_1]")
+    original_value: str = Field(..., description="Valor original sensible disociado")
+    normalized_value: str = Field(..., description="Valor normalizado para deduplicación y mapeo")
+    entity_type: EntityType = Field(..., description="Tipo legal de entidad sensible detectada")
+    start_pos: int = Field(..., description="Índice de posición inicial en el texto original")
+    end_pos: int = Field(..., description="Índice de posición final en el texto original")
+
+class AnonymizationSession(BaseModel):
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="ID único de la sesión de inferencia")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp de inicio de la sesión")
+    entities: list[AnonymizedEntity] = Field(default_factory=list, description="Lista de entidades identificadas")
+    token_to_value_map: Dict[str, str] = Field(default_factory=dict, description="Diccionario para desanonimización inversa")
+    value_to_token_map: Dict[str, str] = Field(default_factory=dict, description="Diccionario para reutilización de tokens idénticos")
+    entity_counters: Dict[str, int] = Field(default_factory=dict, description="Contadores secuenciales por tipo de entidad")
+
+    def register_entity(
+        self,
+        original_value: str,
+        entity_type: EntityType,
+        start_pos: int,
+        end_pos: int
+    ) -> str:
+        normalized = original_value.strip().lower()
+        if normalized in self.value_to_token_map:
+            token = self.value_to_token_map[normalized]
+        else:
+            prefix = ENTITY_TOKEN_PREFIX.get(entity_type, entity_type)
+            current_count = self.entity_counters.get(prefix, 0) + 1
+            self.entity_counters[prefix] = current_count
+            token = f"[{prefix}_{current_count}]"
+            self.value_to_token_map[normalized] = token
+            self.token_to_value_map[token] = original_value.strip()
+
+        entity = AnonymizedEntity(
+            token=token,
+            original_value=original_value,
+            normalized_value=normalized,
+            entity_type=entity_type,
+            start_pos=start_pos,
+            end_pos=end_pos
+        )
+        self.entities.append(entity)
+        return token
+
+    def purge(self) -> None:
+        self.token_to_value_map.clear()
+        self.value_to_token_map.clear()
+        self.entities.clear()
+        self.entity_counters.clear()
+
+class StreamingTokenBuffer(BaseModel):
+    max_token_len: int = Field(default=30, description="Longitud máxima esperada para un token sintético")
+    buffer: str = Field(default="", description="Fragmentos acumulados pendientes de evaluación")
+    in_token: bool = Field(default=False, description="Indica si se ha detectado '[' sin haber llegado a ']'")
+
+    def feed(self, chunk: str, token_map: Dict[str, str]) -> str:
+        self.buffer += chunk
+        output = []
+
+        while self.buffer:
+            if not self.in_token:
+                bracket_pos = self.buffer.find("[")
+                if bracket_pos == -1:
+                    output.append(self.buffer)
+                    self.buffer = ""
+                    break
+                else:
+                    output.append(self.buffer[:bracket_pos])
+                    self.buffer = self.buffer[bracket_pos:]
+                    self.in_token = True
+
+            close_pos = self.buffer.find("]")
+            if close_pos != -1:
+                candidate_token = self.buffer[:close_pos + 1]
+                resolved = token_map.get(candidate_token, candidate_token)
+                output.append(resolved)
+                self.buffer = self.buffer[close_pos + 1:]
+                self.in_token = False
+            else:
+                if len(self.buffer) > self.max_token_len:
+                    output.append(self.buffer[0])
+                    self.buffer = self.buffer[1:]
+                    self.in_token = False
+                else:
+                    break
+
+        return "".join(output)
+
+    def flush(self, token_map: Dict[str, str]) -> str:
+        if not self.buffer:
+            return ""
+        candidate = self.buffer
+        resolved = token_map.get(candidate, candidate)
+        self.buffer = ""
+        self.in_token = False
+        return resolved
+
+class AnonymizationResult(BaseModel):
+    anonymized_text: str = Field(..., description="Texto seguro con tokens sintéticos para enviar al LLM")
+    session: AnonymizationSession = Field(..., description="Sesión activa con el mapa de correspondencia")
+    entities_count: int = Field(..., description="Número total de entidades anonimizadas")
+
+class DetokenizationResult(BaseModel):
+    restored_text: str = Field(..., description="Texto reconstruido con los datos reales para el usuario")
+    unresolved_tokens: list[str] = Field(default_factory=list, description="Tokens no resueltos por el mapa")
+

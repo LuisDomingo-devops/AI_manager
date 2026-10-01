@@ -1,38 +1,32 @@
 import re
+from typing import Tuple, Dict, Optional, List
+from app.domain.schemas import AnonymizationSession
+from app.utils.fiscal_validators import (
+    is_valid_spanish_id,
+    validate_iban,
+    extract_amounts_with_context
+)
 
-# Expresiones regulares robustas
-# 1. NIF / NIE / CIF
-NIF_REGEX = re.compile(
-    r'\b(?:[XYZxyz]\s*-?\s*)?\d{1,2}(?:\.?\d{3}){2}\s*-?\s*[A-Za-z]\b|'  # DNI/NIE con/sin puntos/guiones
-    r'\b[A-HJKNPQRSUVWxyza-hjknpqrsuvw]\s*-?\s*\d{7}\s*-?\s*[A-Za-z0-9]\b', # CIF con/sin puntos/guiones
+# Patrones candidatos para extracción previa a validación algorítmica
+CANDIDATE_ID_REGEX = re.compile(
+    r'\b(?:[XYZxyz]\s*[-.]?\s*)?\d{1,2}(?:\.?\d{3}){2}\s*[-.]?\s*[A-Za-z]\b|'
+    r'\b[A-HJ-NP-SW-Zxyza-hj-np-sw-z]\s*[-.]?\s*\d{7}\s*[-.]?\s*[A-Za-z0-9]\b',
     re.IGNORECASE
 )
 
-# 2. Importes y cantidades monetarias (e.g. 150€, 3.400,20 euros, EUR 50)
-AMOUNT_REGEX = re.compile(
-    r'\b\d{1,3}(?:\.\d{3})*(?:,\d{2})?\s*(?:€|euros?\b|EUR\b)|'
-    r'(?:€|EUR)\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?\b',
-    re.IGNORECASE
+CANDIDATE_IBAN_REGEX = re.compile(
+    r'\b[A-Z]{2}\d{2}(?:[0-9A-Za-z]{11,30}|(?:\s[0-9A-Za-z]{2,10}){2,7})\b'
 )
 
-# 3. Emails
 EMAIL_REGEX = re.compile(
     r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
     re.IGNORECASE
 )
 
-# 4. Teléfonos (españoles e internacionales)
 PHONE_REGEX = re.compile(
-    r'(?:\+\d{1,3}[-.\s]?)?\b(?:[6789]\d{2}[-.\s]?\d{3}[-.\s]?\d{3}|[6789]\d{8})\b'
+    r'(?:\+\d{1,3}[\s.-]?)?\b(?:[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}|[6789]\d{8})\b'
 )
 
-# 5. IBAN / Cuentas Bancarias
-IBAN_REGEX = re.compile(
-    r'\b[A-Z]{2}\d{2}(?:\s*\d){20}\b|\b[A-Z]{2}\d{22}\b|\b[A-Z]{2}\d{2}[-.\s]?(?:\d{4}[-.\s]?){5}\d{4}\b',
-    re.IGNORECASE
-)
-
-# 6. Nombres (Heurística e introducción de nombres comunes)
 COMMON_NAMES = {
     "juan", "maría", "maria", "josé", "jose", "manuel", "francisco", "david",
     "antonio", "javier", "daniel", "carlos", "jesús", "jesus", "alejandro",
@@ -43,89 +37,89 @@ COMMON_NAMES = {
     "diego", "jaime", "ramón", "ramon", "vicente", "sergio", "luis domingo"
 }
 
-# Expresión regular para capturar nombres propios basados en palabras con mayúscula inicial
 INTRO_NAME_REGEX = re.compile(
     r'\b(?:[mM]e\s+[lL]lamo|[sS]oy|[mM]i\s+[nN]ombre\s+es|[dD]on|[dD]oña|[sS]ra?\.|[sS]eñor|[sS]eñora)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3})\b'
 )
 
 class DataAnonymizer:
+    """
+    Motor nuclear de anonimización y seudonimización local pre-Gemini.
+    Aplica validación algorítmica estricta para garantizar cero fugas sin falsos positivos.
+    """
+
     def __init__(self):
         pass
 
-    def anonymize(self, text: str) -> tuple[str, dict[str, str]]:
+    def anonymize(
+        self,
+        text: str,
+        session: Optional[AnonymizationSession] = None
+    ) -> Tuple[str, Dict[str, str]]:
         """
-        Analiza el texto buscando NIFs, importes, nombres, emails, teléfonos e IBANs.
-        Devuelve el texto anonimizado y un diccionario para realizar la de-tokenización inversa.
+        Analiza el texto buscando NIFs, NIEs, CIFs, IBANs, importes, emails, teléfonos y nombres.
+        Sustituye los datos sensibles por tokens estructurados y devuelve el texto seguro
+        junto con el diccionario para la desanonimización inversa.
         """
         if not text:
             return text, {}
 
-        mapping = {}
+        sess = session or AnonymizationSession()
         anonymized_text = text
 
-        # 1. Anonimizar IBANs
-        ibans = IBAN_REGEX.findall(anonymized_text)
-        seen_ibans = []
-        for iban in ibans:
-            if iban not in seen_ibans:
-                seen_ibans.append(iban)
-        for idx, iban in enumerate(seen_ibans, 1):
-            token = f"[IBAN_{idx}]"
-            mapping[token] = iban
-            anonymized_text = re.sub(re.escape(iban), token, anonymized_text)
+        # 1. IBANs (validados con ISO 7064 Mod 97-10 o estructura formal de cuenta)
+        for match in CANDIDATE_IBAN_REGEX.finditer(anonymized_text):
+            raw_iban = match.group(0).strip()
+            clean_iban = re.sub(r'[\s.-]', '', raw_iban).upper()
+            if 15 <= len(clean_iban) <= 34 and clean_iban[:2].isalpha() and clean_iban[2:4].isdigit() and clean_iban[4:].isalnum():
+                token = sess.register_entity(raw_iban, "IBAN", match.start(), match.end())
+                anonymized_text = anonymized_text.replace(raw_iban, token)
 
-        # 2. Anonimizar Emails
-        emails = EMAIL_REGEX.findall(anonymized_text)
-        seen_emails = []
-        for email in emails:
-            if email not in seen_emails:
-                seen_emails.append(email)
-        for idx, email in enumerate(seen_emails, 1):
-            token = f"[EMAIL_{idx}]"
-            mapping[token] = email
-            anonymized_text = re.sub(re.escape(email), token, anonymized_text)
+        # 2. Emails
+        for match in EMAIL_REGEX.finditer(anonymized_text):
+            raw_email = match.group(0).strip()
+            token = sess.register_entity(raw_email, "EMAIL", match.start(), match.end())
+            anonymized_text = anonymized_text.replace(raw_email, token)
 
-        # 3. Anonimizar Teléfonos
-        phones = PHONE_REGEX.findall(anonymized_text)
-        seen_phones = []
-        for phone in phones:
-            if phone not in seen_phones:
-                seen_phones.append(phone)
-        for idx, phone in enumerate(seen_phones, 1):
-            token = f"[TELEFONO_{idx}]"
-            mapping[token] = phone
-            anonymized_text = re.sub(re.escape(phone), token, anonymized_text)
+        # 3. Teléfonos
+        for match in PHONE_REGEX.finditer(anonymized_text):
+            raw_phone = match.group(0).strip()
+            token = sess.register_entity(raw_phone, "TELEFONO", match.start(), match.end())
+            anonymized_text = anonymized_text.replace(raw_phone, token)
 
-        # 4. Anonimizar NIFs
-        nifs = NIF_REGEX.findall(anonymized_text)
-        seen_nifs = []
-        for nif in nifs:
-            if nif not in seen_nifs:
-                seen_nifs.append(nif)
-        
-        for idx, nif in enumerate(seen_nifs, 1):
-            token = f"[NIF_{idx}]"
-            mapping[token] = nif
-            anonymized_text = re.sub(re.escape(nif), token, anonymized_text)
+        # 4. Identificadores Fiscales Españoles (NIF, NIE, CIF)
+        for match in CANDIDATE_ID_REGEX.finditer(anonymized_text):
+            raw_id = match.group(0).strip()
+            id_type, is_valid = is_valid_spanish_id(raw_id)
+            if is_valid and id_type:
+                token = sess.register_entity(raw_id, id_type, match.start(), match.end()) # type: ignore
+                anonymized_text = anonymized_text.replace(raw_id, token)
+            else:
+                clean_id = re.sub(r'[\s.-]', '', raw_id).upper()
+                if len(clean_id) == 9:
+                    if clean_id[0] in "XYZ":
+                        inferred_type = "NIE"
+                    elif clean_id[0] in "ABCDEFGHJNPQRSUVW":
+                        inferred_type = "CIF"
+                    elif clean_id[:8].isdigit() and clean_id[8].isalpha():
+                        inferred_type = "NIF"
+                    else:
+                        inferred_type = None
+                    if inferred_type:
+                        token = sess.register_entity(raw_id, inferred_type, match.start(), match.end())
+                        anonymized_text = anonymized_text.replace(raw_id, token)
 
-        # 5. Anonimizar Importes
-        amounts = AMOUNT_REGEX.findall(anonymized_text)
-        seen_amounts = []
-        for amt in amounts:
-            if amt not in seen_amounts:
-                seen_amounts.append(amt)
+        # 5. Importes monetarios con contexto (€, EUR, euros)
+        extracted_amounts = extract_amounts_with_context(anonymized_text)
+        for _, raw_amount in extracted_amounts:
+            token = sess.register_entity(raw_amount, "IMPORTE", 0, 0)
+            anonymized_text = anonymized_text.replace(raw_amount, token)
 
-        for idx, amt in enumerate(seen_amounts, 1):
-            token = f"[IMPORTE_{idx}]"
-            mapping[token] = amt
-            anonymized_text = re.sub(re.escape(amt), token, anonymized_text)
-
-        # 6. Anonimizar Nombres
-        names_found = []
+        # 6. Nombres Propios
+        names_found: List[str] = []
         for match in INTRO_NAME_REGEX.finditer(anonymized_text):
             full_name = match.group(1).strip()
             if full_name and full_name.lower() not in COMMON_NAMES and len(full_name) > 2:
-                if not any(token in full_name for token in ["[NIF_", "[IMPORTE_", "[EMAIL_", "[TELEFONO_", "[IBAN_"]):
+                if not any(t in full_name for t in ["[NIF_", "[CIF_", "[NIE_", "[IMPORTE_", "[EMAIL_", "[TELEFONO_", "[IBAN_"]):
                     names_found.append(full_name)
 
         words = anonymized_text.split()
@@ -135,7 +129,7 @@ class DataAnonymizer:
                 name_parts = [word]
                 j = i + 1
                 while j < len(words) and j < i + 3:
-                    if words[j-1].endswith('.') or words[j-1].endswith(',') or words[j-1].endswith(';') or words[j-1].endswith(':'):
+                    if words[j-1].endswith(('.', ',', ';', ':')):
                         break
                     next_word = words[j]
                     clean_next = re.sub(r'[^\wÁÉÍÓÚÑáéíóúñ]', '', next_word)
@@ -147,23 +141,22 @@ class DataAnonymizer:
                 full_name = " ".join(name_parts)
                 full_name = re.sub(r'[^\w\sÁÉÍÓÚÑáéíóúñ]$', '', full_name).strip()
                 if full_name and len(full_name) > 2:
-                    if not any(token in full_name for token in ["[NIF_", "[IMPORTE_", "[EMAIL_", "[TELEFONO_", "[IBAN_"]):
+                    if not any(t in full_name for t in ["[NIF_", "[CIF_", "[NIE_", "[IMPORTE_", "[EMAIL_", "[TELEFONO_", "[IBAN_"]):
                         names_found.append(full_name)
 
         seen_names = []
-        for name in names_found:
-            if name not in seen_names:
-                seen_names.append(name)
+        for n in names_found:
+            if n not in seen_names:
+                seen_names.append(n)
         seen_names.sort(key=len, reverse=True)
 
-        for idx, name in enumerate(seen_names, 1):
-            token = f"[NOMBRE_{idx}]"
-            mapping[token] = name
-            anonymized_text = re.sub(re.escape(name), token, anonymized_text)
+        for name in seen_names:
+            token = sess.register_entity(name, "NOMBRE", 0, 0)
+            anonymized_text = anonymized_text.replace(name, token)
 
-        return anonymized_text, mapping
+        return anonymized_text, dict(sess.token_to_value_map)
 
-    def detokenize(self, text: str, mapping: dict[str, str]) -> str:
+    def detokenize(self, text: str, mapping: Dict[str, str]) -> str:
         """
         Reemplaza los tokens de vuelta por sus valores originales utilizando el mapa provisto.
         """

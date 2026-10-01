@@ -449,17 +449,34 @@ async def chat_endpoint(req: ChatRequest, request: Request):
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 import json
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                from app.domain.exceptions import AnonymizationFailureError
+                if isinstance(e, AnonymizationFailureError):
+                    logger.error("Error crítico de privacidad en stream (Fail-Closed): %s", e)
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Flujo interrumpido por protección de datos RGPD.'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            finally:
+                logger.info("Flujo SSE finalizado y memoria de sesión purgada.")
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-    with Timer() as t:
-        result = await orchestrator.run(
-            req.message,
-            llm,
-            request_id=request_id,
-            session_id=session_id,
-            client_id=client_id,
-        )
+    try:
+        with Timer() as t:
+            result = await orchestrator.run(
+                req.message,
+                llm,
+                request_id=request_id,
+                session_id=session_id,
+                client_id=client_id,
+            )
+    except Exception as e:
+        from app.domain.exceptions import AnonymizationFailureError
+        if isinstance(e, AnonymizationFailureError):
+            logger.error("Error crítico de privacidad RGPD (Fail-Closed): %s", e)
+            raise HTTPException(
+                status_code=500,
+                detail="La consulta fue bloqueada localmente para proteger sus datos personales por fallo en el motor de anonimización."
+            )
+        raise
 
     status = result.get("type", "unknown")
     logger.info("Solicitud /chat procesada con estado: %s", status)
@@ -1400,6 +1417,31 @@ async def get_monitoring_metrics(client_id: str = Depends(verify_api_key)):
         "status": "ok",
         "client_id": cid,
         "metrics": summary
+    }
+
+
+_last_privacy_session: dict | None = None
+
+def record_privacy_session(session_summary: dict):
+    global _last_privacy_session
+    _last_privacy_session = session_summary
+
+
+# Endpoint del Panel de Transparencia de Privacidad RGPD (Spec 025)
+@router.get("/api/v1/privacy/last-session")
+async def get_privacy_last_session():
+    """
+    Devuelve las métricas agregadas de la última sesión anonimizada
+    sin exponer datos personales en claro (cumplimiento RGPD/LOPDGDD).
+    """
+    global _last_privacy_session
+    if _last_privacy_session:
+        return _last_privacy_session
+    return {
+        "status": "protected",
+        "session_id": "none",
+        "total_protected_entities": 0,
+        "entities_by_type": {},
     }
 
 
