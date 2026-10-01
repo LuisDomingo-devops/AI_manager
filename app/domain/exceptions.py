@@ -3,6 +3,9 @@ Excepciones tipadas del dominio e infraestructura para Alfonso AI Konta.
 Estandarizadas para erradicar el antipatrón de captura ciega de Exception.
 """
 
+from typing import Any
+
+
 class AlfonsoBaseException(Exception):
     """Excepción raíz del sistema Alfonso AI Konta."""
     def __init__(self, message: str = "", details: dict | None = None):
@@ -94,5 +97,48 @@ class AnonymizationFailureError(GDPRPrivacyError):
     def __init__(self, incident_id: str, message: str = "Fallo en motor de anonimización local", details: dict | None = None):
         super().__init__(f"[{incident_id}] {message}", details)
         self.incident_id = incident_id
+
+# --- Excepciones Contables PGC (Spec 026) ---
+
+class AccountingDomainError(DomainError):
+    """Excepción raíz para violaciones de reglas contables PGC."""
+    pass
+
+class UnbalancedJournalEntryError(AccountingDomainError, ValueError):
+    """Lanzada cuando la suma del Debe no coincide exactamente con la del Haber."""
+    def __init__(self, total_debit: Any, total_credit: Any, difference: Any = None):
+        diff = difference if difference is not None else abs(total_debit - total_credit)
+        message = (
+            f"Asiento descuadrado: total Debe ({total_debit}) != total Haber ({total_credit}). "
+            f"Diferencia: {diff}"
+        )
+        super().__init__(message, details={
+            "total_debit": str(total_debit),
+            "total_credit": str(total_credit),
+            "difference": str(diff),
+        })
+        self.total_debit = total_debit
+        self.total_credit = total_credit
+        self.difference = diff
+
+class FiscalYearClosedError(AccountingDomainError):
+    """Lanzada cuando se intenta asentar o modificar un ejercicio contable ya cerrado."""
+    def __init__(self, tenant_id: str, fiscal_year: int):
+        message = f"El ejercicio fiscal {fiscal_year} para el tenant '{tenant_id}' se encuentra cerrado e inmutable."
+        super().__init__(message, details={"tenant_id": tenant_id, "fiscal_year": fiscal_year})
+        self.tenant_id = tenant_id
+        self.fiscal_year = fiscal_year
+
+class InvalidAccountCodeError(AccountingDomainError):
+    """Lanzada cuando un código de cuenta contable no cumple el estándar PGC."""
+    def __init__(self, account_code: str):
+        message = f"El código de cuenta '{account_code}' no es válido según el Plan General Contable (debe tener entre 3 y 10 dígitos numéricos)."
+        super().__init__(message, details={"account_code": account_code})
+
+class ImmutableEntryError(AccountingDomainError):
+    """Lanzada ante intentos de borrado o alteración destructiva de asientos existentes (Art. 29 C.Com.)."""
+    def __init__(self, entry_id: str):
+        message = f"El asiento '{entry_id}' es inmutable conforme al Art. 29 del Código de Comercio. Debe subsanarse mediante contraasiento."
+        super().__init__(message, details={"entry_id": entry_id})
 
 

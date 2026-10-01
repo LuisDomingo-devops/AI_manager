@@ -41,7 +41,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class JournalLineDTO(BaseModel):
     """Línea individual de un asiento contable del PGC con exactitud Decimal."""
-    account_code: str = Field(..., pattern=r"^\d{3,7}$", description="Código PGC de 3 a 7 dígitos numéricos")
+    account_code: str = Field(..., pattern=r"^\d{3,10}$", description="Código PGC de 3 a 10 dígitos numéricos")
     concept: str = Field(default="", min_length=0, max_length=255, description="Concepto del apunte")
     debit: Decimal = Field(default=Decimal("0.00"), ge=0, description="Importe al Debe")
     credit: Decimal = Field(default=Decimal("0.00"), ge=0, description="Importe al Haber")
@@ -70,7 +70,7 @@ class RecordJournalEntryCommand(BaseModel):
     fiscal_year: int
     concept: str
     document_ref: Optional[str] = None
-    lines: List[JournalLineDTO] = Field(default_factory=list)
+    lines: List[JournalLineDTO] = Field(..., min_length=2, description="Líneas del asiento (mínimo 2)")
 
     @field_validator("lines", mode="before")
     @classmethod
@@ -94,8 +94,34 @@ class JournalEntryView(BaseModel):
     entry_date: date
     fiscal_year: int
     concept: str
-    is_balanced: bool
+    document_ref: Optional[str] = None
+    is_balanced: bool = True
     tenant_id: str = "default"
+    lines: List[JournalLineDTO] = Field(default_factory=list)
+
+
+class LedgerMovementView(BaseModel):
+    """Movimiento individual en el extracto del Libro Mayor con exactitud Decimal."""
+    entry_number: int
+    entry_date: date
+    concept: str
+    debit: Decimal
+    credit: Decimal
+    progressive_balance: Decimal = Decimal("0.00")
+
+
+class PostRectificationInvoiceCommand(BaseModel):
+    tenant_id: str = "default"
+    entry_date: date = Field(default_factory=date.today)
+    fiscal_year: int
+    invoice_number: str
+    rectified_invoice_number: str
+    taxable_base: Decimal
+    tax_rate: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    third_party_account: str
+    is_sales: bool = True
 
 
 class IAccountingService(ABC):
@@ -104,6 +130,11 @@ class IAccountingService(ABC):
     @abstractmethod
     def record_entry(self, command: RecordJournalEntryCommand) -> JournalEntryView:
         """Registra un asiento en el Libro Diario asegurando cuadre y correlatividad."""
+        pass
+
+    @abstractmethod
+    def post_rectification_entry(self, command: PostRectificationInvoiceCommand) -> JournalEntryView:
+        """Registra un asiento por factura rectificativa o abono usando cuentas PGC 708/608."""
         pass
 
     @abstractmethod

@@ -3,7 +3,8 @@ Servicio generador de Informes Contables: Balance de Situación y Cuenta de Pér
 Conforme a la estructura del Plan General Contable (PGC Pymes).
 """
 
-from typing import Dict, Any
+from decimal import Decimal
+from typing import Dict, Any, List
 from app.infrastructure.database.legal_connection import get_legal_readonly_connection
 
 
@@ -140,3 +141,72 @@ class AccountingReportingService:
             "total_pasivo_y_patrimonio_neto": total_pasivo_pn,
             "is_balanced": abs(total_activo - total_pasivo_pn) < 0.01
         }
+
+    def generate_official_daily_book(self, tenant_id: str, fiscal_year: int) -> Dict[str, Any]:
+        """
+        Genera el Libro Diario oficial para legalización mercantil (Arts. 25, 27 y 28 Cód. Comercio).
+        Verifica el foliado correlativo ininterrumpido (1, 2, 3...) y el cuadre exacto en Decimal.
+        """
+        conn = get_legal_readonly_connection(client_id=tenant_id)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT e.entry_number, e.entry_date, e.concept, e.document_ref,
+                   l.account_code, l.concept as line_concept, l.debit, l.credit
+            FROM legal_journal_entries e
+            JOIN legal_journal_lines l ON e.id = l.entry_id
+            WHERE e.tenant_id = ? AND e.fiscal_year = ?
+            ORDER BY e.entry_number ASC, l.id ASC
+            """,
+            (tenant_id, fiscal_year)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+
+        total_debit = Decimal("0.00")
+        total_credit = Decimal("0.00")
+        entries_dict: Dict[int, Dict[str, Any]] = {}
+
+        for r in rows:
+            entry_number, entry_date, concept, doc_ref, account_code, line_concept, debit_raw, credit_raw = r
+            debit_dec = Decimal(str(debit_raw if debit_raw is not None else "0.00")).quantize(Decimal("0.01"))
+            credit_dec = Decimal(str(credit_raw if credit_raw is not None else "0.00")).quantize(Decimal("0.01"))
+            total_debit += debit_dec
+            total_credit += credit_dec
+
+            if entry_number not in entries_dict:
+                entries_dict[entry_number] = {
+                    "entry_number": entry_number,
+                    "entry_date": entry_date,
+                    "concept": concept,
+                    "document_ref": doc_ref,
+                    "lines": [],
+                }
+            entries_dict[entry_number]["lines"].append({
+                "account_code": account_code,
+                "concept": line_concept or concept,
+                "debit": debit_dec,
+                "credit": credit_dec,
+            })
+
+        entry_numbers = sorted(entries_dict.keys())
+        # Verificar foliado correlativo ininterrumpido empezando en 1
+        is_foliated_correlative = True
+        if entry_numbers:
+            expected = list(range(1, len(entry_numbers) + 1))
+            is_foliated_correlative = (entry_numbers == expected)
+
+        is_balanced = (total_debit == total_credit)
+
+        return {
+            "tenant_id": tenant_id,
+            "fiscal_year": fiscal_year,
+            "total_entries": len(entry_numbers),
+            "is_foliated_correlative": is_foliated_correlative,
+            "is_balanced": is_balanced,
+            "total_debit": total_debit.quantize(Decimal("0.01")),
+            "total_credit": total_credit.quantize(Decimal("0.01")),
+            "entries": list(entries_dict.values()),
+        }
+

@@ -41,9 +41,9 @@ def test_journal_line_dto_invalid_account_code_raises_validation_error():
     with pytest.raises(ValidationError):
         JournalLineDTO(account_code="43", concept="Test", debit=10, credit=0)
 
-    # Más de 7 dígitos
+    # Más de 10 dígitos
     with pytest.raises(ValidationError):
-        JournalLineDTO(account_code="43000001", concept="Test", debit=10, credit=0)
+        JournalLineDTO(account_code="43000000001", concept="Test", debit=10, credit=0)
 
     # Caracteres no numéricos
     with pytest.raises(ValidationError):
