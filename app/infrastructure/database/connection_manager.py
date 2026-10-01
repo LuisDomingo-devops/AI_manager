@@ -146,9 +146,13 @@ def _resolve_target_path(client_id: Optional[str] = None):
         if IS_TESTING:
             target_path = DB_PATH.parent / f"test_memory_{sanitized_cid}.db"
         else:
-            target_path = DB_PATH.parent / f"memory_{sanitized_cid}.db"
+            if sanitized_cid == "default":
+                target_path = DB_PATH
+            else:
+                target_path = DB_PATH.parent / f"memory_{sanitized_cid}.db"
 
     return target_path, sanitized_cid
+
 
 
 def _get_connection(client_id: Optional[str] = None) -> sqlite3.Connection:

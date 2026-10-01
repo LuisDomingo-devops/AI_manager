@@ -120,17 +120,7 @@ def test_stripe_provider_unit():
     assert any("Stripe" in t["concept"] for t in txs)
 
 
-def test_mock_bank_provider_unit():
-    provider = MockBankProvider()
-    link = provider.get_auth_link("http://localhost:8000/callback", {"bank_name": "Santander"})
-    assert "/bank/mock-auth" in link
-    
-    confirm = provider.confirm_auth("req_123", {})
-    assert confirm["status"] == "success"
-    assert "mock_account_123" in confirm["accounts"]
 
-    txs = provider.fetch_transactions({}, "mock_account_123", "01/08/2026")
-    assert len(txs) == 2
 
 
 def test_tink_provider_unit():

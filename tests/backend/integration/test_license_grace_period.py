@@ -149,7 +149,7 @@ def test_api_license_status_and_activation(rsa_keypair):
     license_data = generate_signed_license(
         holder="Empresa API Activa",
         client_id="empresa_api_01",
-        expires_at="2026-09-30",
+        expires_at="2029-12-31",
         private_key=private_key
     )
 

@@ -344,6 +344,20 @@ class AlfonsoHUDDashboard(QMainWindow, AlfonsoStyledWidget):
         inst=QApplication.instance()
         if inst: inst.quit()
 
+    def show_approval_modal(self, action_id: str, action_type: str, summary: str, details: dict):
+        """Muestra el modal interactivo de confirmación humana y resuelve la solicitud."""
+        from client.gui.dialogs.approval_modal import ApprovalModalDialog
+        api_url = self.config.get("url", "http://localhost:8000")
+        dialog = ApprovalModalDialog(
+            action_id=action_id,
+            action_type=action_type,
+            summary=summary,
+            details=details,
+            parent=self,
+            api_base_url=api_url
+        )
+        return dialog.exec()
+
     def closeEvent(self, event): self.close_gui()
 
     @staticmethod

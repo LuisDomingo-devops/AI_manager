@@ -80,7 +80,7 @@ class GoCardlessProvider(BaseBankProvider):
         if not secret_id or not secret_key:
             return {"valid": False, "error": "Debes proporcionar Secret ID y Secret Key de GoCardless Bank Data (o configurarlas en .env)."}
         if secret_id.startswith("mock_"):
-            return {"valid": True, "message": "Credenciales simuladas validadas."}
+            return {"valid": False, "error": "Credenciales simuladas no admitidas en entorno real."}
         try:
             token = self._get_access_token(secret_id, secret_key)
             return {"valid": True, "access_token": token}
@@ -170,8 +170,8 @@ class GoCardlessProvider(BaseBankProvider):
     def fetch_transactions(self, credentials_dict: Dict[str, Any], account_id: str, start_date: str) -> List[Dict[str, Any]]:
         secret_id, secret_key = self._resolve_credentials(credentials_dict)
         
-        if not secret_id or not secret_key:
-            raise ValueError("Credenciales de GoCardless no configuradas. No se admiten simulaciones en entorno real.")
+        if not secret_id or not secret_key or secret_id.startswith("mock_"):
+            raise ValueError("Credenciales de GoCardless no configuradas o simuladas. No se admiten simulaciones en entorno real.")
             
         try:
             import httpx

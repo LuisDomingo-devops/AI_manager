@@ -22,9 +22,9 @@ logger = logging.getLogger("sqlite_concurrency")
 @dataclass
 class RetryPolicy:
     """Política determinista de reintentos para operaciones que encuentren contención."""
-    max_retries: int = 5
+    max_retries: int = 10
     base_delay: float = 0.05
-    max_delay: float = 1.0
+    max_delay: float = 2.0
 
     def calculate_delay(self, attempt: int) -> float:
         """Calcula el tiempo de espera con retroceso exponencial y variación aleatoria (jitter)."""

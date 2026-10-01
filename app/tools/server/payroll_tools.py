@@ -32,7 +32,11 @@ async def create_employee_tool(
     Crea y da de alta un nuevo empleado en la base de datos cifrada de Alfonso y genera el fichero AFI de Alta para la TGSS.
     Requiere confirmación expresa del usuario.
     """
-    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval(
+        'create_employee',
+        details={"full_name": full_name, "nif": nif, "gross_annual_salary": gross_annual_salary, "contract_type": contract_type},
+        summary=f"Alta de empleado {full_name} ({nif}) con salario {gross_annual_salary:,.2f} €"
+    )
     if not approved:
         return {
             "status": "pending_confirmation",

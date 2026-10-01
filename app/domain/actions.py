@@ -86,6 +86,9 @@ class Action:
     # --- Gestión de Proyectos --------------------------------------
     SWITCH_PROJECT_SESSION = "switch_project_session"
 
+    # --- Gobernanza Human-in-the-Loop ------------------------------
+    APPROVAL_REQUIRED = "approval_required"
+
 
 # Whitelist generada a partir de la clase Action — nunca se mantiene a
 # mano, así que no puede desincronizarse de las constantes de arriba.
@@ -150,4 +153,6 @@ CLIENT_ALIASES: dict[str, str] = {
     "dev_studio_close_ui": Action.DEV_STUDIO_CLOSE,
     "dev_studio_close": Action.DEV_STUDIO_CLOSE,
     "switch_project_session": "switch_project_session",
+    "approval_required": Action.APPROVAL_REQUIRED,
 }
+

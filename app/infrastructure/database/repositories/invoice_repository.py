@@ -8,7 +8,7 @@ from app.utils.logger import error_logger
 
 class InvoiceRepository:
     @staticmethod
-    @retry_on_db_lock(max_retries=10, base_delay=0.05, max_delay=1.0)
+    @retry_on_db_lock(max_retries=15, base_delay=0.05, max_delay=2.0)
     def save(invoice_db_data: Dict[str, Any], existing_id_db: Optional[int] = None) -> int:
         """
         Saves or updates an invoice in the local SQLite database.

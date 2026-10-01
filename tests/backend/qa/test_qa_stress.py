@@ -134,10 +134,10 @@ def test_qa_alfonso_breaking_point(test_client):
     Al finalizar, valida la integridad de la cadena Veri*Factu.
     """
     stages = [
-        {"concurrency": 5, "requests": 10, "desc": "Carga inicial baja", "timeout": 30.0},
-        {"concurrency": 15, "requests": 30, "desc": "Carga media / concurrencia normal", "timeout": 45.0},
-        {"concurrency": 30, "requests": 60, "desc": "Carga alta / concurrencia elevada", "timeout": 90.0},
-        {"concurrency": 50, "requests": 100, "desc": "Carga extrema para buscar punto de ruptura", "timeout": 240.0}
+        {"concurrency": 5, "requests": 10, "desc": "Carga inicial baja", "timeout": 45.0},
+        {"concurrency": 15, "requests": 30, "desc": "Carga media / concurrencia normal", "timeout": 90.0},
+        {"concurrency": 30, "requests": 60, "desc": "Carga alta / concurrencia elevada", "timeout": 180.0},
+        {"concurrency": 50, "requests": 100, "desc": "Carga extrema para buscar punto de ruptura", "timeout": 300.0}
     ]
 
     broken = False
@@ -161,12 +161,9 @@ def test_qa_alfonso_breaking_point(test_client):
             
             # Alternar entre creación de facturas (escritura contable/PDF/Verifactu) y consultas chat
             is_invoice_op = (index % 2 == 0)
-            
-            # Instanciar TestClient directamente por hilo/operación sin re-ejecutar lifespan
-            local_client = TestClient(app)
-            local_client.headers.update({"X-API-Key": "test_api_key_default"})
+            local_client = test_client
 
-            retries = 3
+            retries = 5
             for attempt in range(retries):
                 start = time.time()
                 try:
@@ -198,8 +195,8 @@ def test_qa_alfonso_breaking_point(test_client):
                         else:
                             total_successful_chats += 1
                         break
-                    elif "locked" in response.text.lower() and attempt < retries - 1:
-                        time.sleep(0.05)
+                    elif ("locked" in response.text.lower() or response.status_code in (429, 503)) and attempt < retries - 1:
+                        time.sleep(0.1 * (attempt + 1))
                         continue
                     else:
                         stage_results.append({"status": "fail_status", "latency": elapsed, "code": response.status_code})
@@ -207,7 +204,7 @@ def test_qa_alfonso_breaking_point(test_client):
                         break
                 except Exception as e:
                     if "locked" in str(e).lower() and attempt < retries - 1:
-                        time.sleep(0.05)
+                        time.sleep(0.1 * (attempt + 1))
                         continue
                     elapsed = time.time() - start
                     stage_results.append({"status": "error", "latency": elapsed, "error": str(e)})

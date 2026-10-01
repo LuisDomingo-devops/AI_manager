@@ -47,3 +47,41 @@ class ExternalProviderError(InfrastructureError):
         super().__init__(message, details)
         self.provider_name = provider_name
         self.status_code = status_code
+
+class DomainError(AlfonsoBaseException):
+    """Errores de lógica de negocio o validación de dominio."""
+    pass
+
+class InvoiceValidationError(DomainError):
+    """Errores en la validación de una factura."""
+    pass
+
+class XSDValidationError(InvoiceValidationError):
+    """Errores al validar el documento XML contra el esquema verifactu.xsd."""
+    def __init__(self, message: str = "", errors: list | None = None, details: dict | None = None):
+        super().__init__(message, details)
+        self.errors = errors or []
+
+class InvoiceNumberGapError(DomainError):
+    """Error al detectar o prevenir un hueco en la serie correlativa de facturación."""
+    pass
+
+class ApprovalRequiredError(DomainError):
+    """Excepción lanzada cuando una operación crítica se suspende a la espera de confirmación humana."""
+    def __init__(self, message: str = "", approval_id: str = "", action_type: str = "", details: dict | None = None):
+        super().__init__(message, details)
+        self.approval_id = approval_id
+        self.action_type = action_type
+
+class TaxCalculationError(DomainError):
+    """Errores durante el cálculo de modelos tributarios oficiales (303, 130, etc.)."""
+    pass
+
+class BankStatementParseError(DomainError):
+    """Errores al parsear extractos Norma 43 o CSV bancarios."""
+    pass
+
+class BankConnectionUnavailableError(ExternalProviderError):
+    """Lanzada cuando un banco no tiene token o las credenciales han expirado (sin datos simulados)."""
+    pass
+

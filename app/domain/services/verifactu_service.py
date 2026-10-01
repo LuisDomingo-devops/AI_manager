@@ -104,12 +104,21 @@ class VerifactuService:
         ph = (prev_hash or "").strip().upper()
 
         if gen_timestamp:
-            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{tipo_factura}|{iva_amount}|{total_amount}|{ph}|{gen_timestamp}"
+            concat_str = (
+                f"IDEmisorFactura={issuer_nif}&NumSerieFactura={invoice_number}&FechaExpedicionFactura={date_of_issue}"
+                f"&TipoRegistroDeclarado={tipo_factura}&CuotaTotal={iva_amount}&ImporteTotal={total_amount}"
+                f"&Huella={ph}&FechaHoraHusoGenRegistro={gen_timestamp}"
+            )
         else:
-            # Cadena concatenada oficial Verifactu
-            concat_str = f"{issuer_nif}|{invoice_number}|{date_of_issue}|{tipo_factura}|{iva_amount}|{total_amount}|{ph}"
+            # Cadena concatenada oficial Verifactu sin timestamp explícito
+            concat_str = (
+                f"IDEmisorFactura={issuer_nif}&NumSerieFactura={invoice_number}&FechaExpedicionFactura={date_of_issue}"
+                f"&TipoRegistroDeclarado={tipo_factura}&CuotaTotal={iva_amount}&ImporteTotal={total_amount}"
+                f"&Huella={ph}"
+            )
         
         return hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
+
 
     @classmethod
     @retry_on_db_lock

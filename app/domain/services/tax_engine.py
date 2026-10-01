@@ -426,3 +426,138 @@ class TaxEngine:
                 filtered.append(d)
 
         return filtered
+
+    def calculate_model_303_from_data(
+        self,
+        fiscal_year: int,
+        quarter: int,
+        sales: list,
+        purchases: list,
+        prorrata_pct: float = 100.0
+    ):
+        """
+        Calcula las casillas oficiales del Modelo 303 de la AEAT según desglose impositivo y regla de prorrata.
+        """
+        from app.domain.models.billing import Model303ResultDTO
+        
+        base_4 = sum(s.get("base", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 4.0) < 0.1)
+        cuota_4 = sum(s.get("tax", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 4.0) < 0.1)
+        
+        base_10 = sum(s.get("base", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 10.0) < 0.1)
+        cuota_10 = sum(s.get("tax", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 10.0) < 0.1)
+        
+        base_21 = sum(s.get("base", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 21.0) < 0.1)
+        cuota_21 = sum(s.get("tax", 0.0) for s in sales if abs(s.get("vat_rate", 0.0) - 21.0) < 0.1)
+        
+        total_devengada = cuota_4 + cuota_10 + cuota_21
+        
+        base_deducible_corriente = sum(p.get("base", 0.0) for p in purchases if not p.get("is_investment", False))
+        cuota_deducible_corriente = sum(p.get("tax", 0.0) for p in purchases if not p.get("is_investment", False))
+        
+        base_deducible_inversion = sum(p.get("base", 0.0) for p in purchases if p.get("is_investment", False))
+        cuota_deducible_inversion = sum(p.get("tax", 0.0) for p in purchases if p.get("is_investment", False))
+        
+        # Aplicación de la regla de prorrata (general)
+        factor_prorrata = max(0.0, min(100.0, prorrata_pct)) / 100.0
+        total_deducible = round((cuota_deducible_corriente + cuota_deducible_inversion) * factor_prorrata, 2)
+        resultado = round(total_devengada - total_deducible, 2)
+        
+        casillas = {
+            "01": round(base_4, 2), "02": 4.0, "03": round(cuota_4, 2),
+            "04": round(base_10, 2), "05": 10.0, "06": round(cuota_10, 2),
+            "07": round(base_21, 2), "08": 21.0, "09": round(cuota_21, 2),
+            "27": round(total_devengada, 2),
+            "28": round(base_deducible_corriente, 2),
+            "29": round(cuota_deducible_corriente, 2),
+            "30": round(base_deducible_inversion, 2),
+            "31": round(cuota_deducible_inversion, 2),
+            "37": round(total_deducible, 2),
+            "46": round(resultado, 2)
+        }
+        
+        return Model303ResultDTO(
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+            base_superreducido_4=round(base_4, 2),
+            cuota_superreducido_4=round(cuota_4, 2),
+            base_reducido_10=round(base_10, 2),
+            cuota_reducido_10=round(cuota_10, 2),
+            base_general_21=round(base_21, 2),
+            cuota_general_21=round(cuota_21, 2),
+            total_cuota_devengada=round(total_devengada, 2),
+            iva_deducible_corriente=round(cuota_deducible_corriente, 2),
+            iva_deducible_inversion=round(cuota_deducible_inversion, 2),
+            prorrata_pct=prorrata_pct,
+            total_iva_deducible=total_deducible,
+            resultado_autoliquidacion=resultado,
+            casillas=casillas
+        )
+
+    def calculate_model_130_from_data(
+        self,
+        fiscal_year: int,
+        quarter: int,
+        accumulated_incomes: float,
+        accumulated_expenses: float,
+        previous_payments: float = 0.0,
+        deduction_art_80_bis: float = 0.0
+    ):
+        """
+        Calcula la autoliquidación del pago fraccionado de IRPF (Modelo 130) acumulativa anual (art. 109 RIRPF).
+        """
+        from app.domain.models.billing import Model130ResultDTO
+        
+        rendimiento_neto = round(accumulated_incomes - accumulated_expenses, 2)
+        # 20% sobre rendimiento neto positivo
+        pago_fraccionado = round(max(0.0, rendimiento_neto * 0.20), 2)
+        resultado = round(max(0.0, pago_fraccionado - previous_payments - deduction_art_80_bis), 2)
+        
+        casillas = {
+            "01": round(accumulated_incomes, 2),
+            "02": round(accumulated_expenses, 2),
+            "03": rendimiento_neto,
+            "04": pago_fraccionado,
+            "07": round(previous_payments, 2),
+            "13": round(deduction_art_80_bis, 2),
+            "19": resultado
+        }
+        
+        return Model130ResultDTO(
+            fiscal_year=fiscal_year,
+            quarter=quarter,
+            casilla_01_ingresos_acumulados=round(accumulated_incomes, 2),
+            casilla_02_gastos_acumulados=round(accumulated_expenses, 2),
+            casilla_03_rendimiento_neto=rendimiento_neto,
+            casilla_04_pago_fraccionado_previo=pago_fraccionado,
+            casilla_07_pagos_anteriores=round(previous_payments, 2),
+            casilla_13_deduccion=round(deduction_art_80_bis, 2),
+            casilla_19_resultado_ingresar=resultado,
+            casillas=casillas
+        )
+
+    def calculate_model_111(self, fiscal_year: int, quarter: int, withholdings: list) -> dict:
+        """Calcula retenciones para el Modelo 111 (trabajo y actividades económicas)."""
+        total_perceptores = len(withholdings)
+        total_bases = round(sum(w.get("base", 0.0) for w in withholdings), 2)
+        total_retenciones = round(sum(w.get("amount", 0.0) for w in withholdings), 2)
+        return {
+            "fiscal_year": fiscal_year,
+            "quarter": quarter,
+            "total_perceptores": total_perceptores,
+            "total_bases": total_bases,
+            "total_retenciones": total_retenciones
+        }
+
+    def calculate_model_115(self, fiscal_year: int, quarter: int, withholdings: list) -> dict:
+        """Calcula retenciones para el Modelo 115 (arrendamiento de inmuebles urbanos)."""
+        total_arrendadores = len(withholdings)
+        total_bases = round(sum(w.get("base", 0.0) for w in withholdings), 2)
+        total_retenciones = round(sum(w.get("amount", 0.0) for w in withholdings), 2)
+        return {
+            "fiscal_year": fiscal_year,
+            "quarter": quarter,
+            "total_arrendadores": total_arrendadores,
+            "total_bases": total_bases,
+            "total_retenciones": total_retenciones
+        }
+

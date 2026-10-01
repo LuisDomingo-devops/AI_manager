@@ -125,8 +125,17 @@ async def dashboard_sync(client_id: str = Depends(verify_api_key)):
     }
 
 class ApprovalResolutionRequest(BaseModel):
-    action_id: str
+    action_id: Optional[str] = None
     approved: bool
+    user_notes: Optional[str] = None
+
+@router.post("/approvals/{action_id}/resolve", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
+@router.post("/api/v1/approvals/{action_id}/resolve", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
+async def resolve_approval_endpoint(action_id: str, payload: ApprovalResolutionRequest, client_id: str = Depends(verify_api_key)):
+    from app.domain.services.approval_service import approval_service
+    if approval_service.resolve_approval(action_id, payload.approved):
+        return {"status": "ok", "message": "Acción resuelta correctamente.", "approved": payload.approved}
+    raise HTTPException(status_code=404, detail="Aprobación no encontrada o ya resuelta.")
 
 @router.post("/approvals/{action_id}/confirm", summary="Confirma una acción sensible retenida.")
 async def confirm_approval(action_id: str, client_id: str = Depends(verify_api_key)):
