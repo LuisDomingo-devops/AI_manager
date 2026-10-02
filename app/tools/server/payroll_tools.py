@@ -9,6 +9,7 @@ from app.domain.services.employee_service import EmployeeService
 from app.domain.services.payroll_engine import PayrollEngine
 from app.domain.services.payroll_pdf_service import PayrollPdfService
 from app.domain.services.tgss_affiliation_service import TgssAffiliationService
+from app.domain.services.tgss_cra_service import TgssCraService
 from app.domain.services.ledger_service import LedgerService
 from app.adapters.memory.memory import _get_connection
 from app.utils.logger import tool_logger
@@ -155,25 +156,18 @@ async def issue_monthly_payroll_tool(
         # 1. Generar PDF Oficial
         pdf_path = PayrollPdfService.generate_payroll_pdf(payroll, emp)
 
-        # 2. Asiento contable de nómina en Libro Diario
-        # Debe: 64000000 (Sueldos Brutos) + 64200000 (SS Empresa)
-        # Haber: 47511100 (IRPF Retenido) + 47600000 (SS Total Acreedora: Trabajador + Empresa) + 57200000 (Banco / Líquido)
-        total_ss_deuda = round(payroll["ss_worker_total"] + payroll["ss_employer_total"], 2)
+        # 2. Asiento contable de nómina en Libro Diario oficial PGC
         date_str = f"{year}-{str(month).zfill(2)}-28"
         payroll_code = f"NOM-{emp['id']}-{year}-{str(month).zfill(2)}"
 
-        apuntes = [
-            {"account_code": "64000000", "debe": payroll["gross_total"], "haber": 0.0},
-            {"account_code": "64200000", "debe": payroll["ss_employer_total"], "haber": 0.0},
-            {"account_code": "47511100", "debe": 0.0, "haber": payroll["irpf_amount"]},
-            {"account_code": "47600000", "debe": 0.0, "haber": total_ss_deuda},
-            {"account_code": "57200000", "debe": 0.0, "haber": payroll["net_salary"]}
-        ]
+        payroll_entry_data = dict(payroll)
+        payroll_entry_data["employee_name"] = emp.get("full_name", "Personal")
+        payroll_entry_data["month"] = month
+        payroll_entry_data["year"] = year
 
-        journal_id = LedgerService._insert_journal_and_ledger(
-            date_str=date_str,
-            concept=f"Nómina {month}/{year} - {emp['full_name']}",
-            apuntes=apuntes
+        journal_id = LedgerService.record_payroll_asiento(
+            payroll_data=payroll_entry_data,
+            date_str=date_str
         )
 
         # 3. Guardar en tabla payrolls
@@ -309,24 +303,15 @@ async def issue_settlement_and_dismissal_tool(
             vacation_days_pending=settlement["vacation_pending_days"]
         )
 
-        # 3. Asiento contable de Finiquito e Indemnización
-        # Debe: 64000000 (Sueldos y Salarios por días trabajados + pagas + vacaciones)
-        # Debe: 64100000 (Indemnizaciones por despido)
-        # Haber: 57200000 (Bancos)
-        haberes = round(settlement["worked_days_amount"] + settlement["extra_pays_pending"] + settlement["vacation_pending_amount"], 2)
-        indemnizacion = settlement["indemnity_amount"]
+        # 3. Asiento contable de Finiquito e Indemnización oficial PGC
+        settlement_entry_data = dict(settlement)
+        settlement_entry_data["employee_name"] = emp.get("full_name", f"Empleado ID {emp['id']}")
+        settlement_entry_data["employee_id"] = emp["id"]
+        settlement_entry_data["termination_date"] = termination_date
 
-        apuntes = []
-        if haberes > 0:
-            apuntes.append({"account_code": "64000000", "debe": haberes, "haber": 0.0})
-        if indemnizacion > 0:
-            apuntes.append({"account_code": "64100000", "debe": indemnizacion, "haber": 0.0})
-        apuntes.append({"account_code": "57200000", "debe": 0.0, "haber": settlement["total_settlement"]})
-
-        journal_id = LedgerService._insert_journal_and_ledger(
-            date_str=termination_date,
-            concept=f"Finiquito e Indemnización extinción {emp['full_name']}",
-            apuntes=apuntes
+        journal_id = LedgerService.record_settlement_asiento(
+            settlement_data=settlement_entry_data,
+            date_str=termination_date
         )
 
         # 4. Guardar en tabla settlements y actualizar status del empleado
@@ -365,4 +350,50 @@ async def issue_settlement_and_dismissal_tool(
         }
     except Exception as e:
         tool_logger.exception("Error al procesar el finiquito")
+        return {"status": "error", "message": str(e)}
+
+
+async def generate_cra_monthly_file_tool(
+    month: int,
+    year: int,
+    ccc: str = "28123456789",
+    confirmed_by_user: bool = False
+) -> dict:
+    """
+    Genera el fichero XML de Conceptos Retributivos Abonados (CRA) para la TGSS/SILTRA correspondiente al mes y año indicados.
+    Requiere confirmación previa del usuario.
+    """
+    approved = confirmed_by_user or await approval_service.request_approval(
+        'generate_cra_file',
+        details={"month": month, "year": year, "ccc": ccc},
+        summary=f"Generación de remesa mensual CRA TGSS {month:02d}/{year} (CCC {ccc})"
+    )
+    if not approved:
+        return {
+            "status": "pending_confirmation",
+            "message": (
+                f"Propuesta de Generación de Fichero CRA para la TGSS:\n"
+                f"- Periodo de liquidación: {month:02d}/{year}\n"
+                f"- Código Cuenta Cotización (CCC): {ccc}\n\n"
+                f"¿Deseas confirmar la generación y registro del fichero XML para SILTRA? (confirmed_by_user=True)"
+            )
+        }
+
+    try:
+        cra_result = TgssCraService.generate_monthly_cra_xml(
+            month=month,
+            year=year,
+            ccc=ccc
+        )
+        return {
+            "status": "ok",
+            "success": True,
+            "message": f"Remesa CRA {month:02d}/{year} generada correctamente para SILTRA.",
+            "file_path": cra_result.get("file_path"),
+            "record_id": cra_result.get("record_id"),
+            "total_trabajadores": cra_result.get("total_trabajadores"),
+            "total_importe": cra_result.get("total_importe")
+        }
+    except Exception as e:
+        tool_logger.exception("Error al generar remesa CRA")
         return {"status": "error", "message": str(e)}

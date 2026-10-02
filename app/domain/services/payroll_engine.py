@@ -1,70 +1,114 @@
-"""
-PAYROLL ENGINE — Motor de cálculo laboral de nóminas, cotizaciones SS y finiquitos.
-"""
-
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date
 from typing import Dict, Any, Tuple
-from app.domain.schemas import PayrollResultSchema, SettlementResultSchema
+from app.domain.schemas import PayrollResultSchema, SettlementResultSchema, IrpfFamilySituation
+from app.domain.services.irpf_retention_engine import IrpfRetentionEngine
 
 
 class PayrollEngine:
 
-    # Eliminadas constantes hardcodeadas. Se cargarán vía tax_rules_port.
-
     @classmethod
-    def calculate_monthly_payroll(cls, employee: Dict[str, Any], month: int, year: int, tax_rules_port=None) -> Dict[str, Any]:
+    def calculate_monthly_payroll(cls, employee: Dict[str, Any], month: int, year: int, tax_rules_port=None, **kwargs) -> Dict[str, Any]:
         """
-        Calcula la nómina mensual completa con bases de cotización, descuentos del trabajador y coste patronal.
+        Calcula la nómina mensual completa con bases de cotización con topes por grupo,
+        descuentos del trabajador y coste patronal desglosado con precisión Decimal y algoritmo oficial IRPF.
         """
+        emp_dict = dict(employee)
+        emp_dict.update(kwargs)
+        if "family_situation" in kwargs:
+            emp_dict["irpf_situation"] = kwargs["family_situation"]
+        if "num_children" in kwargs:
+            emp_dict["num_descendants"] = kwargs["num_children"]
+        employee = emp_dict
         if tax_rules_port:
             rules = tax_rules_port.get_rules().get("payroll", {})
         else:
-            # Fallback para no romper la API si no se inyecta
             from app.infrastructure.adapters.file_tax_rules_adapter import FileTaxRulesAdapter
             rules = FileTaxRulesAdapter().get_rules().get("payroll", {})
-        gross_annual = float(employee["gross_annual_salary"])
+
+        gross_annual = Decimal(str(employee["gross_annual_salary"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         num_paychecks = int(employee.get("num_paychecks", 12))
-        is_temp = str(employee.get("contract_type", "100")).startswith("4")
+        contract_code = str(employee.get("contract_code", employee.get("contract_type", "100")))
+        is_temp = contract_code.startswith("4")
+        group = str(employee.get("contribution_group", 1))
 
         # Salario base y prorrata de pagas extras
         if num_paychecks == 12:
-            salary_base = round(gross_annual / 12.0, 2)
-            extra_pay_prorata = 0.0
+            salary_base = (gross_annual / Decimal("12.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            extra_pay_prorata = Decimal("0.00")
             gross_total = salary_base
         else:
-            salary_base = round(gross_annual / 14.0, 2)
-            extra_pay_prorata = round((salary_base * 2.0) / 12.0, 2)
+            salary_base = (gross_annual / Decimal("14.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            extra_pay_prorata = ((salary_base * Decimal("2.00")) / Decimal("12.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             gross_total = salary_base
 
         # Base de Cotización a Contingencias Comunes (BCCC) y Profesionales (BCCP)
-        bccc = round(gross_annual / 12.0, 2)
+        raw_bccc = (gross_annual / Decimal("12.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        min_bases = rules.get("min_monthly_bases", {})
+        min_base = Decimal(str(min_bases.get(group, 1323.00)))
+        max_base = Decimal(str(rules.get("max_monthly_base_cap", 4720.50)))
+
+        bccc = min(max_base, max(min_base, raw_bccc))
         bccp = bccc
 
         # Cotizaciones Trabajador
-        w_cc = round(bccc * (rules.get("worker_cc_rate", 4.70) / 100.0), 2)
-        w_unempl_rate = rules.get("worker_unemployment_temp", 1.60) if is_temp else rules.get("worker_unemployment_rate", 1.55)
-        w_unempl = round(bccp * (w_unempl_rate / 100.0), 2)
-        w_fp = round(bccp * (rules.get("worker_fp_rate", 0.10) / 100.0), 2)
-        w_mei = round(bccc * (rules.get("worker_mei_rate", 0.12) / 100.0), 2)
-        w_total_ss = round(w_cc + w_unempl + w_fp + w_mei, 2)
+        w_cc_rate = Decimal(str(rules.get("worker_cc_rate", 4.70)))
+        w_cc = (bccc * (w_cc_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        w_unempl_rate = Decimal(str(rules.get("worker_unemployment_temp", 1.60))) if is_temp else Decimal(str(rules.get("worker_unemployment_rate", 1.55)))
+        w_unempl = (bccp * (w_unempl_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        w_fp_rate = Decimal(str(rules.get("worker_fp_rate", 0.10)))
+        w_fp = (bccp * (w_fp_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        w_mei_rate = Decimal(str(rules.get("worker_mei_rate", 0.12)))
+        w_mei = (bccc * (w_mei_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        w_total_ss = w_cc + w_unempl + w_fp + w_mei
 
         # Cotizaciones Empresa
-        e_cc = round(bccc * (rules.get("employer_cc_rate", 23.60) / 100.0), 2)
-        e_unempl_rate = rules.get("employer_unemployment_temp", 6.70) if is_temp else rules.get("employer_unemployment_rate", 5.50)
-        e_unempl = round(bccp * (e_unempl_rate / 100.0), 2)
-        e_fogasa = round(bccp * (rules.get("employer_fogasa_rate", 0.20) / 100.0), 2)
-        e_fp = round(bccp * (rules.get("employer_fp_rate", 0.60) / 100.0), 2)
-        e_mei = round(bccc * (rules.get("employer_mei_rate", 0.58) / 100.0), 2)
-        e_atep = round(bccp * (rules.get("employer_atep_rate", 1.50) / 100.0), 2)
-        e_total_ss = round(e_cc + e_unempl + e_fogasa + e_fp + e_mei + e_atep, 2)
+        e_cc_rate = Decimal(str(rules.get("employer_cc_rate", 23.60)))
+        e_cc = (bccc * (e_cc_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-        # Retención IRPF
-        irpf_rate = float(employee.get("irpf_rate", 10.0))
-        irpf_amount = round(gross_total * (irpf_rate / 100.0), 2)
+        e_unempl_rate = Decimal(str(rules.get("employer_unemployment_temp", 6.70))) if is_temp else Decimal(str(rules.get("employer_unemployment_rate", 5.50)))
+        e_unempl = (bccp * (e_unempl_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-        # Líquido a percibir y coste total para el autónomo
-        net_salary = round(gross_total - w_total_ss - irpf_amount, 2)
-        total_cost_company = round(gross_total + e_total_ss, 2)
+        e_fogasa_rate = Decimal(str(rules.get("employer_fogasa_rate", 0.20)))
+        e_fogasa = (bccp * (e_fogasa_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        e_fp_rate = Decimal(str(rules.get("employer_fp_rate", 0.60)))
+        e_fp = (bccp * (e_fp_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        e_mei_rate = Decimal(str(rules.get("employer_mei_rate", 0.58)))
+        e_mei = (bccc * (e_mei_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        e_atep_rate = Decimal(str(rules.get("employer_atep_rate", 1.50)))
+        e_atep = (bccp * (e_atep_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        e_total_ss = e_cc + e_unempl + e_fogasa + e_fp + e_mei + e_atep
+
+        # Retención IRPF Oficial
+        if "irpf_situation" in employee or "use_official_irpf" in employee or "irpf_rate" not in employee:
+            sit_val = int(employee.get("irpf_situation", 3))
+            situation = IrpfFamilySituation(sit_val) if sit_val in (1, 2, 3) else IrpfFamilySituation.SITUATION_3
+            irpf_dto = IrpfRetentionEngine.calculate_withholding(
+                annual_gross=gross_annual,
+                family_situation=situation,
+                num_descendants=int(employee.get("num_descendants", 0)),
+                num_descendants_under_3=int(employee.get("num_descendants_under_3", 0)),
+                disability_grade=int(employee.get("disability_grade", 0)),
+                contract_code=contract_code,
+                tax_rules_port=tax_rules_port
+            )
+            irpf_rate = irpf_dto.final_irpf_rate
+            irpf_amount = (gross_total * (irpf_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            irpf_rate = Decimal(str(employee["irpf_rate"])).quantize(Decimal("0.01"))
+            irpf_amount = (gross_total * (irpf_rate / Decimal("100.00"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        # Líquido a percibir y coste total para el empleador
+        net_salary = gross_total - w_total_ss - irpf_amount
+        total_cost_company = gross_total + e_total_ss
 
         return {
             "employee_id": employee["id"],
@@ -72,27 +116,27 @@ class PayrollEngine:
             "employee_nif": employee["nif"],
             "month": month,
             "year": year,
-            "salary_base": salary_base,
-            "extra_pay_prorata": extra_pay_prorata,
-            "gross_total": gross_total,
-            "bccc": bccc,
-            "bccp": bccp,
-            "ss_worker_cc": w_cc,
-            "ss_worker_unemployment": w_unempl,
-            "ss_worker_fp": w_fp,
-            "ss_worker_mei": w_mei,
-            "ss_worker_total": w_total_ss,
-            "ss_employer_cc": e_cc,
-            "ss_employer_unemployment": e_unempl,
-            "ss_employer_fogasa": e_fogasa,
-            "ss_employer_fp": e_fp,
-            "ss_employer_mei": e_mei,
-            "ss_employer_atep": e_atep,
-            "ss_employer_total": e_total_ss,
-            "irpf_rate": irpf_rate,
-            "irpf_amount": irpf_amount,
-            "net_salary": net_salary,
-            "total_cost_company": total_cost_company
+            "salary_base": float(salary_base),
+            "extra_pay_prorata": float(extra_pay_prorata),
+            "gross_total": float(gross_total),
+            "bccc": float(bccc),
+            "bccp": float(bccp),
+            "ss_worker_cc": float(w_cc),
+            "ss_worker_unemployment": float(w_unempl),
+            "ss_worker_fp": float(w_fp),
+            "ss_worker_mei": float(w_mei),
+            "ss_worker_total": float(w_total_ss),
+            "ss_employer_cc": float(e_cc),
+            "ss_employer_unemployment": float(e_unempl),
+            "ss_employer_fogasa": float(e_fogasa),
+            "ss_employer_fp": float(e_fp),
+            "ss_employer_mei": float(e_mei),
+            "ss_employer_atep": float(e_atep),
+            "ss_employer_total": float(e_total_ss),
+            "irpf_rate": float(irpf_rate),
+            "irpf_amount": float(irpf_amount),
+            "net_salary": float(net_salary),
+            "total_cost_company": float(total_cost_company)
         }
 
     @classmethod

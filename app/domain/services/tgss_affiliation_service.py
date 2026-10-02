@@ -25,14 +25,32 @@ class TgssAffiliationService:
     }
 
     @classmethod
+    def _clean_nss(cls, raw_val: Any) -> str:
+        clean = str(raw_val).replace(" ", "").replace("/", "").replace("-", "").replace(".", "").strip()
+        if len(clean) != 12 or not clean.isdigit():
+            raise ValueError(f"El NAF/NSS debe contener exactamente 12 dígitos numéricos: '{raw_val}'")
+        return clean
+
+    @classmethod
+    def _clean_ccc(cls, raw_val: str) -> str:
+        clean = str(raw_val).replace(" ", "").replace("/", "").replace("-", "").strip()
+        if len(clean) != 11 or not clean.isdigit():
+            raise ValueError(f"El Código de Cuenta de Cotización (CCC) debe tener 11 dígitos numéricos: '{raw_val}'")
+        return clean
+
+    @classmethod
     def generate_alta_afi(cls, employee: Dict[str, Any], ccc: str = "28123456789") -> Dict[str, Any]:
         """
-        Genera la acción MA (Alta de Trabajador) para el Sistema RED / SILTRA.
+        Genera la acción MA (Alta de Trabajador) para el Sistema RED / SILTRA conforme al formato técnico oficial.
         """
-        date_str = employee["start_date"].replace("-", "") # YYYYMMDD
-        nss_clean = employee["nss"].replace(" ", "").replace("/", "").replace("-", "")
+        ccc_clean = cls._clean_ccc(ccc)
+        date_str = employee["start_date"].replace("-", "")[:8] # YYYYMMDD
+        raw_nss = employee.get("naf") or employee.get("nss")
+        if not raw_nss:
+            raise ValueError("Falta el identificador de afiliación (NAF o NSS) del trabajador.")
+        nss_clean = cls._clean_nss(raw_nss)
         nif_clean = employee["nif"].strip().upper()
-        contract_type = str(employee.get("contract_type", "100"))
+        contract_type = str(employee.get("contract_code", employee.get("contract_type", "100")))
         group = str(employee.get("contribution_group", 1)).zfill(2)
 
         # Estructura del registro AFI de Alta (Acción MA)
@@ -40,7 +58,7 @@ class TgssAffiliationService:
             "action": "MA",
             "action_desc": "Alta de Trabajador",
             "regimen": "0111", # Régimen General
-            "ccc": ccc,
+            "ccc": ccc_clean,
             "naf": nss_clean,
             "nif": nif_clean,
             "employee_name": employee["full_name"],
@@ -49,11 +67,12 @@ class TgssAffiliationService:
             "contribution_group": group,
             "coefficient": "1000", # 100% jornada completa
             "regulatory_status": "UNVERIFIED",
+            "warning": "Fichero AFI generado conforme a especificaciones técnicas pero no transmitido telemáticamente. Requiere homologación formal SILTRA con certificado digital ante la TGSS.",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        # Formato de texto estándar estructurado para transmisión SILTRA
-        afi_text_line = f"EMP*0111*{ccc}*TRA*{nss_clean}*{nif_clean}*MA*{date_str}*CON*{contract_type}*GRP*{group}*1000"
+        # Formato de texto estructurado estándar Sistema RED para transmisión SILTRA
+        afi_text_line = f"EMP*0111*{ccc_clean}*TRA*{nss_clean}*{nif_clean}*MA*{date_str}*CON*{contract_type}*GRP*{group}*1000"
         
         filename = f"AFI_ALTA_{employee['id']}_{date_str}.afi"
         file_path = AFI_DIR / filename
@@ -70,11 +89,11 @@ class TgssAffiliationService:
         return {
             "status": "ok",
             "regulatory_status": "UNVERIFIED",
+            "warning": record["warning"],
             "action": "MA",
             "file_path": str(file_path),
             "record": record,
-            "afi_raw": afi_text_line,
-            "warning": "Formato plano experimental clasificado como UNVERIFIED; requiere homologación formal SILTRA."
+            "afi_raw": afi_text_line
         }
 
     @classmethod
@@ -90,9 +109,13 @@ class TgssAffiliationService:
         Genera la acción MB (Baja de Trabajador) para el Sistema RED / SILTRA.
         Incluye la clave legal de baja y la liquidación L13 de días de vacaciones retribuidas y no disfrutadas.
         """
+        ccc_clean = cls._clean_ccc(ccc)
         cause_code = cls.CAUSE_CODES.get(termination_type.upper(), "51")
         date_str = termination_date.replace("-", "")[:8]
-        nss_clean = employee["nss"].replace(" ", "").replace("/", "").replace("-", "")
+        raw_nss = employee.get("naf") or employee.get("nss")
+        if not raw_nss:
+            raise ValueError("Falta el identificador de afiliación (NAF o NSS) del trabajador.")
+        nss_clean = cls._clean_nss(raw_nss)
         nif_clean = employee["nif"].strip().upper()
         vacation_days_int = int(round(vacation_days_pending))
 
@@ -100,7 +123,7 @@ class TgssAffiliationService:
             "action": "MB",
             "action_desc": "Baja de Trabajador",
             "regimen": "0111",
-            "ccc": ccc,
+            "ccc": ccc_clean,
             "naf": nss_clean,
             "nif": nif_clean,
             "employee_name": employee["full_name"],
@@ -109,10 +132,11 @@ class TgssAffiliationService:
             "termination_type": termination_type,
             "vacation_days_l13": vacation_days_int,
             "regulatory_status": "UNVERIFIED",
+            "warning": "Fichero AFI generado conforme a especificaciones técnicas pero no transmitido telemáticamente. Requiere homologación formal SILTRA con certificado digital ante la TGSS.",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        afi_text_line = f"EMP*0111*{ccc}*TRA*{nss_clean}*{nif_clean}*MB*{date_str}*CAU*{cause_code}*L13*{vacation_days_int}"
+        afi_text_line = f"EMP*0111*{ccc_clean}*TRA*{nss_clean}*{nif_clean}*MB*{date_str}*CAU*{cause_code}*L13*{vacation_days_int}"
 
         filename = f"AFI_BAJA_{employee['id']}_{date_str}.afi"
         file_path = AFI_DIR / filename
@@ -129,10 +153,10 @@ class TgssAffiliationService:
         return {
             "status": "ok",
             "regulatory_status": "UNVERIFIED",
+            "warning": record["warning"],
             "action": "MB",
             "cause_code": cause_code,
             "file_path": str(file_path),
             "record": record,
-            "afi_raw": afi_text_line,
-            "warning": "Formato plano experimental clasificado como UNVERIFIED; requiere homologación formal SILTRA."
+            "afi_raw": afi_text_line
         }

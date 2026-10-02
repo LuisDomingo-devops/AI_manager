@@ -136,7 +136,8 @@ class PayrollPdfService:
 
         c.drawString(320, h - 90, f"Nombre: {employee['full_name']}")
         c.drawString(320, h - 105, f"NIF/NIE: {employee['nif']}")
-        c.drawString(320, h - 120, f"Nº Afiliación SS: {employee['nss']}  | Grupo: {employee.get('contribution_group', 1)}")
+        naf_display = employee.get("naf") or employee.get("nss", "")
+        c.drawString(320, h - 120, f"Nº Afiliación SS: {naf_display}  | Grupo: {employee.get('contribution_group', 1)}")
 
         # 3. Período de Liquidación
         c.setFont("Helvetica-Bold", 9)

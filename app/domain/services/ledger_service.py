@@ -145,6 +145,82 @@ class LedgerService:
         return cls._insert_journal_and_ledger(date_str, concept, apuntes)
 
     @classmethod
+    def record_payroll_asiento(cls, payroll_data: Dict[str, Any], date_str: str = None) -> int:
+        """
+        Registra el asiento contable reglamentario de devengo de nóminas (PGC).
+        Debe:
+          - 64000000 (Sueldos y Salarios): Bruto total devengado
+          - 64200000 (Seguridad Social a cargo de la empresa): Coste patronal total
+        Haber:
+          - 47600000 (Organismos de la Seguridad Social acreedores): SS Empresa + SS Trabajador
+          - 47510000 / 47511100 (Hacienda Pública acreedora por retenciones de IRPF): IRPF retenido
+          - 46500000 (Remuneraciones pendientes de pago) / 57200000 (Bancos): Líquido a percibir
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        if not date_str:
+            month = payroll_data.get("month", datetime.now().month)
+            year = payroll_data.get("year", datetime.now().year)
+            date_str = f"{year}-{str(month).zfill(2)}-28"
+
+        gross = Decimal(str(payroll_data["gross_total"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        e_ss = Decimal(str(payroll_data["ss_employer_total"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        w_ss = Decimal(str(payroll_data["ss_worker_total"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        irpf = Decimal(str(payroll_data["irpf_amount"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        net = (gross - w_ss - irpf).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        total_ss = (e_ss + w_ss).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        emp_name = payroll_data.get("employee_name", "Personal")
+        concept = f"Nómina {payroll_data.get('month', '')}/{payroll_data.get('year', '')} - {emp_name}"
+
+        apuntes = [
+            {"account_code": "64000000", "debe": float(gross), "haber": 0.0},
+            {"account_code": "64200000", "debe": float(e_ss), "haber": 0.0},
+            {"account_code": "47600000", "debe": 0.0, "haber": float(total_ss)},
+            {"account_code": "47510000", "debe": 0.0, "haber": float(irpf)},
+            {"account_code": "46500000", "debe": 0.0, "haber": float(net)}
+        ]
+
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
+
+    @classmethod
+    def record_settlement_asiento(cls, settlement_data: Dict[str, Any], date_str: str = None) -> int:
+        """
+        Registra el asiento contable oficial de liquidación, finiquito e indemnizaciones (PGC).
+        Debe:
+          - 64000000 (Sueldos y Salarios): Salarios días mes, pagas extras y vacaciones devengadas
+          - 64100000 (Indemnizaciones por despido objetivo o improcedente)
+          - 64200000 (Seguridad Social a cargo de la empresa por L13 vacaciones si aplica)
+        Haber:
+          - 47600000 (Seguridad Social acreedora por L13 si aplica)
+          - 47510000 (Retenciones IRPF practicadas sobre liquidación)
+          - 46500000 / 57200000 (Líquido total finiquito a abonar)
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        if not date_str:
+            date_str = settlement_data.get("termination_date", datetime.now().strftime("%Y-%m-%d"))
+
+        w_days = Decimal(str(settlement_data.get("worked_days_amount", 0.0))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        extra = Decimal(str(settlement_data.get("extra_pays_pending", 0.0))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        vac = Decimal(str(settlement_data.get("vacation_pending_amount", 0.0))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        salarios = (w_days + extra + vac).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        indemnizacion = Decimal(str(settlement_data.get("indemnity_amount", 0.0))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        total_liquidado = Decimal(str(settlement_data.get("total_settlement", salarios + indemnizacion))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        emp_name = settlement_data.get("employee_name", f"Empleado ID {settlement_data.get('employee_id')}")
+        concept = f"Finiquito e Indemnización extinción {emp_name}"
+
+        apuntes = []
+        if salarios > Decimal("0.00"):
+            apuntes.append({"account_code": "64000000", "debe": float(salarios), "haber": 0.0})
+        if indemnizacion > Decimal("0.00"):
+            apuntes.append({"account_code": "64100000", "debe": float(indemnizacion), "haber": 0.0})
+        apuntes.append({"account_code": "46500000", "debe": 0.0, "haber": float(total_liquidado)})
+
+        return cls._insert_journal_and_ledger(date_str, concept, apuntes)
+
+
+    @classmethod
     def get_libro_diario(cls, year: int) -> List[Dict[str, Any]]:
         """
         Retorna la lista de todos los asientos y apuntes contables para un año fiscal específico.

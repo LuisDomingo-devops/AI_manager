@@ -1,5 +1,6 @@
 import re
-from typing import Optional, Literal, Dict, Any
+from decimal import Decimal
+from typing import Optional, Literal, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator
 
 class UserProfileSchema(BaseModel):
@@ -157,7 +158,193 @@ class SettlementResultSchema(BaseModel):
     indemnity_amount: float
     total_settlement: float
     is_exempt_irpf: bool
+
+
+# ==============================================================================
+# SPEC-030: GESTIÓN DE RRHH, NÓMINAS IRPF OFICIAL, SILTRA TGSS Y PGC
+# ==============================================================================
 from enum import Enum
+
+class EmployeeStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    LEAVE = "LEAVE"
+    DISMISSED = "DISMISSED"
+
+class IrpfFamilySituation(int, Enum):
+    SITUATION_1 = 1  # Soltero, viudo, divorciado con hijos a cargo exclusivo (monoparental)
+    SITUATION_2 = 2  # Casado cuyo cónyuge no percibe rentas anuales superiores a 1.500 €
+    SITUATION_3 = 3  # Situación general / resto de supuestos
+
+class EmployeeContractDTO(BaseModel):
+    id: Optional[int] = None
+    nif: str = Field(..., description="NIF o NIE español con letra de control válida")
+    naf: str = Field(..., description="Número de Afiliación a la Seguridad Social (12 dígitos numéricos)")
+    full_name: str = Field(..., min_length=3, max_length=150)
+    email: Optional[str] = None
+    iban: str = Field(..., pattern=r"^ES\d{22}$", description="Código de cuenta bancaria IBAN español")
+    annual_gross_salary: Decimal = Field(..., gt=Decimal("0.00"), description="Salario bruto anual en euros")
+    num_paychecks: int = Field(default=12, ge=12, le=14, description="Número de pagas (12 o 14)")
+    contract_code: str = Field(default="100", pattern=r"^\d{3}$", description="Código de contrato SEPE (ej. 100 Indefinido TC, 200 Indefinido TP, 401)")
+    contribution_group: int = Field(..., ge=1, le=11, description="Grupo de cotización a la TGSS (01 al 11)")
+    cnae_code: str = Field(default="6201", pattern=r"^\d{4}$", description="Código CNAE 2009 de la actividad")
+    irpf_situation: IrpfFamilySituation = Field(default=IrpfFamilySituation.SITUATION_3, description="Situación familiar Modelo 145")
+    num_descendants: int = Field(default=0, ge=0, description="Hijos o descendientes a cargo")
+    num_descendants_under_3: int = Field(default=0, ge=0, description="Descendientes a cargo menores de 3 años")
+    disability_grade: int = Field(default=0, ge=0, le=100, description="Grado de discapacidad reconocido (%)")
+    start_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha de alta del contrato (AAAA-MM-DD)")
+    end_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha de baja laboral si aplica")
+    status: EmployeeStatus = Field(default=EmployeeStatus.ACTIVE)
+
+    @field_validator("nif")
+    @classmethod
+    def validate_nif_nie(cls, v: str) -> str:
+        clean = v.strip().upper()
+        nif_pattern = r"^[0-9XYZ][0-9]{7}[TRWAGMYFPDXBNJZSQVHLCKE]$"
+        if not re.match(nif_pattern, clean):
+            raise ValueError(f"NIF/NIE con formato o letra de control inválida: {v}")
+        return clean
+
+    @field_validator("naf", mode="before")
+    @classmethod
+    def resolve_and_clean_naf(cls, v: Any) -> str:
+        clean = re.sub(r"[\s\/\-\.]", "", str(v))
+        if not re.match(r"^\d{12}$", clean):
+            raise ValueError(f"El NAF/NSS debe contener exactamente 12 dígitos numéricos: {v}")
+        return clean
+
+    @property
+    def nss(self) -> str:
+        """Alias de compatibilidad hacia atrás para código legacy que accede a employee.nss"""
+        return self.naf
+
+class IrpfCalculationDTO(BaseModel):
+    annual_gross: Decimal
+    deductible_ss_worker_annual: Decimal
+    general_deductible_expenses: Decimal = Decimal("2000.00")
+    article_20_reduction: Decimal = Decimal("0.00")
+    tax_base_irpf: Decimal
+    personal_family_minimum: Decimal
+    quota_tax_base: Decimal
+    quota_minimum: Decimal
+    prior_quota: Decimal
+    is_exempt_art_81: bool
+    final_irpf_rate: Decimal = Field(..., ge=Decimal("0.00"), le=Decimal("47.00"))
+    monthly_retention_amount: Decimal
+
+class PayrollDeductionsWorkerDTO(BaseModel):
+    common_contingencies: Decimal
+    unemployment: Decimal
+    professional_training: Decimal
+    mei: Decimal
+    total_ss_worker: Decimal
+
+class PayrollEmployerCostsDTO(BaseModel):
+    common_contingencies: Decimal
+    unemployment: Decimal
+    fogasa: Decimal
+    professional_training: Decimal
+    mei: Decimal
+    atep: Decimal
+    total_ss_employer: Decimal
+
+class MonthlyPayrollCalculationDTO(BaseModel):
+    employee_id: int
+    employee_name: str
+    employee_nif: str
+    month: int = Field(..., ge=1, le=12)
+    year: int = Field(..., ge=2020)
+    salary_base: Decimal
+    extra_pay_prorata: Decimal = Decimal("0.00")
+    gross_total: Decimal
+    bccc: Decimal
+    bccp: Decimal
+    worker_deductions: PayrollDeductionsWorkerDTO
+    employer_costs: PayrollEmployerCostsDTO
+    irpf_rate: Decimal
+    irpf_retention: Decimal
+    net_salary: Decimal
+    total_cost_to_company: Decimal
+
+class TgssAfiAction(str, Enum):
+    MA = "MA"  # Alta de trabajador
+    MB = "MB"  # Baja de trabajador
+    MC = "MC"  # Modificación de contrato/jornada
+
+class TgssTerminationCause(str, Enum):
+    OBJECTIVE = "51"      # Despido por causas objetivas / procedente
+    VOLUNTARY = "53"      # Dimisión / baja voluntaria
+    DISCIPLINARY = "54"   # Despido disciplinario procedente
+    END_CONTRACT = "93"   # Fin de contrato temporal
+
+class TgssAfiRecordDTO(BaseModel):
+    action: TgssAfiAction
+    regimen: str = "0111"
+    ccc: str = Field(..., pattern=r"^\d{11}$")
+    naf: str = Field(..., pattern=r"^\d{12}$")
+    nif: str
+    real_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    contract_code: Optional[str] = "100"
+    contribution_group: Optional[int] = Field(default=1, ge=1, le=11)
+    coefficient: Optional[str] = "1000"
+    cause_code: Optional[TgssTerminationCause] = None
+    vacation_days_l13: Optional[int] = 0
+    formatted_payload: str
+
+class CraConceptType(str, Enum):
+    COMPUTABLE = "C"  # Concepto computable en base de cotización
+    EXCLUDED = "E"    # Concepto excluido de cotización
+
+class TgssCraConceptDTO(BaseModel):
+    code: str = Field(..., pattern=r"^\d{4}$", description="Código concepto TGSS (ej. 0001 Salario Base, 0005 Extra)")
+    description: str
+    amount: Decimal
+    concept_type: CraConceptType
+
+class TgssCraWorkerDTO(BaseModel):
+    naf: str = Field(..., pattern=r"^\d{12}$")
+    nif: str
+    concepts: List[TgssCraConceptDTO]
+
+class TgssCraMessageDTO(BaseModel):
+    regimen: str = "0111"
+    province: str = Field(..., pattern=r"^\d{2}$")
+    number: str = Field(..., pattern=r"^\d{7}$")
+    control_digit: str = Field(..., pattern=r"^\d{2}$")
+    month: int = Field(..., ge=1, le=12)
+    year: int = Field(..., ge=2020)
+    workers: List[TgssCraWorkerDTO]
+
+class JournalEntryLineDTO(BaseModel):
+    account_code: str
+    concept: str
+    debe: Decimal = Decimal("0.00")
+    haber: Decimal = Decimal("0.00")
+
+class PayrollJournalEntryDTO(BaseModel):
+    date: str
+    concept: str
+    lines: List[JournalEntryLineDTO]
+
+    def validate_double_entry(self) -> bool:
+        total_debe = sum(line.debe for line in self.lines).quantize(Decimal("0.01"))
+        total_haber = sum(line.haber for line in self.lines).quantize(Decimal("0.01"))
+        if total_debe != total_haber:
+            raise ValueError(f"Asiento de nómina descuadrado: Debe ({total_debe}) != Haber ({total_haber})")
+        return True
+
+class SettlementJournalEntryDTO(BaseModel):
+    date: str
+    concept: str
+    lines: List[JournalEntryLineDTO]
+
+    def validate_double_entry(self) -> bool:
+        total_debe = sum(line.debe for line in self.lines).quantize(Decimal("0.01"))
+        total_haber = sum(line.haber for line in self.lines).quantize(Decimal("0.01"))
+        if total_debe != total_haber:
+            raise ValueError(f"Asiento de finiquito descuadrado (Partida Doble rota): Debe ({total_debe}) != Haber ({total_haber})")
+        return True
+
+
 class IntentType(str, Enum):
     message = 'message'
     tool_call = 'tool_call'

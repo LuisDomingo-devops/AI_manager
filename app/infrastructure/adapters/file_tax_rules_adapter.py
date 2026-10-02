@@ -43,8 +43,8 @@ class FileTaxRulesAdapter(TaxRulesPort):
         return {
             "iva_general_rate": 21.0,
             "irpf_profesionales_rate": 15.0,
-            "last_updated": "2026-08-13",
-            "boe_reference": "Default Seed Fallback",
+            "last_updated": "2026-10-02",
+            "boe_reference": "Default Seed Fallback - Orden ESS/2098/2014 & RD 439/2007",
             "payroll": {
                 "worker_cc_rate": 4.70,
                 "worker_unemployment_rate": 1.55,
@@ -57,7 +57,42 @@ class FileTaxRulesAdapter(TaxRulesPort):
                 "employer_fogasa_rate": 0.20,
                 "employer_fp_rate": 0.60,
                 "employer_mei_rate": 0.58,
-                "employer_atep_rate": 1.50
+                "employer_atep_rate": 1.50,
+                "max_monthly_base_cap": 4720.50,
+                "min_monthly_bases": {
+                    "1": 1847.40,
+                    "2": 1532.10,
+                    "3": 1332.90,
+                    "4": 1323.00,
+                    "5": 1323.00,
+                    "6": 1323.00,
+                    "7": 1323.00,
+                    "8": 1323.00,
+                    "9": 1323.00,
+                    "10": 1323.00,
+                    "11": 1323.00
+                },
+                "irpf_brackets": [
+                    { "limit": 12450.00, "rate": 19.00 },
+                    { "limit": 20200.00, "rate": 24.00 },
+                    { "limit": 35200.00, "rate": 30.00 },
+                    { "limit": 60000.00, "rate": 37.00 },
+                    { "limit": 300000.00, "rate": 45.00 },
+                    { "limit": None, "rate": 47.00 }
+                ],
+                "irpf_minimums": {
+                    "taxpayer_general": 5550.00,
+                    "descendant_1": 2400.00,
+                    "descendant_2": 2700.00,
+                    "descendant_3": 4000.00,
+                    "descendant_4_plus": 4500.00,
+                    "descendant_under_3_bonus": 2800.00
+                },
+                "art_81_limits": {
+                    "situation_1": { "0": 15876.00, "1": 17260.00, "2_plus": 18640.00 },
+                    "situation_2": { "0": 17107.00, "1": 18130.00, "2_plus": 19260.00 },
+                    "situation_3": { "0": 15876.00, "1": 16340.00, "2_plus": 16860.00 }
+                }
             }
         }
 
