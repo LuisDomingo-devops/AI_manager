@@ -2,8 +2,8 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, Literal, Dict, Any, List
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Literal, Dict, Any, List, Union
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 class UserProfileSchema(BaseModel):
     user_type: Literal["autónomo", "pyme"] = Field(..., description="Tipo de contribuyente")
@@ -1022,6 +1022,133 @@ class InvoiceApprovalResultDTO(BaseModel):
     invoice_status: Optional[str] = None
     message: str
     is_success: bool = True
+
+
+# ============================================================================
+# MÓDULO 10: CONCILIACIÓN BANCARIA Y LIBRO DIARIO PGC (SPEC 034)
+# ============================================================================
+
+class BankStatementSourceType(str, Enum):
+    NORMA43 = "NORMA43"
+    CSV = "CSV"
+    OPEN_BANKING = "OPEN_BANKING"
+
+
+class BankReconciliationStatus(str, Enum):
+    UNRECONCILED = "UNRECONCILED"
+    SUGGESTED = "SUGGESTED"
+    RECONCILED = "RECONCILED"
+
+
+class BankMovementDTO(BaseModel):
+    """Representa un movimiento bancario con rigor y exactitud Decimal."""
+    id: Optional[int] = Field(None, description="Identificador único en base de datos")
+    statement_id: Optional[int] = Field(None, description="ID del extracto bancario contenedor")
+    account_iban: Optional[str] = Field(default="ES0000000000000000000000", description="IBAN de la cuenta bancaria")
+    operation_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha contable (YYYY-MM-DD)")
+    value_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha valor (YYYY-MM-DD)")
+    amount: Decimal = Field(..., description="Positivo para abonos/ingresos, negativo para cargos/pagos")
+    concept: str = Field(..., min_length=1, description="Concepto íntegro del movimiento bancario")
+    balance_after: Decimal = Field(..., description="Saldo resultante tras la operación")
+    reference: Optional[str] = Field(None, description="Referencia bancaria o ID de transacción")
+    reconciled_invoice_id: Optional[int] = Field(None, description="ID de la factura emparejada")
+    reconciliation_status: str = Field(default="UNRECONCILED", description="'UNRECONCILED', 'SUGGESTED', 'RECONCILED'")
+    journal_entry_id: Optional[int] = Field(None, description="ID del asiento contable en Libro Diario PGC")
+
+    @field_validator("amount", "balance_after", mode="before")
+    @classmethod
+    def parse_quantize_decimals(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class BankStatementDTO(BaseModel):
+    """Extracto bancario completo con balance contable verificado."""
+    id: Optional[int] = None
+    tenant_id: str = Field(default="default")
+    source_type: BankStatementSourceType = Field(default=BankStatementSourceType.NORMA43)
+    account_iban: str
+    initial_balance: Decimal
+    final_balance: Decimal
+    import_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}")
+    entries: List[BankMovementDTO] = Field(default_factory=list)
+
+    @field_validator("initial_balance", "final_balance", mode="before")
+    @classmethod
+    def parse_quantize_balance(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class ReconciliationSuggestionDTO(BaseModel):
+    """Propuesta de casación probabilística ponderada."""
+    entry_id: int
+    invoice_id: int
+    score: float = Field(..., ge=0.0, le=1.0)
+    matching_criteria: List[str] = Field(default_factory=list)
+    suggested_entry_debit_account: str = Field(default="572")
+    suggested_entry_credit_account: str = Field(default="430")
+    fee_amount: Decimal = Field(default=Decimal("0.00"))
+
+    @field_validator("fee_amount", mode="before")
+    @classmethod
+    def parse_quantize_fee(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class ApplyReconciliationCommand(BaseModel):
+    """Comando emitido tras la confirmación humana para consolidar y asentar."""
+    tenant_id: str = Field(default="default")
+    entry_id: int
+    invoice_id: int
+    fee_amount: Decimal = Field(default=Decimal("0.00"))
+    debit_account: Optional[str] = None
+    credit_account: Optional[str] = None
+    debit_account_override: Optional[str] = None
+    credit_account_override: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_account_overrides(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("debit_account") and data.get("debit_account_override"):
+                data["debit_account"] = data.get("debit_account_override")
+            if not data.get("credit_account") and data.get("credit_account_override"):
+                data["credit_account"] = data.get("credit_account_override")
+        return data
+
+    @field_validator("fee_amount", mode="before")
+    @classmethod
+    def parse_quantize_fee_cmd(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class ReconciliationResultDTO(BaseModel):
+    """Resultado de la ejecución atómica de conciliación y asiento en Libro Diario."""
+    entry_id: int
+    invoice_id: int
+    journal_entry_id: Union[str, int]
+    reconciliation_status: str = "RECONCILED"
+    invoice_status: str = "PAID"
+    total_reconciled: Decimal = Field(default=Decimal("0.00"))
+    fee_accounted: Decimal = Field(default=Decimal("0.00"))
+    status: str = "RECONCILED"
+    message: Optional[str] = None
+
+    @field_validator("total_reconciled", "fee_accounted", mode="before")
+    @classmethod
+    def parse_quantize_res(cls, v) -> Decimal:
+        if v is None:
+            return Decimal("0.00")
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
 
 
 

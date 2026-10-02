@@ -49,12 +49,16 @@ class AccountingReportingService:
                 saldo = round(debit - credit, 2)
                 desglose_gastos[code] = saldo
 
+        total_ingresos_calc = float(sum(desglose_ingresos.values()))
+        total_gastos_calc = float(sum(desglose_gastos.values()))
+        resultado_calc = round(total_ingresos_calc - total_gastos_calc, 2)
+
         res = dto.model_dump()
         res.update({
             "fiscal_year": fiscal_year,
-            "total_ingresos": float(dto.cifra_negocios + dto.otros_ingresos_explotacion + dto.ingresos_financieros),
-            "total_gastos": float(dto.aprovisionamientos + dto.gastos_personal + dto.otros_gastos_explotacion + dto.amortizaciones_dotacion + dto.gastos_financieros + dto.impuesto_sociedades),
-            "resultado_ejercicio": float(dto.resultado_neto_ejercicio),
+            "total_ingresos": total_ingresos_calc,
+            "total_gastos": total_gastos_calc,
+            "resultado_ejercicio": resultado_calc,
             "ingresos": desglose_ingresos,
             "gastos": desglose_gastos
         })

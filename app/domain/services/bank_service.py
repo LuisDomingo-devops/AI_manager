@@ -372,6 +372,85 @@ class BankService:
         return count
 
     @classmethod
+    def save_statement(cls, statement, tenant_id: str = "default") -> int:
+        """
+        Persiste un extracto bancario validado en bank_statements y bank_movements con rigor Decimal.
+        """
+        from app.infrastructure.database.connection_manager import write_transaction
+        movements_sum = sum(e.amount for e in statement.entries)
+        with write_transaction(tenant_id) as conn:
+            cursor = conn.cursor()
+            source_type_val = statement.source_type.value if hasattr(statement.source_type, "value") else str(statement.source_type)
+            cursor.execute("""
+                INSERT INTO bank_statements (
+                    tenant_id, source_type, account_iban, initial_balance, final_balance, movements_sum, is_balanced, import_date
+                ) VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (
+                tenant_id,
+                source_type_val,
+                statement.account_iban,
+                str(statement.initial_balance),
+                str(statement.final_balance),
+                str(movements_sum),
+                statement.import_date
+            ))
+            statement_id = cursor.lastrowid
+
+            for entry in statement.entries:
+                cursor.execute("""
+                    INSERT INTO bank_movements (
+                        tenant_id, statement_id, account_iban, movement_date, operation_date, value_date,
+                        amount, balance_after, concept, reference, reconciliation_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    tenant_id,
+                    statement_id,
+                    entry.account_iban,
+                    entry.operation_date,
+                    entry.operation_date,
+                    entry.value_date,
+                    str(entry.amount),
+                    str(entry.balance_after),
+                    entry.concept,
+                    entry.reference,
+                    entry.reconciliation_status or "UNRECONCILED"
+                ))
+            return statement_id
+
+    @classmethod
+    def sync_connector_without_fakes(cls, provider_name: str, connection_id: int, tenant_id: str = "default") -> int:
+        """
+        Sincroniza transacciones en tiempo real exigiendo credenciales y consentimiento PSD2 activo.
+        Prohíbe terminantemente inyectar movimientos ficticios o fakes cuando las credenciales no existen o son inválidas.
+        """
+        from app.domain.exceptions import BankAuthenticationRequiredError
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, provider, credentials, consent_status, consent_expires_at FROM bank_connections WHERE id = ?", (connection_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise BankAuthenticationRequiredError(
+                    message=f"Conexión bancaria {connection_id} no encontrada para el proveedor {provider_name}.",
+                    provider_name=provider_name
+                )
+            
+            creds_cipher = row["credentials"]
+            if not creds_cipher:
+                raise BankAuthenticationRequiredError(
+                    message=f"Credenciales no configuradas para el conector bancario {provider_name}.",
+                    provider_name=provider_name
+                )
+            
+            consent_status = row["consent_status"] if "consent_status" in row.keys() else "valid"
+            if consent_status == "expired":
+                raise BankAuthenticationRequiredError(
+                    message=f"El consentimiento PSD2 para el proveedor {provider_name} ha expirado. Reautorización requerida.",
+                    provider_name=provider_name
+                )
+            
+            return cls.sync_connection(connection_id)
+
+    @classmethod
     def import_statement(cls, filepath: str, connection_id: int = None) -> int:
         """
         Punto de entrada universal para importar cualquier extracto bancario.

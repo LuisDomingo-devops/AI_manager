@@ -11,11 +11,63 @@ from app.domain.accounting.ports import RecordJournalEntryCommand
 from app.domain.services.accounting_reporting_service import AccountingReportingService
 
 
-def test_qa_balance_sheet_and_pyg_integrity():
+from app.infrastructure.database.legal_connection import get_legal_connection
+
+
+@pytest.fixture
+def clean_balance_qa_db():
+    tenant_id = "test_qa_balance_pyg"
+    conn = get_legal_connection(tenant_id)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS legal_fiscal_years (
+            tenant_id TEXT NOT NULL,
+            fiscal_year INTEGER NOT NULL,
+            is_closed INTEGER NOT NULL DEFAULT 0,
+            closed_at TEXT,
+            closed_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (tenant_id, fiscal_year)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS legal_journal_entries (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            entry_number INTEGER NOT NULL,
+            entry_date TEXT NOT NULL,
+            fiscal_year INTEGER NOT NULL,
+            concept TEXT NOT NULL,
+            document_ref TEXT,
+            is_closed INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (tenant_id, fiscal_year, entry_number)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS legal_journal_lines (
+            id TEXT PRIMARY KEY,
+            entry_id TEXT NOT NULL,
+            account_code TEXT NOT NULL,
+            concept TEXT,
+            debit TEXT DEFAULT '0.00',
+            credit TEXT DEFAULT '0.00',
+            FOREIGN KEY (entry_id) REFERENCES legal_journal_entries(id)
+        )
+    """)
+    cursor.execute("DELETE FROM legal_journal_lines WHERE entry_id IN (SELECT id FROM legal_journal_entries WHERE tenant_id = ?)", (tenant_id,))
+    cursor.execute("DELETE FROM legal_journal_entries WHERE tenant_id = ?", (tenant_id,))
+    cursor.execute("DELETE FROM legal_fiscal_years WHERE tenant_id = ?", (tenant_id,))
+    conn.commit()
+    cursor.close()
+    yield tenant_id
+
+
+def test_qa_balance_sheet_and_pyg_integrity(clean_balance_qa_db):
     """Valida la generación íntegra y cuadre de Balance de Situación y PyG."""
     accounting = AccountingService()
     reporting = AccountingReportingService()
-    tenant_id = "default"
+    tenant_id = clean_balance_qa_db
     fiscal_year = 2026
     
     # 1. Asiento de Inicio / Capital: Banco a Capital

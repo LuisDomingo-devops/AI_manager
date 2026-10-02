@@ -1,15 +1,17 @@
 """
 Parser oficial para extractos bancarios en formato Norma 43 (CSB 43) de la Asociación Española de Banca (AEB).
-Procesa registros posicionales 11, 22, 23, 33 y 88 con rigor contable.
+Procesa registros posicionales 11, 22, 23, 33 y 88 con rigor contable Decimal y comprobación estricta de balance.
 """
 
 from typing import List, Optional
 from datetime import datetime
-from app.domain.models.billing import BankStatementDTO, BankEntryDTO
+from decimal import Decimal
+from app.domain.schemas import BankStatementDTO, BankMovementDTO, BankStatementSourceType, BankReconciliationStatus
+from app.domain.exceptions import BankStatementDiscrepancyError
 
 
 class Norma43Parser:
-    """Parsea ficheros en especificación Norma 43 / Cuaderno 43."""
+    """Parsea ficheros en especificación Norma 43 / Cuaderno 43 con exactitud Decimal."""
 
     def parse(self, raw_content: bytes, account_iban: Optional[str] = None) -> BankStatementDTO:
         # Decodificar usando latin-1 o iso-8859-1 (estándar bancario español histórico)
@@ -17,9 +19,9 @@ class Norma43Parser:
         lines = [line.strip("\r\n") for line in text.splitlines() if line.strip("\r\n")]
 
         iban = account_iban or ""
-        initial_balance = 0.0
-        final_balance = 0.0
-        entries: List[BankEntryDTO] = []
+        initial_balance = Decimal("0.00")
+        final_balance = Decimal("0.00")
+        entries: List[BankMovementDTO] = []
         current_entry: Optional[dict] = None
 
         for line in lines:
@@ -36,18 +38,26 @@ class Norma43Parser:
                 if not iban:
                     iban = f"ES00{banco}{sucursal}00{cuenta}"
                 
-                # Saldo inicial: pos 28 a 42 (14 dígitos) con signo en pos 27 ('1' debe/deudor, '2' haber/acreedor)
+                # Saldo inicial:
+                # Estándar oficial CSB 43: fecha inicio (20:26), fecha fin (26:32), signo D/H (32:33), importe (33:47)
+                # Variante compacta: fecha (20:26), signo D/H (26:27), importe (27:41)
                 try:
-                    sign_char = line[26:27]
-                    amount_cents = int(line[27:41])
-                    initial_balance = (amount_cents / 100.0) * (-1.0 if sign_char == "1" else 1.0)
+                    if len(line) >= 47 and line[26:32].isdigit() and line[32:33] in ("1", "2") and line[33:47].isdigit():
+                        sign_char = line[32:33]
+                        amount_cents = int(line[33:47])
+                    else:
+                        sign_char = line[26:27]
+                        amount_cents = int(line[27:41])
+                    raw_dec = Decimal(amount_cents) / Decimal("100.00")
+                    initial_balance = (-raw_dec if sign_char == "1" else raw_dec).quantize(Decimal("0.01"))
                 except Exception:
-                    initial_balance = 0.0
+                    initial_balance = Decimal("0.00")
+
 
             # 22: Registro Principal de Movimiento
             elif record_type == "22":
                 if current_entry:
-                    entries.append(self._build_entry_dto(len(entries) + 1, current_entry))
+                    entries.append(self._build_entry_dto(len(entries) + 1, current_entry, iban))
                     current_entry = None
 
                 # Fecha operación (YYMMDD pos 10-16)
@@ -60,13 +70,14 @@ class Norma43Parser:
                 sign_code = line[27:28]
                 # Importe: pos 28-42 (14 dígitos céntimos)
                 amount_cents = int(line[28:42])
-                amount = (amount_cents / 100.0) * (-1.0 if sign_code == "1" else 1.0)
+                raw_amount = Decimal(amount_cents) / Decimal("100.00")
+                amount = (-raw_amount if sign_code == "1" else raw_amount).quantize(Decimal("0.01"))
 
                 concept_main = line[42:].strip()
                 current_entry = {
                     "operation_date": op_date,
                     "value_date": val_date,
-                    "amount": round(amount, 2),
+                    "amount": amount,
                     "concept_parts": [concept_main] if concept_main else []
                 }
 
@@ -80,39 +91,69 @@ class Norma43Parser:
             # 33: Registro de Fin de Cuenta
             elif record_type == "33":
                 if current_entry:
-                    entries.append(self._build_entry_dto(len(entries) + 1, current_entry))
+                    entries.append(self._build_entry_dto(len(entries) + 1, current_entry, iban))
                     current_entry = None
 
-                # Saldo final pos 59-73 (14 dígitos) y signo en pos 58 ('1'=Debe, '2'=Haber)
+                # Saldo final: signo ('1'=Debe, '2'=Haber) e importe (14 dígitos)
                 try:
-                    sign_char = line[58:59]
-                    amount_cents = int(line[59:73])
-                    final_balance = (amount_cents / 100.0) * (-1.0 if sign_char == "1" else 1.0)
+                    import re
+                    matches = re.findall(r'([12])(\d{14})', line)
+                    if matches:
+                        sign_char, amount_cents_str = matches[-1]
+                        amount_cents = int(amount_cents_str)
+                    else:
+                        sign_char = line[58:59]
+                        amount_cents = int(line[59:73])
+                    raw_dec = Decimal(amount_cents) / Decimal("100.00")
+                    final_balance = (-raw_dec if sign_char == "1" else raw_dec).quantize(Decimal("0.01"))
                 except Exception:
-                    final_balance = 0.0
+                    final_balance = Decimal("0.00")
+
+
 
         if current_entry:
-            entries.append(self._build_entry_dto(len(entries) + 1, current_entry))
+            entries.append(self._build_entry_dto(len(entries) + 1, current_entry, iban))
+
+        # Calcular saldos progresivos (balance_after) para cada apunte
+        running = initial_balance
+        for entry in entries:
+            running = (running + entry.amount).quantize(Decimal("0.01"))
+            entry.balance_after = running
+
+        # Validación estricta de cuadre contable
+        calculated_final = (initial_balance + sum(e.amount for e in entries)).quantize(Decimal("0.01"))
+        if abs(calculated_final - final_balance) >= Decimal("0.005"):
+            raise BankStatementDiscrepancyError(
+                message=(
+                    f"Descuadre contable detectado en el extracto Norma 43. "
+                    f"Saldo Inicial ({initial_balance} €) + Movimientos ({calculated_final - initial_balance} €) "
+                    f"!= Saldo Final ({final_balance} €). Diferencia: {calculated_final - final_balance} €."
+                ),
+                initial_balance=initial_balance,
+                final_balance=final_balance,
+                calculated_final=calculated_final
+            )
 
         return BankStatementDTO(
-            source_type="NORMA43",
+            source_type=BankStatementSourceType.NORMA43,
             account_iban=iban,
-            initial_balance=round(initial_balance, 2),
-            final_balance=round(final_balance, 2),
+            initial_balance=initial_balance,
+            final_balance=final_balance,
             import_date=datetime.now().strftime("%Y-%m-%d"),
             entries=entries
         )
 
-    def _build_entry_dto(self, entry_id: int, entry_dict: dict) -> BankEntryDTO:
+    def _build_entry_dto(self, entry_id: int, entry_dict: dict, account_iban: str) -> BankMovementDTO:
         full_concept = " ".join(entry_dict["concept_parts"]).strip()
-        return BankEntryDTO(
+        return BankMovementDTO(
             id=entry_id,
+            account_iban=account_iban,
             operation_date=entry_dict["operation_date"],
             value_date=entry_dict["value_date"],
             concept=full_concept,
             amount=entry_dict["amount"],
-            balance_after=0.0,
-            reconciliation_status="UNRECONCILED"
+            balance_after=Decimal("0.00"),
+            reconciliation_status=BankReconciliationStatus.UNRECONCILED.value
         )
 
     @staticmethod

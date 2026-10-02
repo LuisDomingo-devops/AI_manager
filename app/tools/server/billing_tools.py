@@ -2312,6 +2312,27 @@ async def close_fiscal_year_tool(year: int) -> dict:
         from app.domain.services.fiscal_year_closing_service import FiscalYearClosingService
         closing_svc = FiscalYearClosingService()
         res = closing_svc.execute_year_end_closing(tenant_id="default", fiscal_year=year, closed_by="user_hitl")
+
+        # Sincronizar estado en tabla histórica fiscal_year_status para compatibilidad con LedgerService
+        try:
+            from app.infrastructure.database.sqlite_connection import _get_connection
+            with _get_connection("default") as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS fiscal_year_status (
+                        year INTEGER PRIMARY KEY,
+                        is_closed INTEGER NOT NULL DEFAULT 0,
+                        closed_at TEXT
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO fiscal_year_status (year, is_closed, closed_at)
+                    VALUES (?, 1, datetime('now'))
+                    ON CONFLICT(year) DO UPDATE SET is_closed = 1, closed_at = datetime('now')
+                """, (year,))
+                conn.commit()
+        except Exception:
+            pass
+
         return {
             "status": "ok",
             "message": res.message,

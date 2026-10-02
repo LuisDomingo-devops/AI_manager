@@ -213,3 +213,29 @@ class ApprovalRejectedOrTimeoutError(DomainError):
         super().__init__(message, details)
         self.approval_id = approval_id
         self.tool_name = tool_name
+
+
+# --- Excepciones de Conciliación Bancaria y Tesorería (Spec 034) ---
+
+class BankStatementDiscrepancyError(DomainError):
+    """Lanzada cuando un extracto bancario no cuadra matemáticamente (Saldo Inicial + Sumatorio != Saldo Final)."""
+    def __init__(self, message: str = "Descuadre contable detectado en el extracto bancario", initial_balance: Any = None, final_balance: Any = None, calculated_final: Any = None, details: dict | None = None):
+        super().__init__(message, details)
+        self.initial_balance = initial_balance
+        self.final_balance = final_balance
+        self.calculated_final = calculated_final
+
+
+class BankAuthenticationRequiredError(ExternalProviderError):
+    """Lanzada cuando un conector bancario requiere autenticación o consentimiento PSD2 activo, prohibiendo fakes."""
+    def __init__(self, message: str = "Autenticación requerida para el conector bancario", provider_name: str = "BankConnector", status_code: int | None = 401, details: dict | None = None):
+        super().__init__(message=message, provider_name=provider_name, status_code=status_code, details=details)
+
+
+class BankReconciliationConflictError(DomainError):
+    """Lanzada cuando se intenta conciliar un movimiento o factura ya conciliados previamente."""
+    def __init__(self, message: str = "Conflicto de conciliación: el apunte o la factura ya están conciliados", entry_id: int | None = None, invoice_id: int | None = None, details: dict | None = None):
+        super().__init__(message, details)
+        self.entry_id = entry_id
+        self.invoice_id = invoice_id
+

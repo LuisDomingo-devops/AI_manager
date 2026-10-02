@@ -44,6 +44,8 @@ async def run_bank_reconciliation() -> dict:
     Requiere confirmación explícita del usuario vía OOB.
     """
     from app.domain.services.approval_service import approval_service
+    from app.domain.services.bank_reconciliation_engine import BankReconciliationEngine
+
     approved = await approval_service.request_approval(
         "run_bank_reconciliation",
         details={"action": "reconcile_all_pending"},
@@ -53,12 +55,16 @@ async def run_bank_reconciliation() -> dict:
         return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
 
     try:
+        engine = BankReconciliationEngine()
+        suggestions = engine.get_suggestions(min_score=0.70)
         pairs = BankService.reconcile_matching_algorithm()
         return {
             "status": "ok",
-            "message": f"Conciliación finalizada. Se han emparejado con éxito {len(pairs)} movimientos.",
+            "message": f"Conciliación finalizada. Se han emparejado con éxito {len(pairs)} movimientos y se han hallado {len(suggestions)} sugerencias de alta confianza.",
             "reconciled_count": len(pairs),
-            "reconciled_pairs": pairs
+            "reconciled_pairs": pairs,
+            "suggestions_count": len(suggestions),
+            "suggestions": [s.model_dump() for s in suggestions]
         }
     except Exception as e:
         tool_logger.exception("Error al ejecutar conciliación bancaria")
@@ -66,13 +72,18 @@ async def run_bank_reconciliation() -> dict:
 
 async def get_unreconciled_report_tool() -> dict:
     """
-    Retorna el reporte de movimientos bancarios y facturas pendientes de conciliar.
+    Retorna el reporte de movimientos bancarios y facturas pendientes de conciliar,
+    enriquecido con propuestas de casación probabilística ponderada.
     """
     try:
+        from app.domain.services.bank_reconciliation_engine import BankReconciliationEngine
         report = BankService.get_unreconciled_report()
+        engine = BankReconciliationEngine()
+        suggestions = engine.get_suggestions(min_score=0.70)
         return {
             "status": "ok",
-            "report": report
+            "report": report,
+            "suggestions": [s.model_dump() for s in suggestions]
         }
     except Exception as e:
         tool_logger.exception("Error al recuperar reporte de conciliación")

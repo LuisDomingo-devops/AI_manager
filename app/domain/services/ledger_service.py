@@ -41,11 +41,24 @@ class LedgerService:
         """
         Comprueba si un ejercicio contable/fiscal está marcado como cerrado en la base de datos.
         """
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT is_closed FROM fiscal_year_status WHERE year = ?", (year,))
-            row = cursor.fetchone()
-            return bool(row["is_closed"]) if row else False
+        try:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT is_closed FROM fiscal_year_status WHERE year = ?", (year,))
+                row = cursor.fetchone()
+                if row and bool(row["is_closed"]):
+                    return True
+        except Exception:
+            pass
+
+        try:
+            from app.domain.services.fiscal_year_closing_service import FiscalYearClosingService
+            if FiscalYearClosingService().is_fiscal_year_closed("default", year):
+                return True
+        except Exception:
+            pass
+
+        return False
 
     @classmethod
     def _insert_journal_and_ledger(cls, date_str: str, concept: str, apuntes: List[Dict[str, Any]]) -> int:

@@ -26,6 +26,7 @@ class InvoiceStatus(str, Enum):
     PENDING_APPROVAL = "PENDING_APPROVAL"
     ISSUED = "ISSUED"
     RECEIVED = "RECEIVED"
+    PAID = "PAID"
     CANCELLED = "CANCELLED"
 
 
@@ -265,30 +266,15 @@ class FixedAssetDTO(BaseModel):
     status: str = "ACTIVE"
 
 
-class BankEntryDTO(BaseModel):
-    id: Optional[int] = None
-    statement_id: Optional[int] = None
-    operation_date: str
-    value_date: str
-    concept: str
-    amount: float
-    balance_after: float
-    reconciled_invoice_id: Optional[int] = None
-    reconciliation_status: str = "UNRECONCILED"
+from app.domain.schemas import (
+    BankStatementSourceType,
+    BankReconciliationStatus,
+    BankMovementDTO,
+    BankStatementDTO,
+    ReconciliationSuggestionDTO,
+    ApplyReconciliationCommand,
+    ReconciliationResultDTO,
+)
 
-
-class BankStatementDTO(BaseModel):
-    id: Optional[int] = None
-    source_type: str  # NORMA43, CSV, OPEN_BANKING
-    account_iban: str
-    initial_balance: float
-    final_balance: float
-    import_date: str
-    entries: List[BankEntryDTO] = Field(default_factory=list)
-
-
-class ReconciliationSuggestionDTO(BaseModel):
-    entry_id: int
-    invoice_id: int
-    score: float
-    matching_criteria: List[str]
+# Alias canónico compatible (I1):
+BankEntryDTO = BankMovementDTO

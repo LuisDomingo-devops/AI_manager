@@ -8,7 +8,7 @@ class DepreciationService:
 
     def __init__(self, repository: Optional[AssetRepositoryPort] = None):
         self.repository = repository
-        self.engine = AssetDepreciationEngine()
+        self.engine = AssetDepreciationEngine(repository=self.repository)
 
     def calculate_depreciation_proposal(self, client_id: str, year: int) -> List[Dict[str, Any]]:
         """
@@ -34,6 +34,34 @@ class DepreciationService:
         Garantiza idempotencia y cálculo en Decimal estricto.
         """
         res = self.engine.record_depreciation_entries(client_id, year)
+
+        # Sincronización de compatibilidad con tablas de journal/ledger histórico
+        try:
+            from app.domain.services.ledger_service import LedgerService
+            from app.adapters.memory.memory import _get_connection
+            proposals = self.calculate_depreciation_proposal(client_id, year)
+            if proposals:
+                with _get_connection(client_id) as conn:
+                    table_exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='journal_entries'").fetchone()
+                if table_exists:
+                    apuntes = []
+                    for p in proposals:
+                        apuntes.append({
+                            "account_code": p["account_debe"],
+                            "debe": p["amount"],
+                            "haber": 0.0
+                        })
+                        apuntes.append({
+                            "account_code": p["account_haber"],
+                            "debe": 0.0,
+                            "haber": p["amount"]
+                        })
+                    date_str = f"31/12/{year}"
+                    concept = f"Amortización Inmovilizado - Ejercicio {year}"
+                    LedgerService.record_manual_entry(date_str, concept, apuntes)
+        except Exception:
+            pass
+
         return {
             "status": res.status,
             "message": res.message,
