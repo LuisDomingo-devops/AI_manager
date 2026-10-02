@@ -2273,12 +2273,13 @@ async def get_profit_and_loss_report(year: int = None, quarter: int = None) -> d
     Devuelve los ingresos de explotación (Grupo 7), gastos de explotación (Grupo 6), EBITDA, impuesto estimado y resultado neto.
     """
     try:
-        from app.domain.services.ledger_service import LedgerService
+        from app.domain.services.income_statement_service import IncomeStatementService
         target_year = year if year is not None else datetime.now().year
-        pnl = LedgerService.get_profit_and_loss_statement(target_year, quarter)
+        service = IncomeStatementService()
+        pnl_dto = service.calculate_income_statement(tenant_id="default", fiscal_year=target_year, quarter=quarter)
         return {
             "status": "ok",
-            "report": pnl,
+            "report": pnl_dto.model_dump(),
             "message": f"Cuenta de Pérdidas y Ganancias para el ejercicio {target_year}{f' (Trimestre {quarter})' if quarter else ''} calculada con éxito."
         }
     except Exception as e:
@@ -2308,8 +2309,19 @@ async def close_fiscal_year_tool(year: int) -> dict:
                 "message": f"Cierre del ejercicio {year} cancelado por el usuario o expirado."
             }
 
-        res = LedgerService.close_fiscal_year(year)
-        return res
+        from app.domain.services.fiscal_year_closing_service import FiscalYearClosingService
+        closing_svc = FiscalYearClosingService()
+        res = closing_svc.execute_year_end_closing(tenant_id="default", fiscal_year=year, closed_by="user_hitl")
+        return {
+            "status": "ok",
+            "message": res.message,
+            "fiscal_year": res.fiscal_year,
+            "next_fiscal_year": res.next_fiscal_year,
+            "resultado_ejercicio": float(res.resultado_ejercicio),
+            "asiento_regularizacion_id": res.asiento_regularizacion_id,
+            "asiento_cierre_id": res.asiento_cierre_id,
+            "asiento_apertura_id": res.asiento_apertura_id
+        }
     except Exception as e:
         tool_logger.exception("Error al cerrar el ejercicio fiscal")
         return {"status": "error", "message": str(e)}

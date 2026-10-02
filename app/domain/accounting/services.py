@@ -252,38 +252,9 @@ class AccountingService(IAccountingService):
             cursor.close()
 
     def close_fiscal_year(self, tenant_id: str, fiscal_year: int, closed_by: Optional[str] = None) -> bool:
-        """Cierra el ejercicio contable e impide modificaciones futuras."""
-        with legal_write_transaction(client_id=tenant_id) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS legal_fiscal_years (
-                    tenant_id TEXT NOT NULL,
-                    fiscal_year INTEGER NOT NULL,
-                    is_closed INTEGER NOT NULL DEFAULT 0,
-                    closed_at TEXT,
-                    closed_by TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tenant_id, fiscal_year)
-                )
-            """)
-            cursor.execute(
-                """
-                INSERT INTO legal_fiscal_years (tenant_id, fiscal_year, is_closed, closed_at, closed_by)
-                VALUES (?, ?, 1, datetime('now'), ?)
-                ON CONFLICT(tenant_id, fiscal_year) DO UPDATE SET
-                    is_closed = 1,
-                    closed_at = datetime('now'),
-                    closed_by = excluded.closed_by
-                """,
-                (tenant_id, fiscal_year, closed_by or "system"),
-            )
-            cursor.execute(
-                """
-                UPDATE legal_journal_entries 
-                SET is_closed = 1 
-                WHERE tenant_id = ? AND fiscal_year = ?
-                """,
-                (tenant_id, fiscal_year),
-            )
-            cursor.close()
+        """Cierra el ejercicio contable, genera asientos de regularización/cierre/apertura e impide modificaciones futuras."""
+        from app.domain.services.fiscal_year_closing_service import FiscalYearClosingService
+        closing_svc = FiscalYearClosingService()
+        if not closing_svc.is_fiscal_year_closed(tenant_id, fiscal_year):
+            closing_svc.execute_year_end_closing(tenant_id=tenant_id, fiscal_year=fiscal_year, closed_by=closed_by or "system")
         return True

@@ -1,5 +1,7 @@
 import re
+from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Optional, Literal, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator
 
@@ -521,4 +523,380 @@ class AnonymizationResult(BaseModel):
 class DetokenizationResult(BaseModel):
     restored_text: str = Field(..., description="Texto reconstruido con los datos reales para el usuario")
     unresolved_tokens: list[str] = Field(default_factory=list, description="Tokens no resueltos por el mapa")
+
+
+# ==============================================================================
+# ESTADOS FINANCIEROS OFICIALES, AMORTIZACIONES Y CIERRE CONTABLE (PGC PYMES)
+# ==============================================================================
+
+class FinancialStatementType(str, Enum):
+    BALANCE_SHEET = "BALANCE_SHEET"
+    INCOME_STATEMENT = "INCOME_STATEMENT"
+    MEMORIA = "MEMORIA"
+
+
+class DepreciationMethod(str, Enum):
+    LINEAR = "LINEAR"
+    DEGRESSIVE_DIGITS = "DEGRESSIVE_DIGITS"
+    PERCENT_ON_DECLINING = "DECLINING_BALANCE"
+
+
+class AssetStatus(str, Enum):
+    REGISTERED = "REGISTERED"
+    ACTIVE = "ACTIVE"
+    FULLY_DEPRECIATED = "FULLY_DEPRECIATED"
+    RETIRED = "RETIRED"
+
+
+class FiscalYearStatusEnum(str, Enum):
+    OPEN = "OPEN"
+    PRE_CLOSING = "PRE_CLOSING"
+    CLOSED = "CLOSED"
+
+
+class FinancialStatementLineDTO(BaseModel):
+    """Línea o epígrafe individual en el modelo normalizado del PGC PYMES."""
+    epigrafe_codigo: str = Field(..., description="Código oficial del epígrafe (ej. 'A.II.1', 'B.II', '1.a')")
+    epigrafe_nombre: str = Field(..., description="Denominación reglamentaria según el RD 1515/2007")
+    cuentas_asociadas: List[str] = Field(default_factory=list, description="Códigos de cuentas PGC agregadas")
+    saldo_ejercicio_actual: Decimal = Field(..., description="Saldo del ejercicio evaluado expresado en Decimal")
+    saldo_ejercicio_anterior: Decimal = Field(default=Decimal("0.00"), description="Saldo comparativo del ejercicio N-1")
+
+    @field_validator("saldo_ejercicio_actual", "saldo_ejercicio_anterior", mode="before")
+    @classmethod
+    def ensure_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class BalanceSheetDTO(BaseModel):
+    """Balance de Situación normalizado para el depósito de cuentas en el Registro Mercantil."""
+    tenant_id: str
+    fiscal_year: int
+    fecha_cierre: str = Field(..., description="Fecha de emisión o cierre contable (YYYY-MM-DD)")
+    activo_no_corriente: List[FinancialStatementLineDTO] = Field(default_factory=list)
+    activo_corriente: List[FinancialStatementLineDTO] = Field(default_factory=list)
+    total_activo: Decimal = Field(..., description="Suma total de Activo No Corriente + Activo Corriente")
+    patrimonio_neto: List[FinancialStatementLineDTO] = Field(default_factory=list)
+    pasivo_no_corriente: List[FinancialStatementLineDTO] = Field(default_factory=list)
+    pasivo_corriente: List[FinancialStatementLineDTO] = Field(default_factory=list)
+    total_pasivo_y_patrimonio_neto: Decimal = Field(..., description="Suma total de PN + Pasivo NC + Pasivo C")
+    is_balanced: bool = Field(..., description="Garantiza que abs(Total Activo - Total Pasivo y PN) == Decimal(\"0.00\")")
+    descuadre_forense: Optional[Dict[str, Decimal]] = Field(
+        default=None, 
+        description="Si is_balanced es False, detalle de cuentas causantes de la discordancia"
+    )
+
+    @field_validator("total_activo", "total_pasivo_y_patrimonio_neto", mode="before")
+    @classmethod
+    def ensure_totals_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class IncomeStatementDTO(BaseModel):
+    """Cuenta de Pérdidas y Ganancias (PyG) escalonada según el PGC PYMES."""
+    tenant_id: str
+    fiscal_year: int
+    fecha_desde: str
+    fecha_hasta: str
+    cifra_negocios: Decimal = Decimal("0.00")
+    variacion_existencias: Decimal = Decimal("0.00")
+    aprovisionamientos: Decimal = Decimal("0.00")
+    gastos_personal: Decimal = Decimal("0.00")
+    otros_gastos_explotacion: Decimal = Decimal("0.00")
+    amortizaciones_dotacion: Decimal = Decimal("0.00")
+    otros_ingresos_explotacion: Decimal = Decimal("0.00")
+    margen_bruto: Decimal = Decimal("0.00")
+    ebitda: Decimal = Decimal("0.00")
+    resultado_explotacion: Decimal = Field(..., description="EBIT / Resultado Operativo")
+    ingresos_financieros: Decimal = Decimal("0.00")
+    gastos_financieros: Decimal = Decimal("0.00")
+    resultado_financiero: Decimal = Field(..., description="Diferencia de ingresos y gastos financieros")
+    resultado_antes_impuestos: Decimal = Field(..., description="Resultado de explotación + financiero")
+    impuesto_sociedades: Decimal = Field(..., description="Gasto por Impuesto sobre Sociedades (Cuenta 630)")
+    resultado_neto_ejercicio: Decimal = Field(..., description="Beneficio o Pérdida final (Cuenta 129)")
+    lineas_epigrafes: List[FinancialStatementLineDTO] = Field(default_factory=list)
+
+    @field_validator(
+        "cifra_negocios", "variacion_existencias", "aprovisionamientos", "gastos_personal",
+        "otros_gastos_explotacion", "amortizaciones_dotacion", "otros_ingresos_explotacion",
+        "margen_bruto", "ebitda", "resultado_explotacion", "ingresos_financieros",
+        "gastos_financieros", "resultado_financiero", "resultado_antes_impuestos",
+        "impuesto_sociedades", "resultado_neto_ejercicio", mode="before"
+    )
+    @classmethod
+    def ensure_decimal_fields(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class AssetRecordDTO(BaseModel):
+    """Ficha contable y técnica de un bien de inmovilizado afecto a la actividad."""
+    id: str
+    tenant_id: str
+    code: str
+    name: str
+    account_asset: str = Field(default="21700000", description="Cuenta de inmovilizado")
+    account_amort_accum: str = Field(default="28100000", description="Cuenta de amortización acumulada")
+    account_amort_expense: str = Field(default="68100000", description="Cuenta de gasto por dotación a la amortización")
+    acquisition_date: date
+    acquisition_cost: Decimal
+    salvage_value: Decimal = Field(default=Decimal("0.00"), description="Valor residual")
+    useful_life_years: int = Field(..., ge=1)
+    depreciation_rate: Decimal = Field(..., ge=Decimal("0.00"), le=Decimal("100.00"))
+    method: DepreciationMethod = DepreciationMethod.LINEAR
+    accumulated_depreciation: Decimal = Decimal("0.00")
+    net_book_value: Decimal
+    status: AssetStatus = AssetStatus.ACTIVE
+
+    @field_validator("acquisition_cost", "salvage_value", "depreciation_rate", "accumulated_depreciation", "net_book_value", mode="before")
+    @classmethod
+    def ensure_asset_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class SimulatedJournalLineDTO(BaseModel):
+    account_code: str
+    concept: Optional[str] = None
+    debit: Decimal = Decimal("0.00")
+    credit: Decimal = Decimal("0.00")
+
+    @field_validator("debit", "credit", mode="before")
+    @classmethod
+    def ensure_decimal(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+
+class SimulatedJournalEntryDTO(BaseModel):
+    entry_number: Optional[int] = None
+    entry_date: str
+    concept: str
+    lines: List[SimulatedJournalLineDTO] = Field(default_factory=list)
+
+
+class DepreciationQuotaDTO(BaseModel):
+    """Cálculo individual de amortización para un período concreto."""
+    asset_id: str
+    asset_name: str
+    account_debe: str = "68100000"
+    account_haber: str = "28100000"
+    quota_amount: Decimal
+    period: str = Field(..., description="'YYYY-MM' para mensual o 'YYYY' para anual")
+    is_prorated: bool = False
+    concept: str
+
+    @property
+    def depreciation_quota(self) -> Decimal:
+        return self.quota_amount
+
+    @property
+    def account_debit(self) -> str:
+        return self.account_debe
+
+    @property
+    def account_credit(self) -> str:
+        return self.account_haber
+
+    @field_validator("quota_amount", mode="before")
+    @classmethod
+    def ensure_quota_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class DepreciationRunResultDTO(BaseModel):
+    """Resultado del proceso por lotes de contabilización de amortizaciones."""
+    status: str
+    tenant_id: str
+    fiscal_year: int
+    period: str
+    total_assets_processed: int
+    total_amount_amortized: Decimal
+    journal_entry_id: Optional[str] = None
+    quotas: List[DepreciationQuotaDTO] = Field(default_factory=list)
+    message: Optional[str] = None
+    is_posted: bool = True
+
+    @property
+    def total_depreciation_amount(self) -> Decimal:
+        return self.total_amount_amortized
+
+    @field_validator("total_amount_amortized", mode="before")
+    @classmethod
+    def ensure_total_amort_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class YearEndClosingSimulationDTO(BaseModel):
+    """Propuesta de cierre contable y saldado de cuentas antes de su ejecución definitiva."""
+    tenant_id: str
+    fiscal_year: int
+    resultado_antes_impuestos: Decimal
+    tipo_is_aplicado: Decimal
+    cuota_is_estimada: Decimal
+    resultado_neto: Decimal
+    apuntes_regularizacion_cuentas_6_y_7: List[Dict[str, Any]] = Field(default_factory=list)
+    apuntes_cierre_cuentas_balance: List[Dict[str, Any]] = Field(default_factory=list)
+    apuntes_apertura_ejercicio_siguiente: List[Dict[str, Any]] = Field(default_factory=list)
+    asiento_regularizacion: Optional[SimulatedJournalEntryDTO] = None
+    asiento_cierre: Optional[SimulatedJournalEntryDTO] = None
+    asiento_apertura_siguiente: Optional[SimulatedJournalEntryDTO] = None
+    warnings: List[str] = Field(default_factory=list)
+
+    @property
+    def impuesto_sociedades_estimado(self) -> Decimal:
+        return self.cuota_is_estimada
+
+    @property
+    def resultado_neto_ejercicio(self) -> Decimal:
+        return self.resultado_neto
+
+
+class CloseFiscalYearExecutionCommand(BaseModel):
+    tenant_id: str
+    fiscal_year: int
+    confirmed_by_user: bool = Field(..., description="Requisito HITL explícito para autorizar el cierre")
+    closed_by: str = "user"
+    corporate_tax_rate: float = 0.25
+
+
+class CloseFiscalYearExecutionResultDTO(BaseModel):
+    status: str
+    tenant_id: str
+    fiscal_year: int
+    next_fiscal_year: int
+    resultado_ejercicio: Decimal
+    asiento_regularizacion_id: str
+    asiento_cierre_id: str
+    asiento_apertura_id: str
+    closed_at: datetime
+    is_locked: bool
+    message: str
+    is_success: bool = True
+    is_closed: bool = True
+    entries_created: int = 3
+
+    @field_validator("resultado_ejercicio", mode="before")
+    @classmethod
+    def ensure_result_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+# ============================================================================
+# MÓDULO 8: INTELIGENCIA DE MERCADO, ANÁLISIS COMPETITIVO Y DAFO (SPEC 032)
+# ============================================================================
+
+class SectorBenchmarkDTO(BaseModel):
+    """Comparativa cuantitativa de precios y posicionamiento de mercado."""
+    cnae_code: str = Field(..., min_length=2, max_length=5, description="Código de actividad CNAE-2009 (ej. '6201')")
+    sector_name: str = Field(..., min_length=1, description="Denominación oficial del sector de actividad")
+    region: str = Field(..., min_length=1, description="Comunidad Autónoma o provincia de referencia")
+    average_market_price: Decimal = Field(..., ge=Decimal("0.00"), description="Precio medio de mercado sectorial en euros")
+    user_average_price: Decimal = Field(..., ge=Decimal("0.00"), description="Precio medio facturado por el usuario en euros")
+    price_position_percentile: int = Field(..., ge=0, le=100, description="Posición relativa en percentil (0 a 100)")
+    positioning_segment: str = Field(..., description="Segmento de mercado: 'Económico', 'Medio', 'Premium'")
+    potential_revenue_upside: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"), description="Incremento potencial de facturación al equiparar precios a la media")
+    recommendation: str = Field(..., description="Recomendación táctica de fijación de precios y márgenes")
+
+    @field_validator("average_market_price", "user_average_price", "potential_revenue_upside", mode="before")
+    @classmethod
+    def quantize_benchmark_decimals(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+
+class TopClientConcentrationItemDTO(BaseModel):
+    """Desglose de concentración de facturación por cliente anonimizado."""
+    client_label: str = Field(..., description="Etiqueta anónima del cliente (ej. 'Cliente Principal 1')")
+    annual_turnover: Decimal = Field(..., ge=Decimal("0.00"), description="Importe neto facturado en el ejercicio")
+    concentration_percentage: Decimal = Field(..., ge=Decimal("0.00"), le=Decimal("100.00"), description="Porcentaje sobre la facturación neta total")
+
+    @field_validator("annual_turnover", "concentration_percentage", mode="before")
+    @classmethod
+    def quantize_client_decimals(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+
+class TopSupplierRiskItemDTO(BaseModel):
+    """Desglose de riesgo y variación de costes en proveedores clave."""
+    supplier_label: str = Field(..., description="Etiqueta anónima del proveedor (ej. 'Proveedor Clave A')")
+    current_year_cost: Decimal = Field(..., ge=Decimal("0.00"), description="Gasto acumulado en el año N")
+    previous_year_cost: Decimal = Field(..., ge=Decimal("0.00"), description="Gasto acumulado en el año N-1")
+    cost_increase_rate: Decimal = Field(..., description="Porcentaje de variación del coste")
+    exceeds_sector_inflation: bool = Field(..., description="Indica si el incremento supera la inflación sectorial")
+
+    @field_validator("current_year_cost", "previous_year_cost", "cost_increase_rate", mode="before")
+    @classmethod
+    def quantize_supplier_decimals(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+
+class BusinessRiskAuditDTO(BaseModel):
+    """Auditoría de riesgos de concentración, costes y solvencia de tesorería."""
+    client_concentration_ratio: Decimal = Field(..., description="Porcentaje de facturación concentrado en el top 3 de clientes")
+    top_single_client_ratio: Decimal = Field(..., description="Porcentaje de facturación del cliente mayoritario")
+    high_concentration_alert: bool = Field(..., description="True si un único cliente supera el 40% o top 3 supera el 70%")
+    top_clients: List[TopClientConcentrationItemDTO] = Field(default_factory=list, description="Desglose del top de clientes")
+    supplier_cost_increase_rate: Decimal = Field(..., description="Tasa media de incremento de costes en proveedores clave")
+    top_risk_suppliers: List[TopSupplierRiskItemDTO] = Field(default_factory=list, description="Proveedores con incrementos de costes anómalos")
+    runway_months: Decimal = Field(..., description="Meses de supervivencia con la tesorería actual redondeado a 1 decimal")
+    monthly_burn_rate: Decimal = Field(..., ge=Decimal("0.00"), description="Gasto operativo fijo mensual medio")
+    available_liquidity: Decimal = Field(..., ge=Decimal("0.00"), description="Tesorería líquida total disponible")
+
+    @field_validator("client_concentration_ratio", "top_single_client_ratio", "supplier_cost_increase_rate", "monthly_burn_rate", "available_liquidity", mode="before")
+    @classmethod
+    def quantize_risk_decimals(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+    @field_validator("runway_months", mode="before")
+    @classmethod
+    def quantize_runway_decimal(cls, v):
+        return Decimal(str(v or "0.0")).quantize(Decimal("0.1"))
+
+
+class DAFOAnalysisReportDTO(BaseModel):
+    """Informe de diagnóstico estratégico DAFO estructurado validado con LLM."""
+    cnae_code: str = Field(..., description="Código CNAE de la actividad evaluada")
+    evaluation_date: str = Field(..., description="Fecha de emisión del informe (ISO 8601 YYYY-MM-DD)")
+    fortalezas: List[str] = Field(..., min_length=2, description="Puntos fuertes internos cuantitativos y operativos")
+    debilidades: List[str] = Field(..., min_length=2, description="Vulnerabilidades internas (liquidez, concentración, márgenes)")
+    oportunidades: List[str] = Field(..., min_length=2, description="Oportunidades de mercado detectadas en la prospección externa")
+    amenazas: List[str] = Field(..., min_length=2, description="Riesgos externos de mercado, inflación de proveedores o sector")
+    acciones_recomendadas: List[str] = Field(..., min_length=3, description="Propuestas tácticas concretas con metas numéricas")
+    synthetic_prompt_tokens: Optional[int] = Field(default=None, description="Métricas de ejecución pre-LLM anonimizado")
+
+
+class StrategicAnalysisContextDTO(BaseModel):
+    """Payload de contexto anonimizado para alimentar el asistente LLM (cumplimiento RGPD)."""
+    cnae: str
+    sector: str
+    region: str
+    gross_margin_pct: Decimal
+    ebitda_margin_pct: Decimal
+    debt_ratio_pct: Optional[Decimal] = Field(default=None, description="Ratio de endeudamiento patrimonial (Pasivo Total / Activo Total)")
+    seasonality_pattern: Optional[str] = Field(default=None, description="Patrón de estacionalidad detectado en la facturación trimestral")
+    average_collection_days: int
+    user_price_percentile: int
+    potential_upside_eur: Decimal
+    client_concentration_c3_pct: Decimal
+    max_client_c1_pct: Decimal
+    high_concentration_alert: bool
+    supplier_increase_pct: Decimal
+    sector_inflation_pct: Decimal
+    runway_months: Decimal = Field(..., description="Meses de supervivencia con la tesorería actual redondeado a 1 decimal")
+    available_liquidity_eur: Decimal
+
+    @field_validator("gross_margin_pct", "ebitda_margin_pct", "potential_upside_eur", "client_concentration_c3_pct", "max_client_c1_pct", "supplier_increase_pct", "sector_inflation_pct", "available_liquidity_eur", mode="before")
+    @classmethod
+    def quantize_context_decimals(cls, v):
+        return Decimal(str(v or "0.00")).quantize(Decimal("0.01"))
+
+    @field_validator("debt_ratio_pct", mode="before")
+    @classmethod
+    def quantize_debt_ratio(cls, v):
+        if v is None:
+            return None
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+    @field_validator("runway_months", mode="before")
+    @classmethod
+    def quantize_context_runway(cls, v):
+        return Decimal(str(v or "0.0")).quantize(Decimal("0.1"))
+
 

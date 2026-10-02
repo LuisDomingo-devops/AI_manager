@@ -11,11 +11,15 @@ from .onboarding_router import router as onboarding_router
 from .auth_router import router as auth_router
 from .import_api import router as import_router
 from .tax_models_router import router as tax_models_router
+from .financial_statements_router import router as financial_statements_router
+from .market_intelligence_router import router as market_intelligence_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth_router, tags=["Auth & Usuarios"])
 api_v1_router.include_router(billing_router, tags=["Billing & E-Invoice"])
 api_v1_router.include_router(accounting_router, tags=["Accounting PGC"])
+api_v1_router.include_router(financial_statements_router, tags=["Financial Statements & Cierre Contable"])
+api_v1_router.include_router(market_intelligence_router, tags=["Market Intelligence & DAFO"])
 api_v1_router.include_router(banking_router, tags=["Open Banking PSD2"])
 api_v1_router.include_router(compliance_router, tags=["Compliance Veri*Factu"])
 api_v1_router.include_router(advisor_router, tags=["Advisor Portal"])
