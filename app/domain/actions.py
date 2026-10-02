@@ -99,6 +99,36 @@ ALLOWED_ACTIONS: frozenset[str] = frozenset(
 )
 
 
+# Catálogo canónico de herramientas críticas que requieren supervisión
+# humana obligatoria (Human-in-the-Loop) antes de su ejecución.
+CRITICAL_TOOLS: frozenset[str] = frozenset({
+    # Facturación y cobros
+    "create_invoice",
+    "emit_invoice",
+    "create_rectificativa_invoice",
+    "delete_invoice",
+    "delete_client",
+    "delete_product",
+    "process_inventory_document",
+    # Fiscalidad y modelos oficiales AEAT
+    "submit_tax_model",
+    "submit_aeat_model",
+    "download_tax_certificate",
+    # Contabilidad, conciliación y bancos
+    "run_bank_reconciliation",
+    "reconcile_bank_entry",
+    "post_accounting_entry",
+    "close_fiscal_year",
+    # Laboral y seguridad social
+    "generate_payroll",
+    "calculate_settlement_finiquito",
+    "submit_cra_tgss",
+    # Operaciones del sistema de archivos destructivas
+    "delete_file",
+    "delete_directory",
+})
+
+
 # Alias cortos que el LLM puede emitir en modo "tool" y que
 # PlannerOrchestrator resuelve directo contra el bridge (sin pasar por
 # una función Python intermedia en SERVER_TOOLS). Pensado para acciones

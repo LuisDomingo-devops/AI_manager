@@ -142,16 +142,18 @@ def generate_tool_prompt(client_id: str | None = None) -> str:
         "1. Use exact Desktop/Documents paths from the context above.\n"
         "2. Normalize all paths to forward slashes '/'.\n\n"
         "FORMAT:\n"
-        '{"tool":"TOOL_NAME","args":{...}}\n\n'
+        '{"type": "tool_call", "tool_name": "TOOL_NAME", "tool_args": {...}}\n'
+        'or for conversational response:\n'
+        '{"type": "message", "message": "YOUR_RESPONSE"}\n\n'
         "EXAMPLES:\n"
         'User: crea carpeta PruebaManual en Escritorio\n'
-        f'Output: {{"tool":"create_directory","args":{{"path":"{desktop_dir}/PruebaManual"}}}}\n'
+        f'Output: {{"type": "tool_call", "tool_name": "create_directory", "tool_args": {{"path": "{desktop_dir}/PruebaManual"}}}}\n'
         'User: crea archivo notas.txt con texto Hola\n'
-        f'Output: {{"tool":"create_file","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt","content":"Hola"}}}}\n'
+        f'Output: {{"type": "tool_call", "tool_name": "create_file", "tool_args": {{"path": "{desktop_dir}/PruebaManual/notas.txt", "content": "Hola"}}}}\n'
         'User: lee archivo notas.txt\n'
-        f'Output: {{"tool":"read_file","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt"}}}}\n'
+        f'Output: {{"type": "tool_call", "tool_name": "read_file", "tool_args": {{"path": "{desktop_dir}/PruebaManual/notas.txt"}}}}\n'
         'User: reemplaza Hola por Chao en notas.txt\n'
-        f'Output: {{"tool":"replace_file_content","args":{{"path":"{desktop_dir}/PruebaManual/notas.txt","target":"Hola","replacement":"Chao"}}}}\n\n'
+        f'Output: {{"type": "tool_call", "tool_name": "replace_file_content", "tool_args": {{"path": "{desktop_dir}/PruebaManual/notas.txt", "target": "Hola", "replacement": "Chao"}}}}\n\n'
         "AVAILABLE TOOLS:\n"
     )
 
@@ -177,6 +179,6 @@ def generate_tool_prompt(client_id: str | None = None) -> str:
         doc_line = doc.split("\n")[0].strip() if doc else ""
         desc = f"  # {doc_line}" if doc_line else ""
         
-        lines.append(f'{{"tool":"{tool_name}","args":{{{args_preview}}}}}{desc}')
+        lines.append(f'{{"type":"tool_call","tool_name":"{tool_name}","tool_args":{{{args_preview}}}}}{desc}')
 
     return header + "\n".join(lines)

@@ -44,7 +44,11 @@ async def run_bank_reconciliation() -> dict:
     Requiere confirmación explícita del usuario vía OOB.
     """
     from app.domain.services.approval_service import approval_service
-    approved = await approval_service.request_approval("run_bank_reconciliation", {})
+    approved = await approval_service.request_approval(
+        "run_bank_reconciliation",
+        details={"action": "reconcile_all_pending"},
+        summary="Ejecución de conciliación bancaria automática"
+    )
     if not approved:
         return {"status": "error", "message": "Operación cancelada o timeout en confirmación."}
 

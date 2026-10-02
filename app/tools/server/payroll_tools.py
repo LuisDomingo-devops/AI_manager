@@ -131,7 +131,11 @@ async def issue_monthly_payroll_tool(
 
     payroll = PayrollEngine.calculate_monthly_payroll(emp, month=month, year=year)
 
-    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval(
+        'generate_payroll_receipt',
+        details={"employee_id": employee_id, "month": month, "year": year},
+        summary=f"Emisión de nómina mes {month}/{year} para empleado ID {employee_id}"
+    )
     if not approved:
         return {
             "status": "pending_confirmation",
@@ -261,7 +265,16 @@ async def issue_settlement_and_dismissal_tool(
         vacation_days_taken=vacation_days_taken
     )
 
-    approved = confirmed_by_user or await approval_service.request_approval('human_confirmation', {})
+    approved = confirmed_by_user or await approval_service.request_approval(
+        'terminate_employee',
+        details={
+            "employee_id": employee_id,
+            "termination_date": termination_date,
+            "termination_type": termination_type,
+            "vacation_days_taken": vacation_days_taken
+        },
+        summary=f"Extinción contractual y finiquito ({termination_type}) para empleado ID {employee_id}"
+    )
     if not approved:
         return {
             "status": "pending_confirmation",

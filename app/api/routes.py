@@ -46,6 +46,9 @@ from app.utils.logger import app_logger, attach_request_id
 # pyrefly: ignore [missing-import]
 from app.utils.timer import Timer
 from app.config import settings
+from app.domain.planner_orchestrator import PlannerOrchestrator
+
+orchestrator = PlannerOrchestrator()
 
 # ── API Key Security ────────────────────────────────────────────────────────
 API_KEY_NAME = "X-API-Key"
@@ -126,15 +129,23 @@ async def dashboard_sync(client_id: str = Depends(verify_api_key)):
 
 class ApprovalResolutionRequest(BaseModel):
     action_id: Optional[str] = None
-    approved: bool
+    approved: Optional[bool] = None
+    decision: Optional[str] = None
     user_notes: Optional[str] = None
 
 @router.post("/approvals/{action_id}/resolve", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
 @router.post("/api/v1/approvals/{action_id}/resolve", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
+@router.post("/api/v1/approval/{action_id}/decision", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
+@router.post("/approvals/{action_id}/decision", summary="Resuelve una acción sensible retenida (aprobar o rechazar).")
 async def resolve_approval_endpoint(action_id: str, payload: ApprovalResolutionRequest, client_id: str = Depends(verify_api_key)):
     from app.domain.services.approval_service import approval_service
-    if approval_service.resolve_approval(action_id, payload.approved):
-        return {"status": "ok", "message": "Acción resuelta correctamente.", "approved": payload.approved}
+    is_approved = payload.approved
+    if is_approved is None and payload.decision:
+        is_approved = payload.decision.lower() in ("approved", "approve", "true", "1")
+    if is_approved is None:
+        is_approved = False
+    if approval_service.resolve_approval(action_id, is_approved, user_notes=payload.user_notes):
+        return {"status": "ok", "message": "Acción resuelta correctamente.", "approved": is_approved}
     raise HTTPException(status_code=404, detail="Aprobación no encontrada o ya resuelta.")
 
 @router.post("/approvals/{action_id}/confirm", summary="Confirma una acción sensible retenida.")
@@ -158,8 +169,9 @@ router_calendar = APIRouter(prefix="/calendar", tags=["calendar"], dependencies=
 router_mail = APIRouter(prefix="/mail", tags=["mail"], dependencies=[Depends(verify_api_key)])
 router_security = APIRouter(prefix="/security", tags=["security"], dependencies=[Depends(verify_api_key)])
 
-# Inyectado desde lifespan en main.py
-orchestrator: Any = None
+# Inyectado desde lifespan en main.py o inicializado por defecto
+if "orchestrator" not in globals() or orchestrator is None:
+    orchestrator = PlannerOrchestrator()
 
 
 # ---------------------------------------------------------------------------
@@ -409,8 +421,11 @@ async def metrics():
 from app.infrastructure.database.concurrency import retry_on_db_lock
 
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
+@router.post("/chat/stream", dependencies=[Depends(verify_api_key)])
 @retry_on_db_lock
 async def chat_endpoint(req: ChatRequest, request: Request):
+    if request.url.path.endswith("/stream"):
+        req.stream = True
     if "<script" in req.message.lower() or "</script>" in req.message.lower():
         raise HTTPException(status_code=400, detail="Entrada no permitida (posible inyección detectada).")
     from app.main import llm
@@ -438,7 +453,8 @@ async def chat_endpoint(req: ChatRequest, request: Request):
         async def event_stream():
             try:
                 import json
-                async for chunk in orchestrator.run_stream(
+                target_orchestrator = orchestrator or PlannerOrchestrator()
+                async for chunk in target_orchestrator.run_stream(
                     req.message,
                     llm,
                     request_id=request_id,

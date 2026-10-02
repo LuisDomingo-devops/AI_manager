@@ -267,7 +267,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 @app.middleware("http")
-async def license_validation_middleware(request: Request, call_next):
+async def request_id_middleware(request: Request, call_next):
     path = request.url.path
     
     # Comprobar si la ruta coincide con un feature restringido
@@ -281,12 +281,7 @@ async def license_validation_middleware(request: Request, call_next):
                     content={"status": "error", "request_id": request_id, "detail": detail}
                 )
             break
-            
-    return await call_next(request)
 
-
-@app.middleware("http")
-async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
     logger = attach_request_id(app_logger, request_id)
@@ -307,9 +302,14 @@ async def request_id_middleware(request: Request, call_next):
         try:
             body_bytes = await request.body()
             body_str = body_bytes.decode("utf-8", errors="ignore")
-            # Reinyectar bytes para que FastAPI pueda leer el cuerpo después
+            # Reinyectar bytes para que FastAPI pueda leer el cuerpo después cumpliendo la especificación ASGI
+            body_consumed = False
             async def receive():
-                return {"type": "http.request", "body": body_bytes, "more_body": False}
+                nonlocal body_consumed
+                if not body_consumed:
+                    body_consumed = True
+                    return {"type": "http.request", "body": body_bytes, "more_body": False}
+                return {"type": "http.disconnect"}
             request._receive = receive
         except (UnicodeDecodeError, RuntimeError, OSError) as exc:
             error_logger.warning("Fallo al decodificar o reinyectar el body de la petición: %s", exc, exc_info=True)

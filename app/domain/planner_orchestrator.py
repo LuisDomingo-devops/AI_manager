@@ -20,6 +20,7 @@ from app.domain.ports.llm_port import LLMPort
 from app.domain.ports.memory_port import MemoryPort, VectorMemoryPort
 from app.domain.ports.bridge_port import BridgePort
 from app.domain.ports.calendar_port import CalendarPort
+from app.domain.schemas import LLMDecisionEnvelope, IntentType
 # pyrefly: ignore [missing-import]
 from app.infrastructure.adapters.tool_registry import (
     get_tool,
@@ -290,6 +291,86 @@ class ToolExecutionEngine:
         self.bridge = bridge
 
     async def execute_tool(self, tool_name: str, args: dict, session_id: str | None, client_id: str | None, request_id: str | None, logger, error) -> dict:
+        # 1. Resolución de rol RBAC: peticiones locales o de escritorio sin client_id, 'default' o 'local' son 'owner'
+        if not client_id or str(client_id).strip().lower() in ("default", "local", "none"):
+            role = "owner"
+        else:
+            role = "guest"
+            client_meta = None
+            if self.bridge and hasattr(self.bridge, "_client_info_dict"):
+                client_meta = self.bridge._client_info_dict.get(client_id)
+            if not client_meta:
+                from app.infrastructure.adapters.alfonso_bridge import bridge as default_bridge
+                if hasattr(default_bridge, "_client_info_dict"):
+                    client_meta = default_bridge._client_info_dict.get(client_id)
+
+            if client_meta:
+                role = client_meta.get("role", "guest")
+                if role == "guest":
+                    from app.config import settings
+                    role = settings.get_client_role(client_id)
+            else:
+                from app.config import settings
+                role = settings.get_client_role(client_id)
+
+        # 2. Control de acceso RBAC
+        if role in ("guest", "limitado") and tool_name != "no_op":
+            logger.warning("Acceso denegado: el cliente %s con rol %s intentó ejecutar %s", client_id, role, tool_name)
+            return {
+                "status": "rbac_error",
+                "execution": "client" if is_client_tool(tool_name) else "server",
+                "message": f"Acceso denegado: el rol '{role}' no tiene permisos para ejecutar la herramienta '{tool_name}'",
+            }
+
+        if role in ("advisor", "asesor"):
+            advisor_allowed = {
+                "get_libro_diario", "get_libro_mayor", "get_balance_situacion", "get_pgc_accounts",
+                "get_profit_and_loss_report", "export_advisor_pack", "export_advisor_pack_tool",
+                "send_to_advisor", "request_document",
+                "get_tax_estimate", "get_clients", "get_products", "get_quotes",
+                "get_pending_payments_report", "get_invoice_payment_summary",
+                "get_b2b_invoice_status_history_tool", "export_einvoice_tool",
+                "list_directory", "view_file", "no_op"
+            }
+            if tool_name not in advisor_allowed:
+                logger.warning("Acceso denegado: el cliente %s con rol %s intentó ejecutar %s", client_id, role, tool_name)
+                return {
+                    "status": "rbac_error",
+                    "execution": "client" if is_client_tool(tool_name) else "server",
+                    "message": f"Acceso denegado: el rol 'advisor' solo dispone de permisos de consulta y auditoría contable/fiscal. No puede ejecutar '{tool_name}'."
+                }
+
+        # 3. Verificación de nivel de membresía (Feature Gating: Basic, Pro, Advisor)
+        from app.utils.license_validator import is_tool_allowed_for_tier
+        is_tier_allowed, tier_msg = is_tool_allowed_for_tier(tool_name)
+        if not is_tier_allowed:
+            logger.warning("Bloqueo por membresía: la herramienta %s no está permitida para el nivel activo", tool_name)
+            return {
+                "status": "tier_upgrade_required",
+                "execution": "client" if is_client_tool(tool_name) else "server",
+                "message": tier_msg
+            }
+
+        # 4. Interceptación Human-in-the-Loop (HITL) para herramientas críticas
+        from app.domain.actions import CRITICAL_TOOLS
+        if tool_name in CRITICAL_TOOLS:
+            from app.domain.services.approval_service import approval_service
+            logger.info("Herramienta crítica detectada: %s. Solicitando aprobación HITL.", tool_name)
+            approved = await approval_service.request_approval(
+                action_type=tool_name,
+                details=args or {},
+                summary=f"Aprobación requerida para ejecutar la herramienta crítica '{tool_name}'"
+            )
+            if not approved:
+                logger.warning("Ejecución de herramienta crítica %s rechazada o cancelada por el usuario.", tool_name)
+                return {
+                    "status": "cancelled",
+                    "execution": "client" if is_client_tool(tool_name) else "server",
+                    "message": f"La ejecución de la herramienta crítica '{tool_name}' fue cancelada o rechazada por el usuario.",
+                    "tool": tool_name
+                }
+
+        # 5. Ejecución en cliente
         if is_client_tool(tool_name):
             logger.info("Ejecutando tool de cliente: %s", tool_name)
             action = get_client_action(tool_name)
@@ -309,62 +390,6 @@ class ToolExecutionEngine:
                 "result": result,
             }
         else:
-            role = "guest"
-            if client_id:
-                client_meta = None
-                if self.bridge and hasattr(self.bridge, "_client_info_dict"):
-                    client_meta = self.bridge._client_info_dict.get(client_id)
-                if not client_meta:
-                    from app.infrastructure.adapters.alfonso_bridge import bridge as default_bridge
-                    if hasattr(default_bridge, "_client_info_dict"):
-                        client_meta = default_bridge._client_info_dict.get(client_id)
-
-                if client_meta:
-                    role = client_meta.get("role", "guest")
-                    if role == "guest":
-                        from app.config import settings
-                        role = settings.get_client_role(client_id)
-                else:
-                    from app.config import settings
-                    role = settings.get_client_role(client_id)
-            
-            if role in ("guest", "limitado") and tool_name != "no_op":
-                logger.warning("Acceso denegado: el cliente %s con rol %s intentó ejecutar %s", client_id, role, tool_name)
-                return {
-                    "status": "rbac_error",
-                    "execution": "server",
-                    "message": f"Acceso denegado: el rol '{role}' no tiene permisos para ejecutar la herramienta de servidor '{tool_name}'",
-                }
-
-            if role in ("advisor", "asesor"):
-                advisor_allowed = {
-                    "get_libro_diario", "get_libro_mayor", "get_balance_situacion", "get_pgc_accounts",
-                    "get_profit_and_loss_report", "export_advisor_pack", "export_advisor_pack_tool",
-                    "send_to_advisor", "request_document",
-                    "get_tax_estimate", "get_clients", "get_products", "get_quotes",
-                    "get_pending_payments_report", "get_invoice_payment_summary",
-                    "get_b2b_invoice_status_history_tool", "export_einvoice_tool",
-                    "list_directory", "view_file", "no_op"
-                }
-                if tool_name not in advisor_allowed:
-                    logger.warning("Acceso denegado: el cliente %s con rol %s intentó ejecutar %s", client_id, role, tool_name)
-                    return {
-                        "status": "rbac_error",
-                        "execution": "server",
-                        "message": f"Acceso denegado: el rol 'advisor' solo dispone de permisos de consulta y auditoría contable/fiscal. No puede ejecutar '{tool_name}'."
-                    }
-
-            # Verificación de nivel de membresía (Feature Gating: Basic, Pro, Advisor)
-            from app.utils.license_validator import is_tool_allowed_for_tier
-            is_tier_allowed, tier_msg = is_tool_allowed_for_tier(tool_name)
-            if not is_tier_allowed:
-                logger.warning("Bloqueo por membresía: la herramienta %s no está permitida para el nivel activo", tool_name)
-                return {
-                    "status": "tier_upgrade_required",
-                    "execution": "server",
-                    "message": tier_msg
-                }
-
             logger.info("Ejecutando tool de servidor: %s", tool_name)
             tool = get_tool(tool_name, request_id)
 
@@ -981,10 +1006,30 @@ class PlannerOrchestrator:
             # Si era JSON (Herramienta) lo ejecutamos al final
             if is_json:
                 data = extract_json_robust(buffer)
-                if data and "tool" in data:
-                    res = await self.execution_engine.execute_tool(data["tool"], data.get("args", {}), session_id, client_id, request_id, logger, error_logger)
-                    yield json.dumps({"type": "tool", "tool": data["tool"], "result": res})
-                    return
+                if isinstance(data, LLMDecisionEnvelope):
+                    if data.type in (IntentType.tool_call, "tool_call") and data.tool_name:
+                        tool_name = data.tool_name
+                        tool_args = data.tool_args or {}
+                        res = await self.execution_engine.execute_tool(
+                            tool_name, tool_args, session_id, client_id, request_id, logger, error_logger
+                        )
+                        yield json.dumps({"type": "tool", "tool": tool_name, "result": res})
+                        return
+                    else:
+                        resp_text = data.message or buffer
+                        yield json.dumps({"type": "chat", "response": resp_text})
+                elif isinstance(data, dict):
+                    tool_name = data.get("tool") or data.get("tool_name")
+                    if tool_name:
+                        tool_args = data.get("args") or data.get("tool_args") or {}
+                        res = await self.execution_engine.execute_tool(
+                            tool_name, tool_args, session_id, client_id, request_id, logger, error_logger
+                        )
+                        yield json.dumps({"type": "tool", "tool": tool_name, "result": res})
+                        return
+                    else:
+                        resp_text = data.get("message") or buffer
+                        yield json.dumps({"type": "chat", "response": resp_text})
                 else:
                     # Falsa alarma, era texto que empezaba con {
                     yield json.dumps({"type": "chat", "response": buffer})

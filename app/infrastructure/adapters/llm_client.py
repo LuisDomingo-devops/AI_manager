@@ -104,25 +104,43 @@ NO DEBES INCLUIR NINGÚN TEXTO FUERA DEL JSON.
 # VALIDACIÓN TOOL
 # ---------------------------------------------------------------------
 
+def format_tool_call(tool_name: str, tool_args: dict | None = None) -> dict:
+    ''' Formatea una llamada a herramienta con el protocolo canónico LLMDecisionEnvelope. '''
+    return {"type": "tool_call", "tool_name": tool_name, "tool_args": tool_args or {}}
+
+
 def validate_tool_call(tool_call: dict) -> dict:
     ''' Valida la estructura de la llamada a la herramienta y
     devuelve un diccionario con el nombre de la herramienta y sus 
-    argumentos. '''
+    argumentos. Soporta tanto el formato canónico (tool_name/tool_args)
+    como el formato legacy (tool/args). '''
     if not isinstance(tool_call, dict):
-        return {"tool": "no_op", "args": {"message": "Invalid tool format"}}
+        return {
+            "tool": "no_op", "args": {"message": "Invalid tool format"},
+            "tool_name": "no_op", "tool_args": {"message": "Invalid tool format"}
+        }
 
-    tool_name = tool_call.get("tool")
-    args = tool_call.get("args", {})
+    tool_name = tool_call.get("tool_name") or tool_call.get("tool")
+    args = tool_call.get("tool_args") if "tool_args" in tool_call else tool_call.get("args", {})
 
     tool = get_tool(tool_name)
 
     if tool is None:
-        return {"tool": "no_op", "args": {"message": f"Tool no existe: {tool_name}"}}
+        return {
+            "tool": "no_op", "args": {"message": f"Tool no existe: {tool_name}"},
+            "tool_name": "no_op", "tool_args": {"message": f"Tool no existe: {tool_name}"}
+        }
 
     if not isinstance(args, dict):
-        return {"tool": "no_op", "args": {"message": "Args inválidos"}}
+        return {
+            "tool": "no_op", "args": {"message": "Args inválidos"},
+            "tool_name": "no_op", "tool_args": {"message": "Args inválidos"}
+        }
 
-    return {"tool": tool_name, "args": args}
+    return {
+        "tool": tool_name, "args": args,
+        "tool_name": tool_name, "tool_args": args
+    }
 
 
 # ---------------------------------------------------------------------
@@ -133,7 +151,7 @@ import re
 
 def extract_json_robust(raw: str):
     ''' Extrae y valida la respuesta del LLM según el protocolo estructurado. '''
-    from app.domain.schemas import LLMDecisionEnvelope, ProtocolError
+    from app.domain.schemas import LLMDecisionEnvelope, IntentType, ProtocolError
     
     if not raw:
         raise ProtocolError("Empty response from LLM", "")
@@ -154,9 +172,30 @@ def extract_json_robust(raw: str):
 
     try:
         data = json.loads(clean)
+        if not isinstance(data, dict):
+            raise ProtocolError("Parsed JSON is not an object", raw)
+
+        # Normalización preventiva de formato legacy: {"tool": "...", "args": {...}}
+        if "type" not in data:
+            if "tool" in data:
+                data["type"] = IntentType.tool_call.value
+                data["tool_name"] = data.get("tool")
+                data["tool_args"] = data.get("args") or {}
+            elif "message" in data:
+                data["type"] = IntentType.message.value
+            else:
+                raise ProtocolError("Missing 'type' field in LLM decision", raw)
+        elif data.get("type") in ("tool_call", IntentType.tool_call):
+            if "tool_name" not in data and "tool" in data:
+                data["tool_name"] = data.get("tool")
+            if "tool_args" not in data and "args" in data:
+                data["tool_args"] = data.get("args") or {}
+
         return LLMDecisionEnvelope(**data)
     except json.JSONDecodeError as e:
         raise ProtocolError(f"Failed to parse or validate JSON: {str(e)}", raw)
+    except ProtocolError:
+        raise
     except Exception as e:
         raise ProtocolError(f"Failed to parse or validate JSON: {str(e)}", raw)
 

@@ -192,4 +192,24 @@ class TaxRetentionPolicyViolationError(RegulatoryAuditError):
         self.filing_id = filing_id
 
 
+# --- Excepciones Protocolo LLM, RBAC y HITL (Spec 029) ---
 
+class ProtocolValidationError(DomainError):
+    """Lanzada ante discrepancias de esquema o validación de contratos entre LLM y el backend."""
+    def __init__(self, message: str = "Error de validación del protocolo LLM", raw_output: str = "", details: dict | None = None):
+        super().__init__(message, details)
+        self.raw_output = raw_output
+
+class RBACPermissionDeniedError(DomainError):
+    """Lanzada cuando un cliente o rol no dispone de permisos para ejecutar una herramienta del servidor."""
+    def __init__(self, message: str = "Acceso denegado por política RBAC", role: str = "", tool_name: str = "", details: dict | None = None):
+        super().__init__(message, details)
+        self.role = role
+        self.tool_name = tool_name
+
+class ApprovalRejectedOrTimeoutError(DomainError):
+    """Lanzada cuando una acción crítica Human-in-the-Loop es rechazada por el usuario o caduca el timeout."""
+    def __init__(self, message: str = "Operación cancelada o no autorizada por el usuario", approval_id: str = "", tool_name: str = "", details: dict | None = None):
+        super().__init__(message, details)
+        self.approval_id = approval_id
+        self.tool_name = tool_name

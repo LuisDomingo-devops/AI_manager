@@ -56,7 +56,7 @@ COMMON_ASSISTANT_TOOLS = {
 
 BASIC_ALLOWED_TOOLS = COMMON_ASSISTANT_TOOLS | {
     # Facturación Verifactu y Rectificativas
-    "create_invoice", "get_invoices", "list_invoices", "get_invoice", "generate_invoice_pdf",
+    "create_invoice", "delete_invoice", "get_invoices", "list_invoices", "get_invoice", "generate_invoice_pdf",
     "generate_invoice_qr", "create_rectificativa_invoice",
     # Catálogo básico
     "get_clients", "create_client", "update_client", "delete_client",

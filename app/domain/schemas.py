@@ -157,26 +157,36 @@ class SettlementResultSchema(BaseModel):
     indemnity_amount: float
     total_settlement: float
     is_exempt_irpf: bool
-from enum import Enum
-class IntentType(str, Enum):
-    message = 'message'
-    tool_call = 'tool_call'
-    clarification = 'clarification'
-    confirmation_required = 'confirmation_required'
-    error = 'error'
-
-class LLMDecisionEnvelope(BaseModel):
-    type: IntentType
-    message: Optional[str] = None
-    tool_name: Optional[str] = None
-    tool_args: Optional[Dict[str, Any]] = None
-    error_code: Optional[str] = None
-
-class ProtocolError(Exception):
-    def __init__(self, message: str, raw_output: str):
-        self.message = message
-        self.raw_output = raw_output
-        super().__init__(self.message)
+from enum import Enum
+class IntentType(str, Enum):
+    message = 'message'
+    tool_call = 'tool_call'
+    clarification = 'clarification'
+    confirmation_required = 'confirmation_required'
+    error = 'error'
+
+class LLMDecisionEnvelope(BaseModel):
+    type: IntentType
+    message: Optional[str] = None
+    tool_name: Optional[str] = None
+    tool_args: Optional[Dict[str, Any]] = None
+    error_code: Optional[str] = None
+    domain: Optional[str] = Field("general", description="Dominio inferido (accounting, legal, general)")
+
+class ToolExecutionResult(BaseModel):
+    status: Literal["ok", "error", "cancelled", "rbac_error", "tier_upgrade_required", "missing_error", "validation_error", "execution_error"] = Field(
+        ..., description="Estado de finalización de la ejecución"
+    )
+    execution: Literal["server", "client"] = Field(..., description="Entorno de ejecución (servidor FastAPI o agente de escritorio)")
+    result: Optional[Any] = Field(None, description="Carga útil resultante de la ejecución exitosa")
+    message: Optional[str] = Field(None, description="Mensaje explicativo para el usuario o logs")
+    tool_name: Optional[str] = Field(None, description="Nombre de la herramienta ejecutada")
+
+class ProtocolError(Exception):
+    def __init__(self, message: str, raw_output: str):
+        self.message = message
+        self.raw_output = raw_output
+        super().__init__(self.message)
 
 class DomainErrorContract(BaseModel):
     status: Literal["needs_user_validation", "fatal_error", "system_error"] = Field(..., description="Estado del error")
