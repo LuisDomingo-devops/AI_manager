@@ -101,35 +101,154 @@ class AuditHashDTO(BaseModel):
     aeat_csv: Optional[str] = None
 
 
+class DeclarantInfoDTO(BaseModel):
+    nif: str = Field(..., min_length=9, max_length=9, description="NIF/NIE/CIF del declarante (9 caracteres)")
+    name: str = Field(..., min_length=1, max_length=40, description="Apellidos y nombre o razón social")
+    phone: Optional[str] = Field(None, max_length=9, description="Teléfono de contacto")
+    contact_person: Optional[str] = Field(None, max_length=40, description="Persona de contacto")
+    is_complementary: bool = Field(default=False, description="Indica si es declaración complementaria")
+    previous_receipt_number: Optional[str] = Field(None, max_length=13, description="Nº justificante anterior si complementaria")
+
+
 class Model303ResultDTO(BaseModel):
-    fiscal_year: int
-    quarter: int
-    base_superreducido_4: float = 0.0
-    cuota_superreducido_4: float = 0.0
-    base_reducido_10: float = 0.0
-    cuota_reducido_10: float = 0.0
-    base_general_21: float = 0.0
-    cuota_general_21: float = 0.0
-    total_cuota_devengada: float = 0.0
-    iva_deducible_corriente: float = 0.0
-    iva_deducible_inversion: float = 0.0
-    prorrata_pct: float = 100.0
-    total_iva_deducible: float = 0.0
-    resultado_autoliquidacion: float = 0.0
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    quarter: int = Field(..., ge=1, le=4)
+    base_superreducido_4: float = Field(default=0.0, description="Casilla 01: Base imponible al 4%")
+    tipo_superreducido_4: float = Field(default=4.0, description="Casilla 02: Tipo 4%")
+    cuota_superreducido_4: float = Field(default=0.0, description="Casilla 03: Cuota al 4%")
+    base_reducido_10: float = Field(default=0.0, description="Casilla 04: Base imponible al 10%")
+    tipo_reducido_10: float = Field(default=10.0, description="Casilla 05: Tipo 10%")
+    cuota_reducido_10: float = Field(default=0.0, description="Casilla 06: Cuota al 10%")
+    base_general_21: float = Field(default=0.0, description="Casilla 07: Base imponible al 21%")
+    tipo_general_21: float = Field(default=21.0, description="Casilla 08: Tipo 21%")
+    cuota_general_21: float = Field(default=0.0, description="Casilla 09: Cuota al 21%")
+    total_cuota_devengada: float = Field(default=0.0, description="Casilla 27: Total cuota devengada")
+    base_deducible_corriente: float = Field(default=0.0, description="Casilla 28: Base operaciones interiores corrientes")
+    iva_deducible_corriente: float = Field(default=0.0, description="Casilla 29: Cuota operaciones interiores corrientes")
+    base_deducible_inversion: float = Field(default=0.0, description="Casilla 30: Base bienes de inversión")
+    iva_deducible_inversion: float = Field(default=0.0, description="Casilla 31: Cuota bienes de inversión")
+    prorrata_pct: float = Field(default=100.0, ge=0.0, le=100.0, description="Porcentaje de prorrata aplicable")
+    total_iva_deducible: float = Field(default=0.0, description="Casilla 37: Total a deducir")
+    resultado_regimen_general: float = Field(default=0.0, description="Casilla 46: Diferencia (27 - 37)")
+    casilla_110_compensacion_anterior: float = Field(default=0.0, ge=0.0, description="Casilla 110: Cuotas a compensar")
+    resultado_autoliquidacion: float = Field(default=0.0, description="Casilla 71: Resultado final (46 - 110)")
     casillas: Dict[str, float] = Field(default_factory=dict)
 
 
 class Model130ResultDTO(BaseModel):
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    quarter: int = Field(..., ge=1, le=4)
+    casilla_01_ingresos_acumulados: float = Field(default=0.0, description="Casilla 01: Ingresos computables acumulados")
+    casilla_02_gastos_acumulados: float = Field(default=0.0, description="Casilla 02: Gastos deducibles acumulados")
+    casilla_03_rendimiento_neto: float = Field(default=0.0, description="Casilla 03: Rendimiento neto (01 - 02)")
+    casilla_04_pago_fraccionado_previo: float = Field(default=0.0, description="Casilla 04: 20% de casilla 03 (si > 0)")
+    casilla_07_pagos_anteriores: float = Field(default=0.0, ge=0.0, description="Casilla 07: Pagos fraccionados anteriores")
+    casilla_08_retenciones_soportadas: float = Field(default=0.0, ge=0.0, description="Casilla 08: Retenciones soportadas acumuladas")
+    casilla_13_deduccion: float = Field(default=0.0, ge=0.0, description="Casilla 13: Deducción art. 80 bis LIRPF")
+    casilla_19_resultado_ingresar: float = Field(default=0.0, description="Casilla 19: Resultado autoliquidación")
+    casillas: Dict[str, float] = Field(default_factory=dict)
+
+
+class Model111ResultDTO(BaseModel):
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    quarter: int = Field(..., ge=1, le=4)
+    perceptores_trabajo: int = Field(default=0, description="Casilla 01: Nº perceptores rendimientos trabajo")
+    base_trabajo: float = Field(default=0.0, description="Casilla 02: Importe percepciones trabajo")
+    retenciones_trabajo: float = Field(default=0.0, description="Casilla 03: Importe retenciones trabajo")
+    perceptores_profesionales: int = Field(default=0, description="Casilla 07: Nº perceptores actividades económicas")
+    base_profesionales: float = Field(default=0.0, description="Casilla 08: Importe percepciones actividades económicas")
+    retenciones_profesionales: float = Field(default=0.0, description="Casilla 09: Importe retenciones actividades económicas")
+    resultado_total: float = Field(default=0.0, description="Casilla 28: Total liquidación")
+    casillas: Dict[str, float] = Field(default_factory=dict)
+
+
+class Model115ResultDTO(BaseModel):
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    quarter: int = Field(..., ge=1, le=4)
+    numero_arrendadores: int = Field(default=0, description="Casilla 01: Nº perceptores arrendamientos")
+    base_arrendamientos: float = Field(default=0.0, description="Casilla 02: Base de las retenciones")
+    retenciones_arrendamientos: float = Field(default=0.0, description="Casilla 03: Retenciones practicadas (19%)")
+    resultado_a_ingresar: float = Field(default=0.0, description="Casilla 05: Resultado a ingresar")
+    casillas: Dict[str, float] = Field(default_factory=dict)
+
+
+class Model390ResultDTO(BaseModel):
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    total_base_devengada_21: float = 0.0
+    total_cuota_devengada_21: float = 0.0
+    total_base_devengada_10: float = 0.0
+    total_cuota_devengada_10: float = 0.0
+    total_base_devengada_4: float = 0.0
+    total_cuota_devengada_4: float = 0.0
+    total_base_deducible_corriente: float = 0.0
+    total_cuota_deducible_corriente: float = 0.0
+    total_base_deducible_inversion: float = 0.0
+    total_cuota_deducible_inversion: float = 0.0
+    volumen_total_operaciones: float = 0.0
+    prorrata_anual_pct: float = 100.0
+    regularizacion_anual: float = 0.0
+    resultado_anual_declaracion: float = 0.0
+    casillas: Dict[str, float] = Field(default_factory=dict)
+
+
+class BoeExportResultDTO(BaseModel):
+    model_code: str
+    fiscal_year: int
+    period: str
+    filename: str
+    content_raw: str
+    total_bytes: int
+    sha256_checksum: str
+    declarant_nif: Optional[str] = None
+    records_count: Optional[int] = None
+
+    @property
+    def sha256_hash(self) -> str:
+        return self.sha256_checksum
+
+
+class FilingSessionStatus(str, Enum):
+    INITIALIZED = "INITIALIZED"
+    BROWSER_LAUNCHED = "BROWSER_LAUNCHED"
+    FORM_LOADED = "FORM_LOADED"
+    DATA_IMPORTED = "DATA_IMPORTED"
+    VALIDATED_OK = "VALIDATED_OK"
+    VALIDATED_WARNINGS = "VALIDATED_WARNINGS"
+    VALIDATED_ERRORS = "VALIDATED_ERRORS"
+    AWAITING_USER_SIGNATURE = "AWAITING_USER_SIGNATURE"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class FirefoxFilingSessionDTO(BaseModel):
+    session_id: str
+    model_code: str
     fiscal_year: int
     quarter: int
-    casilla_01_ingresos_acumulados: float = 0.0
-    casilla_02_gastos_acumulados: float = 0.0
-    casilla_03_rendimiento_neto: float = 0.0
-    casilla_04_pago_fraccionado_previo: float = 0.0
-    casilla_07_pagos_anteriores: float = 0.0
-    casilla_13_deduccion: float = 0.0
-    casilla_19_resultado_ingresar: float = 0.0
-    casillas: Dict[str, float] = Field(default_factory=dict)
+    status: FilingSessionStatus
+    browser_type: str = "firefox"
+    validation_messages: List[str] = Field(default_factory=list)
+    preview_url: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class TaxDeclarationAuditDTO(BaseModel):
+    id: Optional[int] = None
+    tenant_id: str = Field(default="default", description="Identificador multi-tenant")
+    model_code: str = Field(..., description="Código de modelo: 303, 130, 111, 115, 390")
+    fiscal_year: int = Field(..., ge=2000, le=2100)
+    period: str = Field(..., description="1T, 2T, 3T, 4T o 0A")
+    declarant_nif: str = Field(..., min_length=9, max_length=9)
+    declarant_name: str = Field(..., max_length=120)
+    casillas_payload: Dict[str, float] = Field(default_factory=dict, description="Diccionario canónico de casillas")
+    boe_file_content: str = Field(..., description="Contenido plano exacto del fichero telemático .ses")
+    sha256_hash: str = Field(..., description="Hash criptográfico SHA-256 del fichero generado")
+    filing_status: str = Field(default="CALCULATED", description="CALCULATED, EXPORTED, FILED_AEAT")
+    aeat_csv: Optional[str] = Field(None, description="Código Seguro de Verificación emitido por la AEAT")
+    filing_date: str = Field(..., description="Fecha de cálculo/presentación (YYYY-MM-DD HH:MM:SS)")
+    retention_until_date: str = Field(..., description="Fecha límite obligatoria de retención legal (filing_date + 5 años)")
+    created_at: str
 
 
 class FixedAssetDTO(BaseModel):

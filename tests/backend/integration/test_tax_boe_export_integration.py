@@ -1,63 +1,81 @@
 """
-Test de Integración para Generación de Ficheros BOE (.ses) de la AEAT (User Story 3).
-Valida la exportación en formato telemático con registros de longitud fija para Modelo 303 y Modelo 130.
+Test de Integración para Generación de Ficheros BOE (.ses) de la AEAT (User Story 2).
+Valida la exportación en formato telemático con registros de longitud fija para Modelo 303 y Modelo 130
+conforme a las especificaciones oficiales de diseño de registro (sin etiquetas pseudo-XML ni corchetes).
 """
 
 import pytest
 from app.domain.services.boe_export_service import BoeExportService
-from app.domain.models.billing import Model303ResultDTO, Model130ResultDTO
+from app.domain.models.billing import (
+    Model303ResultDTO,
+    Model130ResultDTO,
+    Model111ResultDTO,
+    Model115ResultDTO,
+    Model390ResultDTO,
+    DeclarantInfoDTO,
+    BoeExportResultDTO,
+)
 
 
-def test_integration_generate_boe_export_model_303():
+def test_integration_generate_boe_export_model_303_positional():
     """Valida la generación de un fichero telemático oficial para importación del Modelo 303 en AEAT."""
     service = BoeExportService()
-    
+
     model_303_data = Model303ResultDTO(
         fiscal_year=2026,
         quarter=1,
-        base_superreducido_4=200.0,
-        cuota_superreducido_4=8.0,
-        base_reducido_10=500.0,
-        cuota_reducido_10=50.0,
         base_general_21=1000.0,
         cuota_general_21=210.0,
-        total_cuota_devengada=268.0,
-        iva_deducible_corriente=168.0,
-        iva_deducible_inversion=0.0,
-        prorrata_pct=100.0,
-        total_iva_deducible=168.0,
-        resultado_autoliquidacion=100.0,
+        total_cuota_devengada=210.0,
+        base_deducible_corriente=400.0,
+        iva_deducible_corriente=84.0,
+        total_iva_deducible=84.0,
+        resultado_autoliquidacion=126.0,
         casillas={
-            "01": 200.0, "03": 8.0,
-            "04": 500.0, "06": 50.0,
-            "07": 1000.0, "09": 210.0,
-            "27": 268.0, "28": 800.0,
-            "29": 168.0, "46": 100.0
+            "01": 1000.0, "02": 21.0, "03": 210.0,
+            "27": 210.0, "28": 400.0, "29": 84.0,
+            "37": 84.0, "46": 126.0, "71": 126.0
         }
     )
-    
-    declarant_info = {
-        "nif": "12345678Z",
-        "name": "ALFONSO ASESOR AUTONOMO"
-    }
-    
-    boe_file_content = service.export_model_303_boe(model_303_data, declarant_info)
-    
-    assert isinstance(boe_file_content, str)
-    assert len(boe_file_content) > 100
-    # Comprobar etiquetas o posiciones fijas BOE
-    assert "303" in boe_file_content
-    assert "2026" in boe_file_content
-    assert "1T" in boe_file_content or "1" in boe_file_content
-    assert "12345678Z" in boe_file_content
-    # Comprobar que incluye el resultado formateado (100.00 con ceros a la izquierda)
-    assert "00000010000" in boe_file_content or "100" in boe_file_content
+
+    declarant = DeclarantInfoDTO(
+        nif="12345678Z",
+        name="ALFONSO ASESOR AUTONOMO SL",
+        phone="912345678"
+    )
+
+    result = service.export_model_boe(
+        model_code="303",
+        fiscal_year=2026,
+        period="1T",
+        declarant_info=declarant,
+        model_data=model_303_data.model_dump()
+    )
+
+    assert isinstance(result, BoeExportResultDTO)
+    assert result.model_code == "303"
+    assert result.fiscal_year == 2026
+    assert result.period == "1T"
+    assert result.declarant_nif == "12345678Z"
+    assert len(result.sha256_hash) == 64
+
+    # Validar que NO contiene etiquetas pseudo-XML ni corchetes inventados
+    assert "<T3030" not in result.content_raw
+    assert "<FIN_T" not in result.content_raw
+    assert "[01=" not in result.content_raw
+
+    lines = result.content_raw.splitlines()
+    assert len(lines) >= 2
+    # Registro Tipo 1
+    assert lines[0].startswith("130320261T12345678Z")
+    # Registro Tipo 2
+    assert lines[1].startswith("230320261T12345678Z")
 
 
-def test_integration_generate_boe_export_model_130():
+def test_integration_generate_boe_export_model_130_positional():
     """Valida la generación de fichero telemático oficial para Modelo 130."""
     service = BoeExportService()
-    
+
     model_130_data = Model130ResultDTO(
         fiscal_year=2026,
         quarter=2,
@@ -74,14 +92,41 @@ def test_integration_generate_boe_export_model_130():
             "07": 1200.0, "19": 1800.0
         }
     )
-    
-    declarant_info = {
-        "nif": "B12345674",
-        "name": "HOLDED SAGE COMPETITOR S.L."
-    }
-    
-    boe_file_content = service.export_model_130_boe(model_130_data, declarant_info)
-    assert "130" in boe_file_content
-    assert "2026" in boe_file_content
-    assert "B12345674" in boe_file_content
-    assert "00000180000" in boe_file_content or "1800" in boe_file_content
+
+    declarant = DeclarantInfoDTO(
+        nif="B12345674",
+        name="HOLDED SAGE COMPETITOR SL"
+    )
+
+    result = service.export_model_boe(
+        model_code="130",
+        fiscal_year=2026,
+        period="2T",
+        declarant_info=declarant,
+        model_data=model_130_data.model_dump()
+    )
+
+    assert isinstance(result, BoeExportResultDTO)
+    assert result.model_code == "130"
+    assert "<T1300" not in result.content_raw
+    lines = result.content_raw.splitlines()
+    assert lines[0].startswith("113020262TB12345674")
+    assert lines[1].startswith("213020262TB12345674")
+
+
+def test_integration_legacy_adapter_methods():
+    """Valida la compatibilidad hacia atrás de export_model_303_boe y export_model_130_boe."""
+    service = BoeExportService()
+    m303 = Model303ResultDTO(
+        fiscal_year=2026,
+        quarter=1,
+        base_general_21=1000.0,
+        cuota_general_21=210.0,
+        total_cuota_devengada=210.0,
+        resultado_autoliquidacion=210.0,
+        casillas={"01": 1000.0, "03": 210.0, "46": 210.0, "71": 210.0}
+    )
+    raw = service.export_model_303_boe(m303, {"nif": "12345678Z", "name": "TEST"})
+    assert isinstance(raw, str)
+    assert raw.startswith("130320261T")
+    assert "<T3030" not in raw

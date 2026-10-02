@@ -301,3 +301,24 @@ async def update_customization_endpoint(req: CustomizationUpdateRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+from app.domain.models.verifactu import EmisionFacturaCommand, RegistroFacturaResponseDTO
+from app.domain.services.verifactu_service import VerifactuService
+from app.domain.exceptions import XSDValidationError
+
+@router.post("/invoices/issue", response_model=RegistroFacturaResponseDTO, status_code=201)
+async def api_issue_verifactu_invoice(cmd: EmisionFacturaCommand):
+    """
+    Emite una factura oficial conforme a Veri*factu / SIF (Orden HAC/1177/2024).
+    Valida previamente contra RegFactuSistemaFacturacion.xsd y encadena criptográficamente.
+    """
+    try:
+        return VerifactuService.emitir_factura_legal(cmd)
+    except XSDValidationError as e:
+        raise HTTPException(status_code=400, detail={"error": "Validación XSD fallida", "details": e.errors})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al emitir factura legal: {e}")
+
+

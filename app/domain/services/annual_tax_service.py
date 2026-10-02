@@ -246,3 +246,92 @@ class AnnualTaxAggregatorService:
             "total_bases": round(total_bases, 2),
             "total_retenciones": round(total_retenciones, 2)
         }
+
+
+class AnnualTaxService:
+    """
+    Servicio de consolidación anual para autoliquidaciones y declaraciones informativas (Modelos 390, 190, 180).
+    """
+
+    def calculate_model_390(
+        self,
+        fiscal_year: int,
+        quarterly_declarations: List[Any] = None,
+        prorrata_anual_pct: float = 100.0
+    ):
+        """
+        Calcula la declaración resumen anual del IVA (Modelo 390) consolidando los 4 trimestres del Modelo 303.
+        """
+        from app.domain.models.billing import Model390ResultDTO, Model303ResultDTO
+
+        total_base_21 = 0.0
+        total_cuota_21 = 0.0
+        total_base_10 = 0.0
+        total_cuota_10 = 0.0
+        total_base_4 = 0.0
+        total_cuota_4 = 0.0
+        total_base_ded_corr = 0.0
+        total_cuota_ded_corr = 0.0
+        total_base_ded_inv = 0.0
+        total_cuota_ded_inv = 0.0
+        total_resultado = 0.0
+
+        if quarterly_declarations:
+            for q in quarterly_declarations:
+                if isinstance(q, Model303ResultDTO):
+                    total_base_21 += q.base_general_21
+                    total_cuota_21 += q.cuota_general_21
+                    total_base_10 += q.base_reducido_10
+                    total_cuota_10 += q.cuota_reducido_10
+                    total_base_4 += q.base_superreducido_4
+                    total_cuota_4 += q.cuota_superreducido_4
+                    total_base_ded_corr += q.base_deducible_corriente
+                    total_cuota_ded_corr += q.iva_deducible_corriente
+                    total_base_ded_inv += q.base_deducible_inversion
+                    total_cuota_ded_inv += q.iva_deducible_inversion
+                    total_resultado += q.resultado_autoliquidacion
+                elif isinstance(q, dict):
+                    total_base_21 += q.get("base_general_21", 0.0)
+                    total_cuota_21 += q.get("cuota_general_21", 0.0)
+                    total_base_10 += q.get("base_reducido_10", 0.0)
+                    total_cuota_10 += q.get("cuota_reducido_10", 0.0)
+                    total_base_4 += q.get("base_superreducido_4", 0.0)
+                    total_cuota_4 += q.get("cuota_superreducido_4", 0.0)
+                    total_base_ded_corr += q.get("base_deducible_corriente", 0.0)
+                    total_cuota_ded_corr += q.get("iva_deducible_corriente", 0.0)
+                    total_base_ded_inv += q.get("base_deducible_inversion", 0.0)
+                    total_cuota_ded_inv += q.get("iva_deducible_inversion", 0.0)
+                    total_resultado += q.get("resultado_autoliquidacion", 0.0)
+
+        volumen_operaciones = round(total_base_21 + total_base_10 + total_base_4, 2)
+
+        casillas = {
+            "01": round(total_base_21, 2), "02": 21.0, "03": round(total_cuota_21, 2),
+            "04": round(total_base_10, 2), "05": 10.0, "06": round(total_cuota_10, 2),
+            "07": round(total_base_4, 2), "08": 4.0, "09": round(total_cuota_4, 2),
+            "27": round(total_cuota_21 + total_cuota_10 + total_cuota_4, 2),
+            "28": round(total_base_ded_corr, 2), "29": round(total_cuota_ded_corr, 2),
+            "30": round(total_base_ded_inv, 2), "31": round(total_cuota_ded_inv, 2),
+            "37": round(total_cuota_ded_corr + total_cuota_ded_inv, 2),
+            "88": volumen_operaciones,
+            "99": round(total_resultado, 2)
+        }
+
+        return Model390ResultDTO(
+            fiscal_year=fiscal_year,
+            total_base_devengada_21=round(total_base_21, 2),
+            total_cuota_devengada_21=round(total_cuota_21, 2),
+            total_base_devengada_10=round(total_base_10, 2),
+            total_cuota_devengada_10=round(total_cuota_10, 2),
+            total_base_devengada_4=round(total_base_4, 2),
+            total_cuota_devengada_4=round(total_cuota_4, 2),
+            total_base_deducible_corriente=round(total_base_ded_corr, 2),
+            total_cuota_deducible_corriente=round(total_cuota_ded_corr, 2),
+            total_base_deducible_inversion=round(total_base_ded_inv, 2),
+            total_cuota_deducible_inversion=round(total_cuota_ded_inv, 2),
+            volumen_total_operaciones=volumen_operaciones,
+            prorrata_anual_pct=prorrata_anual_pct,
+            regularizacion_anual=0.0,
+            resultado_anual_declaracion=round(total_resultado, 2),
+            casillas=casillas
+        )

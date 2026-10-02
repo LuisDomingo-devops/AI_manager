@@ -14,13 +14,12 @@ from app.utils.logger import app_logger
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
-class IssuerIdentityError(Exception):
-    """Excepción lanzada cuando no se puede recuperar la identidad fiscal válida requerida para VeriFactu."""
-    pass
-
-class SIFAuditWriteError(Exception):
-    """Excepción lanzada cuando falla la escritura obligatoria de un evento de auditoría SIF."""
-    pass
+from app.domain.exceptions import (
+    IssuerIdentityError,
+    SIFAuditWriteError,
+    InvoiceChainCorruptedError,
+    XSDValidationError,
+)
 
 class VerifactuService:
     _lock = threading.Lock()
@@ -79,6 +78,315 @@ class VerifactuService:
                 "SELECT current_hash FROM verifactu_invoices ORDER BY id DESC LIMIT 1"
             ).fetchone()
             return row["current_hash"] if row else None
+
+    @classmethod
+    def calcular_huella_oficial(
+        cls,
+        emisor_nif: str,
+        num_serie: str,
+        fecha_expedicion: str,
+        tipo_registro: str,
+        cuota_total: Any,
+        importe_total: Any,
+        huella_anterior: Optional[str],
+        fecha_hora_huso: str
+    ) -> str:
+        """
+        Calcula la huella SHA-256 reglamentaria según el Anexo II de la Orden HAC/1177/2024:
+        IDEmisorFactura&NumSerieFactura&FechaExpedicionFactura&TipoRegistroDeclarado&CuotaTotal&ImporteTotal&HuellaAnterior&FechaHoraHusoGenRegistro
+        """
+        nif = str(emisor_nif).strip().upper()
+        serie = str(num_serie).strip().upper()
+        fecha = str(fecha_expedicion).strip()
+        tipo = str(tipo_registro).strip().upper()
+        from decimal import Decimal
+        cuota = f"{Decimal(str(cuota_total)):.2f}"
+        total = f"{Decimal(str(importe_total)):.2f}"
+        ph = str(huella_anterior).strip().upper() if huella_anterior else ""
+        fh = str(fecha_hora_huso).strip()
+
+        concat_str = f"{nif}&{serie}&{fecha}&{tipo}&{cuota}&{total}&{ph}&{fh}"
+        return hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
+
+    @classmethod
+    def _generar_xml_alta_sif(
+        cls,
+        cmd: Any,
+        cuota_total: Any,
+        total_amount: Any,
+        base_imponible_total: Any,
+        prev_hash: Optional[str]
+    ) -> str:
+        from lxml import etree
+        from app.config import settings
+
+        root = etree.Element("RegFactuSistemaFacturacion")
+        cabecera = etree.SubElement(root, "Cabecera")
+        obligado = etree.SubElement(cabecera, "ObligadoEmision")
+        etree.SubElement(obligado, "NombreRazon").text = cmd.emisor_nombre
+        etree.SubElement(obligado, "NIF").text = cmd.emisor_nif
+
+        alta = etree.SubElement(root, "RegistroFacturacionAlta")
+        id_fac = etree.SubElement(alta, "IDFactura")
+        invoice_num_str = f"{cmd.serie}-{cmd.numero:04d}"
+        etree.SubElement(id_fac, "NumSerieFacturaEmisor").text = invoice_num_str
+        etree.SubElement(id_fac, "FechaExpedicionFacturaEmisor").text = cmd.fecha_expedicion
+
+        etree.SubElement(alta, "NombreRazonEmisor").text = cmd.emisor_nombre
+
+        receptor = etree.SubElement(alta, "Receptor")
+        etree.SubElement(receptor, "NombreRazonReceptor").text = cmd.destinatario_nombre or "CONSUMIDOR FINAL"
+        etree.SubElement(receptor, "NIFReceptor").text = cmd.destinatario_nif or "NIF_NO_APLICA"
+
+        detalle = etree.SubElement(alta, "DetalleFactura")
+        tipo_factura_val = getattr(cmd.tipo_factura, "value", str(cmd.tipo_factura))
+        etree.SubElement(detalle, "TipoFactura").text = tipo_factura_val
+        if getattr(cmd, "tipo_rectificativa", None):
+            rect_val = getattr(cmd.tipo_rectificativa, "value", str(cmd.tipo_rectificativa))
+            etree.SubElement(detalle, "TipoRectificativa").text = rect_val
+
+        if getattr(cmd, "factura_rectificada_num", None):
+            facts_rect = etree.SubElement(detalle, "FacturasRectificadas")
+            fr = etree.SubElement(facts_rect, "FacturaRectificada")
+            etree.SubElement(fr, "NumSerieFacturaEmisor").text = str(cmd.factura_rectificada_num)
+            etree.SubElement(fr, "FechaExpedicionFacturaEmisor").text = getattr(cmd, "factura_rectificada_fecha", None) or cmd.fecha_expedicion
+
+        etree.SubElement(detalle, "ClaveRegimenEspecialOTrascendencia").text = "01"
+        etree.SubElement(detalle, "ImporteTotal").text = f"{total_amount:.2f}"
+
+        desglose = etree.SubElement(detalle, "Desglose")
+        det_iva = etree.SubElement(desglose, "DetalleIVA")
+        etree.SubElement(det_iva, "BaseImponible").text = f"{base_imponible_total:.2f}"
+        etree.SubElement(det_iva, "CuotaIVA").text = f"{cuota_total:.2f}"
+
+        sif = etree.SubElement(alta, "SistemaInformatico")
+        etree.SubElement(sif, "Nombre").text = getattr(settings, "SIF_SOFTWARE_NAME", "Alfonso Autonomo SIF")
+        etree.SubElement(sif, "NIFProductor").text = getattr(settings, "ALFONSO_SIF_PRODUCER_NIF", "B00000000")
+        etree.SubElement(sif, "NumInstalacion").text = "000001"
+        etree.SubElement(sif, "Version").text = getattr(settings, "SIF_VERSION", "1.0.0")
+
+        if prev_hash:
+            enc = etree.SubElement(alta, "Encadenamiento")
+            reg_ant = etree.SubElement(enc, "RegistroAnterior")
+            etree.SubElement(reg_ant, "Huella").text = prev_hash
+
+        return etree.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
+
+    @classmethod
+    def emitir_factura_legal(cls, cmd: Any) -> Any:
+        from decimal import Decimal
+        from app.domain.models.verifactu import EmisionFacturaCommand, RegistroFacturaResponseDTO, VerifactuDeliveryStatus
+        from app.domain.services.verifactu_validator import VerifactuValidator
+        from app.domain.services.verifactu_soap_client import VerifactuSoapClient
+        from app.infrastructure.database.legal_connection import legal_write_transaction
+
+        if not isinstance(cmd, EmisionFacturaCommand):
+            cmd = EmisionFacturaCommand(**cmd)
+
+        invoice_num_str = f"{cmd.serie}-{cmd.numero:04d}"
+        
+        cuota_total = sum((Decimal(str(l.cuota_iva)) for l in cmd.lineas), Decimal("0.00"))
+        total_amount = sum((Decimal(str(l.total_linea)) for l in cmd.lineas), Decimal("0.00"))
+        base_imponible_total = sum((Decimal(str(l.base_imponible)) for l in cmd.lineas), Decimal("0.00"))
+
+        # Validar XML contra esquema oficial ANTES de consumir número o persistir
+        xml_str = cls._generar_xml_alta_sif(cmd, cuota_total, total_amount, base_imponible_total, None)
+        validator = VerifactuValidator()
+        validator.assert_valid_xml(xml_str.encode("utf-8"))
+
+        with legal_write_transaction(client_id=cmd.tenant_id) as conn:
+            cursor = conn.cursor()
+            row = cursor.execute(
+                "SELECT current_hash FROM verifactu_invoices WHERE tenant_id = ? AND series = ? ORDER BY number DESC LIMIT 1",
+                (cmd.tenant_id, cmd.serie)
+            ).fetchone()
+            prev_hash = row[0] if row else None
+
+            tipo_val = getattr(cmd.tipo_factura, "value", str(cmd.tipo_factura))
+            current_hash = cls.calcular_huella_oficial(
+                emisor_nif=cmd.emisor_nif,
+                num_serie=invoice_num_str,
+                fecha_expedicion=cmd.fecha_expedicion,
+                tipo_registro=tipo_val,
+                cuota_total=cuota_total,
+                importe_total=total_amount,
+                huella_anterior=prev_hash,
+                fecha_hora_huso=cmd.hora_huso
+            )
+
+            if prev_hash:
+                xml_str = cls._generar_xml_alta_sif(cmd, cuota_total, total_amount, base_imponible_total, prev_hash)
+                validator.assert_valid_xml(xml_str.encode("utf-8"))
+
+            if cmd.modalidad_verifactu:
+                qr_url = f"https://sede.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif={cmd.emisor_nif}&numserie={invoice_num_str}&fecha={cmd.fecha_expedicion}&importe={total_amount:.2f}"
+            else:
+                qr_url = f"https://alfonso.local/sif/qr/valide?nif={cmd.emisor_nif}&numserie={invoice_num_str}&fecha={cmd.fecha_expedicion}&importe={total_amount:.2f}&huella={current_hash[:16]}"
+
+            status = VerifactuDeliveryStatus.LOCAL_RECORDED
+            aeat_csv = None
+
+            if cmd.modalidad_verifactu:
+                soap_client = VerifactuSoapClient(sandbox=True)
+                res_soap = soap_client.enviar_registro_factura(xml_str)
+                if res_soap.success:
+                    status = VerifactuDeliveryStatus.DELIVERED_AEAT
+                    aeat_csv = res_soap.csv
+                elif res_soap.is_network_timeout:
+                    status = VerifactuDeliveryStatus.INCIDENCIA_RED
+                    try:
+                        from app.domain.services.sif_audit_logger import SIFAuditLogger
+                        SIFAuditLogger().registrar_evento(
+                            tenant_id=cmd.tenant_id,
+                            tipo_evento="NETWORK_OUTAGE",
+                            descripcion=f"Incidencia de red al transmitir factura {invoice_num_str} a la AEAT"
+                        )
+                    except Exception:
+                        pass
+                else:
+                    status = VerifactuDeliveryStatus.REJECTED_AEAT
+
+            cols_info = cursor.execute("PRAGMA table_info(verifactu_invoices)").fetchall()
+            existing_cols = {c[1] for c in cols_info}
+            
+            if "recipient_nif" not in existing_cols:
+                try:
+                    cursor.execute("ALTER TABLE verifactu_invoices ADD COLUMN recipient_nif TEXT")
+                    existing_cols.add("recipient_nif")
+                except Exception:
+                    pass
+
+            fields = {}
+            if "tenant_id" in existing_cols:
+                fields["tenant_id"] = cmd.tenant_id
+            if "series" in existing_cols:
+                fields["series"] = cmd.serie
+            if "number" in existing_cols:
+                fields["number"] = cmd.numero
+            if "invoice_number" in existing_cols:
+                fields["invoice_number"] = invoice_num_str
+            if "issue_date" in existing_cols:
+                fields["issue_date"] = cmd.fecha_expedicion
+            if "date_of_issue" in existing_cols:
+                fields["date_of_issue"] = cmd.fecha_expedicion
+            if "issue_time" in existing_cols:
+                fields["issue_time"] = cmd.hora_huso
+            if "invoice_type" in existing_cols:
+                fields["invoice_type"] = tipo_val
+            if "is_rectificativa" in existing_cols:
+                fields["is_rectificativa"] = 1 if cmd.es_rectificativa else 0
+            if "rectification_type" in existing_cols:
+                fields["rectification_type"] = getattr(cmd.tipo_rectificativa, "value", None) if getattr(cmd, "tipo_rectificativa", None) else None
+            if "issuer_nif" in existing_cols:
+                fields["issuer_nif"] = cmd.emisor_nif
+            if "issuer_name" in existing_cols:
+                fields["issuer_name"] = cmd.emisor_nombre
+            if "recipient_nif" in existing_cols:
+                fields["recipient_nif"] = cmd.destinatario_nif
+            if "receiver_nif" in existing_cols:
+                fields["receiver_nif"] = cmd.destinatario_nif or ""
+            if "recipient_name" in existing_cols:
+                fields["recipient_name"] = cmd.destinatario_nombre
+            if "base_amount" in existing_cols:
+                fields["base_amount"] = f"{base_imponible_total:.2f}"
+            if "base_imponible" in existing_cols:
+                fields["base_imponible"] = float(base_imponible_total)
+            if "tax_amount" in existing_cols:
+                fields["tax_amount"] = f"{cuota_total:.2f}"
+            if "iva_amount" in existing_cols:
+                fields["iva_amount"] = float(cuota_total)
+            if "total_amount" in existing_cols:
+                fields["total_amount"] = f"{total_amount:.2f}"
+            if "prev_hash" in existing_cols:
+                fields["prev_hash"] = prev_hash
+            if "current_hash" in existing_cols:
+                fields["current_hash"] = current_hash
+            if "qr_url" in existing_cols:
+                fields["qr_url"] = qr_url
+            if "xml_content" in existing_cols:
+                fields["xml_content"] = xml_str
+            if "status" in existing_cols:
+                fields["status"] = status.value
+            if "aeat_csv" in existing_cols:
+                fields["aeat_csv"] = aeat_csv
+
+            col_names = list(fields.keys())
+            placeholders = ", ".join(["?"] * len(col_names))
+            sql = f"INSERT INTO verifactu_invoices ({', '.join(col_names)}) VALUES ({placeholders})"
+            cursor.execute(sql, [fields[c] for c in col_names])
+            inserted_id = cursor.lastrowid
+
+        return RegistroFacturaResponseDTO(
+            id=inserted_id,
+            tenant_id=cmd.tenant_id,
+            numero_factura=invoice_num_str,
+            fecha_expedicion=cmd.fecha_expedicion,
+            cuota_total=cuota_total,
+            importe_total=total_amount,
+            prev_hash=prev_hash,
+            current_hash=current_hash,
+            qr_url=qr_url,
+            xml_valido=True,
+            status=status,
+            aeat_csv=aeat_csv
+        )
+
+    @classmethod
+    def reintentar_facturas_incidencia(
+        cls,
+        tenant_id: Optional[str] = None,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Worker en segundo plano para escanear y retransmitir facturas que quedaron
+        en estado 'INCIDENCIA_RED' debido a problemas temporales de red con la AEAT.
+        Conforme a la Orden HAC/1177/2024.
+        """
+        from app.domain.services.verifactu_soap_client import VerifactuSoapClient
+        from app.infrastructure.database.legal_connection import legal_write_transaction
+
+        soap_client = VerifactuSoapClient(sandbox=True)
+        reintentadas = 0
+        exitosas = 0
+        fallidas = 0
+
+        with legal_write_transaction(client_id=tenant_id or "default") as conn:
+            cursor = conn.cursor()
+            query = "SELECT id, tenant_id, series, number, xml_content FROM verifactu_invoices WHERE status = 'INCIDENCIA_RED'"
+            params = []
+            if tenant_id:
+                query += " AND tenant_id = ?"
+                params.append(tenant_id)
+            query += f" ORDER BY id ASC LIMIT {limit}"
+
+            rows = cursor.execute(query, params).fetchall()
+
+            for r_id, r_tenant, r_series, r_num, r_xml in rows:
+                reintentadas += 1
+                if not r_xml:
+                    fallidas += 1
+                    continue
+
+                res = soap_client.enviar_registro_factura(r_xml)
+                if res.success:
+                    exitosas += 1
+                    cursor.execute(
+                        "UPDATE verifactu_invoices SET status = 'DELIVERED_AEAT', aeat_csv = ? WHERE id = ?",
+                        (res.csv, r_id)
+                    )
+                else:
+                    fallidas += 1
+                    if not res.is_network_timeout:
+                        cursor.execute(
+                            "UPDATE verifactu_invoices SET status = 'REJECTED_AEAT' WHERE id = ?",
+                            (r_id,)
+                        )
+
+        return {
+            "reintentadas": reintentadas,
+            "exitosas": exitosas,
+            "fallidas": fallidas
+        }
 
     @classmethod
     def calculate_invoice_hash(cls, invoice_data: Dict[str, Any], prev_hash: Optional[str]) -> str:
@@ -815,72 +1123,116 @@ class VerifactuService:
                         app_logger.warning(f"No se pudo procesar el reenvío de la factura {invoice_num}: {err}")
 
     @classmethod
-    def verify_chain_integrity(cls) -> Dict[str, Any]:
+    def verificar_integridad_cadena(
+        cls,
+        tenant_id: str = "default",
+        serie: Optional[str] = None,
+        raise_on_error: bool = False
+    ) -> Dict[str, Any]:
         """
-        Verifica la integridad de toda la cadena de facturas registradas.
+        Recorre cronológicamente la secuencia de facturas recalculando los hashes encadenados.
         Detecta cualquier modificación o manipulación de datos históricos.
         """
+        from app.infrastructure.database.legal_connection import get_legal_readonly_connection
 
-        with _get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM verifactu_invoices ORDER BY id ASC"
-            ).fetchall()
+        with get_legal_readonly_connection(client_id=tenant_id) as conn:
+            if serie:
+                rows = conn.execute(
+                    "SELECT * FROM verifactu_invoices WHERE tenant_id = ? AND series = ? ORDER BY number ASC, id ASC",
+                    (tenant_id, serie)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM verifactu_invoices WHERE tenant_id = ? ORDER BY series ASC, number ASC, id ASC",
+                    (tenant_id,)
+                ).fetchall()
 
         expected_prev_hash = None
         for i, row in enumerate(rows):
-            inv_num = row["invoice_number"]
-            if inv_num.endswith("_ANUL"):
-                inv_num = inv_num[:-5]
-                
-            invoice_data = {
-                "invoice_number": inv_num,
-                "date_of_issue": row["date_of_issue"],
-                "issuer_nif": row["issuer_nif"],
-                "receiver_nif": row["receiver_nif"],
-                "base_imponible": row["base_imponible"],
-                "iva_amount": row["iva_amount"],
-                "total_amount": row["total_amount"]
-            }
-            # Verificar encadenamiento (comparando en mayúsculas)
-            current_prev_hash = (row["prev_hash"] or "").upper() if row["prev_hash"] else None
-            expected_prev_hash_upper = expected_prev_hash.upper() if expected_prev_hash else None
-            
-            if current_prev_hash != expected_prev_hash_upper:
-                err_msg = f"Cadena rota en factura {row['invoice_number']}. Hash anterior esperado: {expected_prev_hash_upper}, encontrado: {current_prev_hash}"
+            row_dict = dict(row) if not isinstance(row, dict) else row
+            if row_dict.get("invoice_number"):
+                inv_str = str(row_dict["invoice_number"])
+            elif row_dict.get("series") and row_dict.get("number") is not None:
+                inv_str = f"{row_dict['series']}-{int(row_dict['number']):04d}"
+            else:
+                inv_str = f"INV-{i+1}"
+
+            current_prev_hash = row_dict.get("prev_hash")
+            current_hash = row_dict.get("current_hash") or ""
+
+            c_prev = (current_prev_hash or "").strip().upper()
+            e_prev = (expected_prev_hash or "").strip().upper()
+
+            if c_prev != e_prev:
+                err_msg = f"Cadena rota en factura {inv_str}. Esperado prev_hash: '{e_prev}', encontrado: '{c_prev}'"
                 try:
                     cls.log_sif_event(
                         event_type="INTEGRITY_TAMPERING_DETECTED",
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
+                except SIFAuditWriteError:
+                    raise
                 except Exception as e:
-                    raise SIFAuditWriteError("Fallo crítico al registrar evento de auditoría SIF.") from e
-                return {
-                    "status": "corrupted",
-                    "corrupted_invoice_number": row["invoice_number"],
-                    "error": err_msg
-                }
-            
-            calculated = cls.calculate_invoice_hash(invoice_data, expected_prev_hash)
-            if row["current_hash"].upper() != calculated:
-                err_msg = f"Datos alterados en factura {row['invoice_number']}. Hash calculado: {calculated}, encontrado en BD: {row['current_hash']}"
+                    raise SIFAuditWriteError(f"Fallo crítico al registrar evento de auditoría SIF: {e}") from e
+                if raise_on_error:
+                    raise InvoiceChainCorruptedError(err_msg, details={"invoice": inv_str, "tenant_id": tenant_id})
+                return {"status": "corrupted", "corrupted_invoice_number": inv_str, "error": err_msg}
+
+            cuota = row_dict.get("tax_amount") or row_dict.get("iva_amount") or "0.00"
+            total = row_dict.get("total_amount") or "0.00"
+            tipo = row_dict.get("invoice_type") or "F1"
+            fecha = row_dict.get("issue_date") or row_dict.get("date_of_issue")
+            hora = row_dict.get("issue_time") or "10:00:00+02:00"
+            nif = row_dict.get("issuer_nif")
+
+            computed = cls.calcular_huella_oficial(
+                emisor_nif=nif,
+                num_serie=inv_str,
+                fecha_expedicion=fecha,
+                tipo_registro=tipo,
+                cuota_total=cuota,
+                importe_total=total,
+                huella_anterior=expected_prev_hash,
+                fecha_hora_huso=hora
+            )
+
+            is_valid_hash = (current_hash.strip().upper() == computed)
+            if not is_valid_hash:
+                legacy_computed = cls.calculate_invoice_hash(row_dict, expected_prev_hash)
+                if current_hash.strip().upper() == legacy_computed:
+                    is_valid_hash = True
+
+            if not is_valid_hash:
+                err_msg = f"Datos alterados en factura {inv_str}. Hash calculado: '{computed}', BD: '{current_hash}'"
                 try:
                     cls.log_sif_event(
                         event_type="INTEGRITY_TAMPERING_DETECTED",
                         description=f"Alerta de integridad SIF: {err_msg}"
                     )
+                except SIFAuditWriteError:
+                    raise
                 except Exception as e:
-                    raise SIFAuditWriteError("Fallo crítico al registrar evento de auditoría SIF.") from e
-                return {
-                    "status": "tampered",
-                    "corrupted_invoice_number": row["invoice_number"],
-                    "error": err_msg
-                }
-            expected_prev_hash = row["current_hash"]
+                    raise SIFAuditWriteError(f"Fallo crítico al registrar evento de auditoría SIF: {e}") from e
+                if raise_on_error:
+                    raise InvoiceChainCorruptedError(err_msg, details={"invoice": inv_str, "tenant_id": tenant_id})
+                return {"status": "corrupted", "corrupted_invoice_number": inv_str, "error": err_msg}
+
+            expected_prev_hash = current_hash
 
         return {
             "status": "valid",
-            "message": f"Integridad validada con éxito. Se verificaron {len(rows)} facturas sin alteraciones."
+            "message": f"Integridad validada con éxito. Se verificaron {len(rows)} facturas sin alteraciones.",
+            "invoices_checked": len(rows)
         }
+
+    @classmethod
+    def verify_chain_integrity(cls) -> Dict[str, Any]:
+        """
+        Método de compatibilidad hacia atrás para verificar la integridad de la cadena.
+        """
+        from app.adapters.memory.memory import tenant_context
+        cid = (tenant_context.get() or "default").strip().lower()
+        return cls.verificar_integridad_cadena(tenant_id=cid)
 
     @classmethod
     @retry_on_db_lock
@@ -903,31 +1255,17 @@ class VerifactuService:
         from app.adapters.memory.memory import tenant_context
         cid = (tenant_context.get() or "default").strip().lower()
 
-        prev_hash = cls.get_last_event_log_hash()
-        
-        # Generar contenido único para el hash
-        timestamp = datetime.now().isoformat()
-        ph = prev_hash or ""
-        concat_str = f"{event_type}|{description}|{timestamp}|{ph}"
-        current_hash = hashlib.sha256(concat_str.encode("utf-8")).hexdigest().upper()
-        
-        # Firmar digitalmente con la clave privada local
-        private_key = cls.get_or_create_private_key(cid)
-        signature_bytes = private_key.sign(
-            current_hash.encode("utf-8"),
-            padding.PKCS1v15(),
-            hashes.SHA256()
-        )
-        signature_b64 = base64.b64encode(signature_bytes).decode("utf-8")
-        
-        with write_transaction(cid) as conn:
-            conn.execute("""
-                INSERT INTO sif_event_log (
-                    event_type, description, prev_event_hash, current_hash, signature, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (event_type, description, prev_hash, current_hash, signature_b64, timestamp))
-            
-        return current_hash
+        try:
+            from app.domain.services.sif_audit_logger import SIFAuditLogger
+            return SIFAuditLogger().registrar_evento(
+                tenant_id=cid,
+                tipo_evento=event_type,
+                descripcion=description
+            )
+        except SIFAuditWriteError:
+            raise
+        except Exception as e:
+            raise SIFAuditWriteError(f"Fallo crítico al registrar evento de auditoría SIF: {e}") from e
 
     @classmethod
     def export_to_facturae_xml(cls, invoice_data: Dict[str, Any]) -> str:

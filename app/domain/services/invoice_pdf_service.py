@@ -16,7 +16,7 @@ from app.domain.models.billing import InvoiceDTO
 class InvoicePDFService:
     """Genera documentos PDF fiscales conformes con los requisitos de la AEAT."""
 
-    def generate_invoice_pdf(self, invoice: InvoiceDTO) -> bytes:
+    def generate_invoice_pdf(self, invoice: InvoiceDTO, modalidad_verifactu: bool = True) -> bytes:
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             buffer,
@@ -79,21 +79,31 @@ class InvoicePDFService:
         qr_url = ""
         if invoice.hash_record and invoice.hash_record.qr_url:
             qr_url = invoice.hash_record.qr_url
+        elif modalidad_verifactu:
+            qr_url = f"https://sede.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif={invoice.issuer_nif}&numserie={invoice_num_str}&fecha={invoice.issue_date}&importe={invoice.total_amount:.2f}"
         else:
-            qr_url = f"https://www.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif={invoice.issuer_nif}&numserie={invoice_num_str}&fecha={invoice.issue_date}&importe={invoice.total_amount:.2f}"
+            qr_url = f"https://alfonso.local/sif/qr/valide?nif={invoice.issuer_nif}&numserie={invoice_num_str}&fecha={invoice.issue_date}&importe={invoice.total_amount:.2f}"
 
         qr_img = qrcode.make(qr_url)
         qr_buffer = io.BytesIO()
         qr_img.save(qr_buffer, format="PNG")
         qr_buffer.seek(0)
 
-        # Pie con QR y Leyenda legal obligatoria
-        legal_text = (
-            "<b>VERI*FACTU</b><br/>"
-            "Factura verificable en la sede electrónica de la AEAT.<br/>"
-            "Sistema Informático de Facturación conforme al RD 1007/2023 y la Orden HAC/1177/2024.<br/>"
-            f"<font size='7'>Huella: {invoice.hash_record.current_hash if invoice.hash_record else 'N/A'}</font>"
-        )
+        # Pie con QR y Leyenda legal obligatoria según régimen
+        if modalidad_verifactu:
+            legal_text = (
+                "<b>VERI*FACTU</b><br/>"
+                "Factura verificable en la sede electrónica de la AEAT.<br/>"
+                "Sistema Informático de Facturación conforme al RD 1007/2023 y la Orden HAC/1177/2024.<br/>"
+                f"<font size='7'>Huella: {invoice.hash_record.current_hash if invoice.hash_record else 'N/A'}</font>"
+            )
+        else:
+            legal_text = (
+                "<b>SISTEMA INFORMÁTICO DE FACTURACIÓN (SIF)</b><br/>"
+                "Sistema Informático de Facturación conforme al Real Decreto 1007/2023.<br/>"
+                "Emisión inalterable con encadenamiento criptográfico local.<br/>"
+                f"<font size='7'>Huella: {invoice.hash_record.current_hash if invoice.hash_record else 'N/A'}</font>"
+            )
 
         footer_data = [
             [

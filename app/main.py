@@ -182,12 +182,13 @@ async def lifespan(app: FastAPI):
 
     app_logger.info("Alfonso listo")
 
-    # Registro de evento SIF oficial (Orden HAC/1177/2024 Art. 12)
+    # Registro de evento SIF oficial (Orden HAC/1177/2024 Art. 8)
     try:
-        from app.domain.services.verifactu_service import VerifactuService
-        VerifactuService.log_sif_event(
-            event_type="STARTUP_SYSTEM",
-            description=f"Arranque del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
+        from app.domain.services.sif_audit_logger import SIFAuditLogger
+        SIFAuditLogger().registrar_evento(
+            tenant_id="default",
+            tipo_evento="STARTUP",
+            descripcion=f"Arranque del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
         )
     except Exception as sif_err:
         app_logger.warning("No se pudo registrar evento de arranque en SIF event log: %s", str(sif_err))
@@ -196,10 +197,11 @@ async def lifespan(app: FastAPI):
 
     # Registro de evento SIF oficial de parada
     try:
-        from app.domain.services.verifactu_service import VerifactuService
-        VerifactuService.log_sif_event(
-            event_type="SHUTDOWN_SYSTEM",
-            description=f"Parada del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
+        from app.domain.services.sif_audit_logger import SIFAuditLogger
+        SIFAuditLogger().registrar_evento(
+            tenant_id="default",
+            tipo_evento="SHUTDOWN",
+            descripcion=f"Parada controlada del sistema informático de facturación Alfonso SIF v{settings.SIF_VERSION}."
         )
     except Exception as sif_err:
         app_logger.warning("No se pudo registrar evento de parada en SIF event log: %s", str(sif_err))

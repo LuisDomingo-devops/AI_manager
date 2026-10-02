@@ -58,3 +58,14 @@ def legal_write_transaction(client_id: Optional[str] = None) -> Generator[sqlite
             raise
         finally:
             cursor.close()
+
+
+@contextlib.contextmanager
+def legal_read_transaction(client_id: Optional[str] = None) -> Generator[sqlite3.Connection, None, None]:
+    """Context manager para consultas de lectura en el dominio legal."""
+    conn = get_legal_readonly_connection(client_id=client_id)
+    try:
+        yield conn
+    finally:
+        pass
+

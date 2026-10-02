@@ -142,3 +142,54 @@ class ImmutableEntryError(AccountingDomainError):
         super().__init__(message, details={"entry_id": entry_id})
 
 
+# --- Excepciones Veri*factu y SIF (Spec 027) ---
+
+class IssuerIdentityError(DomainError):
+    """Excepción lanzada cuando no se puede recuperar la identidad fiscal válida requerida para VeriFactu."""
+    pass
+
+class InvoiceChainCorruptedError(RegulatoryAuditError):
+    """Excepción lanzada cuando se detecta una rotura o corrupción en el encadenamiento de facturas."""
+    def __init__(self, message: str = "Rotura detectada en el encadenamiento criptográfico de facturas", details: dict | None = None):
+        super().__init__(message=message, event_type="INTEGRITY_ANOMALY", details=details)
+
+class SIFAuditWriteError(RegulatoryAuditError):
+    """Excepción lanzada cuando falla la escritura obligatoria de un evento de auditoría SIF."""
+    def __init__(self, message: str = "Fallo al registrar evento obligatorio de auditoría en sif_event_log", details: dict | None = None):
+        super().__init__(message=message, event_type="SIF_AUDIT_WRITE_ERROR", details=details)
+
+class SIFEventLogCorruptedError(RegulatoryAuditError):
+    """Excepción lanzada cuando se detecta una rotura o corrupción en el libro de eventos del SIF."""
+    def __init__(self, message: str = "Rotura detectada en el encadenamiento criptográfico del libro de eventos SIF", details: dict | None = None):
+        super().__init__(message=message, event_type="INTEGRITY_ANOMALY", details=details)
+
+
+# --- Excepciones Modelos Fiscales BOE y Custodia Legal (Spec 028) ---
+
+class TaxModelValidationError(DomainError):
+    """Lanzada ante incoherencias en las casillas o parámetros de autoliquidación tributaria."""
+    def __init__(self, message: str = "Error de validación en modelo tributario", model_code: str = "", details: dict | None = None):
+        super().__init__(message, details)
+        self.model_code = model_code
+
+class BoeRecordFormattingError(DomainError):
+    """Lanzada cuando un registro de exportación telemática del BOE no cumple las posiciones o longitudes oficiales."""
+    def __init__(self, message: str = "Error en el diseño de registro posicional BOE", record_type: str = "", position: int = 0, details: dict | None = None):
+        super().__init__(message, details)
+        self.record_type = record_type
+        self.position = position
+
+class FirefoxFilingError(InfrastructureError):
+    """Lanzada ante fallos en la automatización asistida local en Mozilla Firefox o violación de política de navegador."""
+    def __init__(self, message: str = "Fallo en la sesión de navegación asistida en Firefox", browser: str = "firefox", details: dict | None = None):
+        super().__init__(message, details)
+        self.browser = browser
+
+class TaxRetentionPolicyViolationError(RegulatoryAuditError):
+    """Lanzada ante intentos de borrado o alteración de declaraciones fiscales dentro del periodo legal de 5 años (Ley 58/2003 LGT)."""
+    def __init__(self, message: str = "Infracción de la política legal de conservación tributaria de 5 años", filing_id: str = "", details: dict | None = None):
+        super().__init__(message=message, event_type="RETENTION_POLICY_VIOLATION", details=details)
+        self.filing_id = filing_id
+
+
+

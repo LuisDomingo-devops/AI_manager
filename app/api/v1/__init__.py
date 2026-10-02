@@ -10,6 +10,7 @@ from .subscriptions_router import router as subscriptions_router
 from .onboarding_router import router as onboarding_router
 from .auth_router import router as auth_router
 from .import_api import router as import_router
+from .tax_models_router import router as tax_models_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth_router, tags=["Auth & Usuarios"])
@@ -22,3 +23,4 @@ api_v1_router.include_router(tasks_router, tags=["Background Tasks"])
 api_v1_router.include_router(subscriptions_router, tags=["Subscriptions & SaaS Licensing"])
 api_v1_router.include_router(onboarding_router, tags=["Onboarding & Setup Wizard"])
 api_v1_router.include_router(import_router, tags=["Import"])
+api_v1_router.include_router(tax_models_router, tags=["Tax Models & BOE Filing"])
