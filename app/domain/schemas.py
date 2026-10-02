@@ -900,3 +900,128 @@ class StrategicAnalysisContextDTO(BaseModel):
         return Decimal(str(v or "0.0")).quantize(Decimal("0.1"))
 
 
+# ==============================================================================
+# INGESTA AUTOMÁTICA DE FACTURAS DESDE EMAIL, OCR Y CONTABILIZACIÓN PGC (033)
+# ==============================================================================
+
+class InvoiceProcessingStatus(str, Enum):
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    DUPLICATE = "DUPLICATE"
+    PARSE_ERROR = "PARSE_ERROR"
+
+
+class InvoiceTaxBreakdownDTO(BaseModel):
+    """Desglose de impuestos por tipo impositivo según RD 1619/2012."""
+    tax_rate: Decimal = Field(..., description="Tipo impositivo (ej. 4.00, 10.00, 21.00)")
+    tax_base: Decimal = Field(..., description="Base imponible sujeta")
+    tax_amount: Decimal = Field(..., description="Cuota tributaria de IVA")
+
+    @field_validator("tax_rate", "tax_base", "tax_amount", mode="before")
+    @classmethod
+    def coerce_tax_decimals(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class ExtractedInvoiceMetadataDTO(BaseModel):
+    """Metadatos de factura extraídos deterministamente del documento adjunto."""
+    sender_nif: str = Field(..., pattern=r"^[0-9A-Z][0-9]{7}[0-9A-Z]$", description="NIF/CIF del emisor")
+    sender_name: str = Field(..., min_length=1, description="Razón social o nombre comercial del emisor")
+    invoice_number: str = Field(..., min_length=1, description="Serie y número de factura")
+    issue_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Fecha de emisión ISO")
+    taxes: List[InvoiceTaxBreakdownDTO] = Field(default_factory=list, description="Desglose de bases y cuotas de IVA")
+    irpf_retention_rate: Decimal = Field(default=Decimal("0.00"), description="Tipo de retención de IRPF (ej. 15.00)")
+    irpf_retention_amount: Decimal = Field(default=Decimal("0.00"), description="Importe retenido de IRPF")
+    total_amount: Decimal = Field(..., description="Importe total neto a pagar de la factura")
+    suggested_pgc_account: str = Field(default="6280001", description="Cuenta PGC de gasto sugerida")
+    suggested_pgc_account_name: str = Field(default="Suministros", description="Nombre descriptivo de la cuenta PGC")
+    source_email_id: str = Field(..., description="Identificador único del correo de origen")
+    attached_pdf_path: str = Field(..., description="Ruta local del documento archivado")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Índice de confianza de la extracción")
+
+    @field_validator("irpf_retention_rate", "irpf_retention_amount", "total_amount", mode="before")
+    @classmethod
+    def coerce_amounts_decimal(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class ProposedJournalLineDTO(BaseModel):
+    """Línea propuesta de asiento contable para revisión humana."""
+    account_code: str = Field(..., description="Código de cuenta contable PGC")
+    account_name: str = Field(..., description="Descripción de la cuenta PGC")
+    debit: Decimal = Field(default=Decimal("0.00"), description="Importe al Debe")
+    credit: Decimal = Field(default=Decimal("0.00"), description="Importe al Haber")
+
+    @field_validator("debit", "credit", mode="before")
+    @classmethod
+    def coerce_line_decimals(cls, v):
+        return Decimal(str(v)).quantize(Decimal("0.01"))
+
+
+class InvoiceApprovalProposalDTO(BaseModel):
+    """Propuesta de factura y asiento contable presentada en la interfaz para validación humana."""
+    proposal_id: str = Field(..., description="Identificador único UUID de la propuesta")
+    status: InvoiceProcessingStatus = Field(default=InvoiceProcessingStatus.PENDING_APPROVAL)
+    metadata: ExtractedInvoiceMetadataDTO
+    proposed_entry_lines: List[ProposedJournalLineDTO] = Field(default_factory=list)
+    created_at: str
+    duplicate_warning: Optional[str] = None
+    journal_entry_id: Optional[str] = None
+
+
+class ApproveInvoiceProposalCommand(BaseModel):
+    """Comando emitido por la interfaz al pulsar [Aprobar y Contabilizar]."""
+    proposal_id: str
+    tenant_id: str = "default_tenant"
+    confirmed_pgc_account: Optional[str] = None
+    custom_concept: Optional[str] = None
+    target_partner_account: Optional[str] = None
+
+
+class EmailAccountConfigDTO(BaseModel):
+    """
+    Parámetros de configuración del servidor de correo entrante (IMAP/TLS).
+    Soporta contraseñas directas o contraseñas de aplicación (App Passwords) de Google y Microsoft.
+    """
+    imap_host: str = Field(..., description="Servidor IMAP (ej. imap.gmail.com, outlook.office365.com)")
+    imap_port: int = Field(default=993, description="Puerto IMAP SSL/TLS (por defecto 993)")
+    imap_user: str = Field(..., description="Dirección de correo electrónico / usuario")
+    imap_password: str = Field(..., description="Contraseña o contraseña de aplicación (App Password)")
+    use_ssl: bool = Field(default=True)
+    mailbox_folder: str = Field(default="INBOX")
+
+
+class InboxStatusDTO(BaseModel):
+    """Estado del buzón de correo para la interfaz gráfica."""
+    is_connected: bool
+    status_label: str  # "Conectado" o "Desconectado: configure su cuenta de correo"
+    account_email: Optional[str] = None
+    unread_emails_count: int = 0
+    pending_proposals_count: int = 0
+    last_sync_at: Optional[str] = None
+
+
+class EmailSyncResultDTO(BaseModel):
+    """Resultado del proceso de sincronización desatendida."""
+    status: str  # "ok" o "error"
+    emails_processed: int
+    attachments_downloaded: int
+    invoices_extracted: int
+    proposals_created: int
+    duplicates_detected: int
+    error_message: Optional[str] = None
+
+
+class InvoiceApprovalResultDTO(BaseModel):
+    """Resultado de la aprobación o rechazo de una propuesta de factura recibida."""
+    proposal_id: str
+    invoice_id: Optional[str] = None
+    journal_entry_id: Optional[str] = None
+    status: InvoiceProcessingStatus
+    invoice_status: Optional[str] = None
+    message: str
+    is_success: bool = True
+
+
+

@@ -1191,6 +1191,43 @@ async def mail_set_invoice_folder(folder_name_or_path: str) -> dict:
         return {"status": "error", "message": f"Error al configurar carpeta de facturas: {str(e)}"}
 
 
+async def mail_sync_inbox_invoices() -> dict:
+    """
+    Sincroniza la bandeja de entrada real de correo vía IMAP,
+    descarga facturas adjuntas y genera propuestas de contabilización PGC.
+    """
+    try:
+        from app.domain.services.email_sync_service import EmailSyncService
+        sync_svc = EmailSyncService()
+        result = sync_svc.sync_unseen_emails_and_invoices()
+        return {
+            "status": "ok",
+            "message": f"Sincronización completada. Facturas encontradas: {result.invoices_found}, Propuestas generadas: {result.proposals_created}, Duplicadas: {result.duplicates_detected}.",
+            "data": result.model_dump()
+        }
+    except Exception as e:
+        tool_logger.exception("Error al sincronizar facturas desde correo")
+        return {"status": "error", "message": f"Error en sincronización IMAP: {str(e)}"}
+
+
+async def mail_list_pending_invoice_proposals() -> dict:
+    """
+    Lista las facturas recibidas pendientes de aprobación humana y contabilización en el Libro Diario.
+    """
+    try:
+        from app.infrastructure.database.repositories.invoice_proposal_repository import InvoiceProposalRepository
+        from app.domain.schemas import InvoiceProcessingStatus
+        proposals = InvoiceProposalRepository.list_proposals(status=InvoiceProcessingStatus.PENDING_APPROVAL.value)
+        return {
+            "status": "ok",
+            "count": len(proposals),
+            "proposals": [p.model_dump() for p in proposals]
+        }
+    except Exception as e:
+        tool_logger.exception("Error al listar propuestas de facturas")
+        return {"status": "error", "message": f"Error al consultar propuestas: {str(e)}"}
+
+
 # Registrar las herramientas en el diccionario TOOLS para su importación dinámica
 TOOLS = {
     "mail_receive_mock_emails": mail_receive_mock_emails,
@@ -1206,4 +1243,6 @@ TOOLS = {
     "mail_forward_email": mail_forward_email,
     "mail_generate_draft": mail_generate_draft,
     "mail_set_invoice_folder": mail_set_invoice_folder,
+    "mail_sync_inbox_invoices": mail_sync_inbox_invoices,
+    "mail_list_pending_invoice_proposals": mail_list_pending_invoice_proposals,
 }

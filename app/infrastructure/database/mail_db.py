@@ -228,7 +228,9 @@ def update_email(email_id: int, **kwargs) -> bool:
 
 
 def seed_mock_emails() -> int:
-    """Inserta correos simulados de prueba si no existen previamente en la base de datos."""
+    """Inserta correos simulados de prueba exclusivamente en entornos de test o debug explícito."""
+    if not IS_TESTING and os.getenv("ALLOW_MOCK_EMAILS") != "true":
+        return 0
     mock_data = [
         {
             "sender": "Notificaciones Judiciales Madrid <notificaciones@justicia.madrid.es>",

@@ -32,8 +32,18 @@ class LocalOCRService:
                 with pdfplumber.open(path) as pdf:
                     for page in pdf.pages:
                         page_text = page.extract_text()
-                        if page_text:
+                        if page_text and page_text.strip():
                             extracted_text += page_text + "\n"
+                        else:
+                            # Fallback ráster si la página es escaneada
+                            try:
+                                import pytesseract
+                                pil_img = page.to_image(resolution=200).original
+                                ocr_text = pytesseract.image_to_string(pil_img, lang="spa")
+                                if ocr_text:
+                                    extracted_text += ocr_text + "\n"
+                            except Exception:
+                                pass
             except Exception as e:
                 app_logger.warning("Fallo al extraer texto con pdfplumber: %s", e)
 

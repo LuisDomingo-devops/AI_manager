@@ -13,6 +13,7 @@ from .import_api import router as import_router
 from .tax_models_router import router as tax_models_router
 from .financial_statements_router import router as financial_statements_router
 from .market_intelligence_router import router as market_intelligence_router
+from .email_invoice_router import router as email_invoice_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth_router, tags=["Auth & Usuarios"])
@@ -28,3 +29,4 @@ api_v1_router.include_router(subscriptions_router, tags=["Subscriptions & SaaS L
 api_v1_router.include_router(onboarding_router, tags=["Onboarding & Setup Wizard"])
 api_v1_router.include_router(import_router, tags=["Import"])
 api_v1_router.include_router(tax_models_router, tags=["Tax Models & BOE Filing"])
+api_v1_router.include_router(email_invoice_router, tags=["Email Invoices & OCR"])

@@ -6,6 +6,7 @@ import shutil
 import csv
 import json
 import collections
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel, 
@@ -106,10 +107,10 @@ class MailWidget(AlfonsoBaseDialog):
         inbox_header_layout.addWidget(lbl_inbox)
         inbox_header_layout.addStretch()
         
-        btn_seed = QPushButton("MOCKS")
-        btn_seed.setStyleSheet("font-size: 9px; font-weight: bold; padding: 4px 8px; max-height: 22px; max-width: 70px;")
-        btn_seed.clicked.connect(self.action_seed)
-        inbox_header_layout.addWidget(btn_seed)
+        self.btn_config_mail = QPushButton("⚙ CONFIGURAR")
+        self.btn_config_mail.setStyleSheet("font-size: 9px; font-weight: bold; padding: 4px 8px; max-height: 22px; max-width: 95px;")
+        self.btn_config_mail.clicked.connect(self.action_config)
+        inbox_header_layout.addWidget(self.btn_config_mail)
 
         btn_compose = QPushButton("REDACTAR (+)")
         btn_compose.setStyleSheet("font-size: 9px; font-weight: bold; padding: 4px 8px; max-height: 22px; max-width: 90px;")
@@ -200,6 +201,13 @@ class MailWidget(AlfonsoBaseDialog):
         
         self.detail_layout.addWidget(self.summary_box)
 
+        # Contenedor de Propuestas de Aprobación de Facturas (Spec 033)
+        self.proposals_container = QWidget()
+        self.proposals_layout = QVBoxLayout(self.proposals_container)
+        self.proposals_layout.setContentsMargins(0, 5, 0, 5)
+        self.proposals_layout.setSpacing(6)
+        self.detail_layout.addWidget(self.proposals_container)
+
         self.txt_body = QTextEdit()
         self.txt_body.setReadOnly(True)
         self.txt_body.setStyleSheet("border: none; background-color: transparent; color: #E0E0E0; font-size: 11px;")
@@ -226,9 +234,11 @@ class MailWidget(AlfonsoBaseDialog):
 
         self.load_emails()
 
-    def action_seed(self):
-        self.api.seed_emails()
-        self.load_emails()
+    def action_config(self):
+        from client.gui.dialogs.mail_config_dialog import MailConfigDialog
+        dlg = MailConfigDialog(self, self.api)
+        if dlg.exec():
+            self.load_emails()
 
     def load_emails(self):
         self.list_widget.clear()
@@ -238,7 +248,12 @@ class MailWidget(AlfonsoBaseDialog):
             self.emails_list = []
             
         if not self.emails_list:
-            item = QListWidgetItem("Sin correos electrónicos en esta categoría.")
+            from app.domain.services.email_sync_service import EmailSyncService
+            inbox_status = EmailSyncService().get_inbox_status()
+            if not inbox_status.is_connected:
+                item = QListWidgetItem("Desconectado: configure su cuenta de correo")
+            else:
+                item = QListWidgetItem("Sin correos electrónicos en esta categoría.")
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             self.list_widget.addItem(item)
             return
@@ -295,6 +310,7 @@ class MailWidget(AlfonsoBaseDialog):
             self.lbl_summary_text.setText("Este correo aún no ha sido clasificado por Alfonso.")
 
         self.txt_body.setText(email.get("body", ""))
+        self._update_invoice_proposals(email.get("id"))
 
         if email.get("read_status") == 0:
             self.api.mark_email_as_read(email.get("id"))
@@ -306,6 +322,39 @@ class MailWidget(AlfonsoBaseDialog):
                 if item_data and item_data.get("id") == selected_id:
                     self.list_widget.setCurrentItem(item)
                     break
+
+    def _update_invoice_proposals(self, email_id: Optional[str] = None):
+        """Carga y muestra tarjetas PendingInvoiceCardWidget asociadas al correo o categoría."""
+        # Limpiar widgets previos
+        while self.proposals_layout.count():
+            item = self.proposals_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        try:
+            from app.infrastructure.database.repositories.invoice_proposal_repository import InvoiceProposalRepository
+            from client.gui.dialogs.pending_invoice_card_widget import PendingInvoiceCardWidget
+            from app.domain.schemas import InvoiceProcessingStatus
+
+            proposals = InvoiceProposalRepository.list_proposals(status=InvoiceProcessingStatus.PENDING_APPROVAL.value)
+            
+            # Filtrar si coincide con el correo actual o mostrar las pendientes
+            matched_props = [p for p in proposals if str(p.metadata.source_email_id) == str(email_id)] if email_id else proposals
+            if not matched_props and self.current_category == "facturas":
+                matched_props = proposals
+
+            if matched_props:
+                self.proposals_container.show()
+                for prop in matched_props:
+                    card = PendingInvoiceCardWidget(proposal=prop, parent=self.proposals_container)
+                    card.proposal_approved.connect(lambda pid: self._update_invoice_proposals(email_id))
+                    card.proposal_rejected.connect(lambda pid: self._update_invoice_proposals(email_id))
+                    self.proposals_layout.addWidget(card)
+            else:
+                self.proposals_container.hide()
+        except Exception:
+            self.proposals_container.hide()
 
     def action_compose(self):
         dialog = EmailComposeDialog(self, self.api, mode="compose")
