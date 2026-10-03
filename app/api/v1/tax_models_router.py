@@ -21,6 +21,12 @@ from app.domain.models.billing import (
     Model111ResultDTO,
     Model115ResultDTO,
     Model390ResultDTO,
+    Model180ResultDTO,
+    Model180ReconciliationDTO,
+    Model180PerceptorDTO,
+    Model347ResultDTO,
+    Model347ReconciliationDTO,
+    Model347DeclaredDTO,
     BoeExportResultDTO,
     FirefoxFilingSessionDTO,
     TaxDeclarationAuditDTO,
@@ -69,6 +75,55 @@ class Model390CalculateRequest(BaseModel):
     fiscal_year: int
     quarterly_declarations: List[Dict[str, Any]] = Field(default_factory=list)
     prorrata_anual_pct: float = Field(default=100.0, ge=0.0, le=100.0)
+
+
+class Model180CalculateRequest(BaseModel):
+    fiscal_year: int
+    tenant_id: str = "default"
+    perceptors: Optional[List[Model180PerceptorDTO]] = None
+
+
+class Model180ReconcileRequest(BaseModel):
+    fiscal_year: int
+    model_180_data: Model180ResultDTO
+    tenant_id: str = "default"
+
+
+class Model180FileAndCustodyRequest(BaseModel):
+    fiscal_year: int
+    declarant_info: DeclarantInfoDTO
+    model_180_data: Model180ResultDTO
+    tenant_id: str = "default"
+    filing_status: str = "CALCULATED"
+    aeat_csv: Optional[str] = None
+
+
+class Model347CalculateRequest(BaseModel):
+    fiscal_year: int
+    tenant_id: str = "default"
+    declarant_nif: Optional[str] = None
+    declarant_name: Optional[str] = None
+    invoices: Optional[List[Dict[str, Any]]] = None
+    is_complementary: bool = False
+    previous_receipt_number: Optional[str] = None
+
+
+class Model347AuditRequest(BaseModel):
+    fiscal_year: int
+    model_347_data: Model347ResultDTO
+    tenant_id: str = "default"
+
+
+class Model347FileAndCustodyRequest(BaseModel):
+    fiscal_year: int
+    declarant_info: DeclarantInfoDTO
+    model_347_data: Model347ResultDTO
+    tenant_id: str = "default"
+    filing_status: str = "CALCULATED"
+    aeat_csv: Optional[str] = None
+
+
+
 
 
 class BoeExportRequest(BaseModel):
@@ -152,6 +207,95 @@ async def calculate_model_390_endpoint(req: Model390CalculateRequest):
     )
 
 
+@router.post("/models/180/calculate", response_model=Model180ResultDTO)
+async def calculate_model_180_endpoint(req: Model180CalculateRequest):
+    """Calcula la declaración informativa anual del Modelo 180 (retenciones alquileres)."""
+    service = AnnualTaxService()
+    if req.perceptors is not None:
+        return service.calculate_model_180_from_perceptors(
+            fiscal_year=req.fiscal_year,
+            perceptors=req.perceptors
+        )
+    return service.calculate_model_180(
+        fiscal_year=req.fiscal_year,
+        tenant_id=req.tenant_id
+    )
+
+
+@router.post("/models/180/reconcile-115", response_model=Model180ReconciliationDTO)
+async def reconcile_model_180_endpoint(req: Model180ReconcileRequest):
+    """Concilia el Modelo 180 anual contra las autoliquidaciones trimestrales del Modelo 115."""
+    service = AnnualTaxService()
+    return service.reconcile_with_model_115(
+        fiscal_year=req.fiscal_year,
+        model_180_result=req.model_180_data,
+        tenant_id=req.tenant_id
+    )
+
+
+@router.post("/models/180/file-and-custody", response_model=TaxDeclarationAuditDTO)
+async def file_and_custody_model_180_endpoint(req: Model180FileAndCustodyRequest):
+    """Archiva y custodia legalmente durante 5 años la declaración del Modelo 180."""
+    service = AnnualTaxService()
+    return service.file_and_custody_model_180(
+        model_180=req.model_180_data,
+        declarant_info=req.declarant_info,
+        tenant_id=req.tenant_id,
+        filing_status=req.filing_status,
+        aeat_csv=req.aeat_csv
+    )
+
+
+@router.post("/models/347/calculate", response_model=Model347ResultDTO)
+async def calculate_model_347_endpoint(req: Model347CalculateRequest):
+    """Calcula la declaración informativa anual del Modelo 347 (operaciones con terceros > 3.005,06 €)."""
+    service = AnnualTaxService()
+    if req.invoices is not None:
+        return AnnualTaxAggregatorService.aggregate_invoices_for_model_347(
+            invoices=req.invoices,
+            fiscal_year=req.fiscal_year,
+            declarant_nif=req.declarant_nif or "B87654321",
+            declarant_name=req.declarant_name or "INNOVACIONES TECNOLOGICAS SL",
+            is_complementary=req.is_complementary,
+            previous_receipt_number=req.previous_receipt_number
+        )
+    return service.calculate_model_347(
+        fiscal_year=req.fiscal_year,
+        tenant_id=req.tenant_id,
+        declarant_nif=req.declarant_nif,
+        declarant_name=req.declarant_name,
+        is_complementary=req.is_complementary,
+        previous_receipt_number=req.previous_receipt_number
+    )
+
+
+@router.post("/models/347/audit", response_model=Model347ReconciliationDTO)
+async def audit_model_347_endpoint(req: Model347AuditRequest):
+    """Audita la concordancia matemática trimestral y umbral del Modelo 347."""
+    service = AnnualTaxService()
+    return service.audit_and_reconcile_model_347(
+        fiscal_year=req.fiscal_year,
+        model_347_result=req.model_347_data,
+        tenant_id=req.tenant_id
+    )
+
+
+@router.post("/models/347/file-and-custody", response_model=TaxDeclarationAuditDTO)
+async def file_and_custody_model_347_endpoint(req: Model347FileAndCustodyRequest):
+    """Archiva y custodia legalmente durante 5 años la declaración del Modelo 347."""
+    service = AnnualTaxService()
+    return service.file_and_custody_model_347(
+        model_347=req.model_347_data,
+        declarant_info=req.declarant_info,
+        tenant_id=req.tenant_id,
+        filing_status=req.filing_status,
+        aeat_csv=req.aeat_csv
+    )
+
+
+
+
+
 # --- Endpoints User Story 2 (Exportación Oficial BOE) ---
 
 @router.post("/models/{model_code}/export-boe", response_model=BoeExportResultDTO)
@@ -174,7 +318,7 @@ async def export_boe_endpoint(model_code: str, req: BoeExportRequest):
             period=req.period,
             declarant_nif=req.declarant_info.nif,
             declarant_name=req.declarant_info.name,
-            casillas_payload=req.model_data.get("casillas", {}),
+            casillas_payload=req.model_data.get("casillas", req.model_data),
             boe_file_content=export_res.content_raw,
             filing_status="EXPORTED"
         )
